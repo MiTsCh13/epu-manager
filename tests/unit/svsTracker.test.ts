@@ -36,6 +36,35 @@ describe('buildSvsTracker', () => {
     expect(m.basisYtd).toBe(13999.15);
   });
 
+  it('Jahresrechnung bisher: Einnahmen → … → zu versteuern (ESt nur fürs ganze Jahr)', () => {
+    expect(m.breakdown.ytd).toEqual({
+      revenue: 15450,
+      expenses: 1450.85,
+      basis: 13999.15,
+      svs: 1447.32,
+      profit: 12551.83,
+      grundfreibetrag: 1882.77,
+      taxable: 10669.06,
+      incomeTax: null,
+      remaining: null,
+    });
+  });
+
+  it('Jahresrechnung hochgerechnet: konsistent mit Rücklage und SVS', () => {
+    const p = m.breakdown.projected;
+    expect(p.basis).toBe(m.projection.projected);
+    expect(p.basis).toBeCloseTo(p.revenue - p.expenses, 1);
+    expect(p.svs).toBe(m.expectedSvs);
+    expect(p.incomeTax).toBe(m.reserve.incomeTaxAmount);
+    expect(p.svs + (p.incomeTax ?? 0)).toBeCloseTo(m.reserve.totalReserve, 2);
+    expect(p.remaining).toBeCloseTo(p.profit - (p.incomeTax ?? 0), 2);
+  });
+
+  it('Am 1. Jänner: keine Hochrechnung (Faktor 1)', () => {
+    const t = buildSvsTracker({ ...base, today: new Date(2026, 0, 1) });
+    expect(t.breakdown.projected.revenue).toBe(15450);
+  });
+
   it('Hochrechnung auf 12 Monate', () => {
     expect(m.projection.projected).toBeCloseTo(13999.15 / monthsElapsedInYear(base.today) * 12, 1);
     expect(m.revenueProjected).toBeGreaterThan(15450);

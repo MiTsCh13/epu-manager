@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Plus, ReceiptEuro } from 'lucide-react';
+import { ArrowRight, Plus, ReceiptEuro } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { calculateProfit, getPauschRate, sumDeductibleExpenses } from '@/lib/profit';
@@ -9,7 +10,6 @@ import { deleteReceipt } from '@/lib/receipts';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { ExpenseFormModal } from '@/components/expenses/ExpenseForm';
 import { ExpenseList } from '@/components/expenses/ExpenseList';
-import { ProfitSummary } from '@/components/expenses/ProfitSummary';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
 import { Alert } from '@/components/ui/Alert';
@@ -28,6 +28,16 @@ export default function Expenses() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Vom Dashboard „Ausgabe erfassen“ → Formular direkt öffnen
+  useEffect(() => {
+    if (searchParams.get('neu') !== null) {
+      setEditing(null);
+      setFormOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const profitMethod = (profile?.profit_method ?? 'euer') as ProfitMethod;
   const pauschType = (profile?.pausch_type ?? null) as PauschType | null;
@@ -98,15 +108,24 @@ export default function Expenses() {
         </div>
       ) : (
         <div className="space-y-8">
-          <ProfitSummary
-            year={year}
-            profitMethod={profitMethod}
-            pauschType={pauschType}
-            industryType={industryType}
-            revenue={data.revenue}
-            deductibleExpenses={deductible}
-            svsPaid={svsPaid}
-          />
+          <section aria-label={`Summe Ausgaben ${year}`} className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm text-slate-600">{pauschal ? `Pauschale Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="expenses-total">
+                  {formatEuro(pauschal ? calculateProfit({ profitMethod, pauschType: pauschType ?? undefined, industryType: industryType ?? undefined, totalRevenue: data.revenue, totalExpenses: 0, svsPayments: 0 }).pauschaleExpenses ?? 0 : deductible)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-600"><Term k="svs">SVS-Beiträge</Term> {year}</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900">{formatEuro(svsPaid)}</p>
+              </div>
+            </div>
+            <Link to="/gewinn" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
+              Gewinn & Hochrechnung ansehen
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </section>
 
           {pauschal ? (
             <PauschalCard year={year} revenue={data.revenue} pauschType={pauschType} industryType={industryType} />

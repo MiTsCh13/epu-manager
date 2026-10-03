@@ -4,7 +4,7 @@ import type { Invoice } from '@/types';
 
 export type InvoiceListItem = Pick<
   Invoice,
-  'id' | 'invoice_number' | 'invoice_date' | 'due_date' | 'status' | 'total' | 'is_honorarnote' | 'paid_at'
+  'id' | 'invoice_number' | 'invoice_date' | 'due_date' | 'status' | 'total' | 'subtotal' | 'is_honorarnote' | 'paid_at'
 > & { clientName: string | null };
 
 type ActionResult = { error: string | null };
@@ -26,7 +26,7 @@ export function useInvoices() {
     setError(null);
     const { data, error: err } = await supabase
       .from('invoices')
-      .select('id, invoice_number, invoice_date, due_date, status, total, is_honorarnote, paid_at, client_snapshot, clients(name)')
+      .select('id, invoice_number, invoice_date, due_date, status, total, subtotal, is_honorarnote, paid_at, client_snapshot, clients(name)')
       .order('invoice_date', { ascending: false })
       .order('invoice_number', { ascending: false });
     if (err) {

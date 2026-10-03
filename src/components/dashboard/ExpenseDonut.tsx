@@ -7,14 +7,14 @@ import { formatEuro } from '@/lib/money';
 const COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'];
 const OTHER = '#a8a29e';
 
-/** Top-5-Ausgabenkategorien des Monats als Donut mit beschrifteter Legende (Betrag + Anteil). */
+/** Top-5-Ausgabenkategorien im gewählten Zeitraum als Donut mit beschrifteter Legende (Betrag + Anteil). */
 export function ExpenseDonut({
   data,
-  monthLabel,
+  periodText,
   pauschal,
 }: {
   data: { label: string; total: number }[];
-  monthLabel: string;
+  periodText: string;
   pauschal: boolean;
 }) {
   const sum = data.reduce((s, d) => s + d.total, 0);
@@ -25,7 +25,7 @@ export function ExpenseDonut({
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 id="donut-heading" className="text-lg font-semibold text-slate-900">
-            Ausgaben im {monthLabel}
+            Ausgaben in {periodText}
           </h2>
           <p className="text-sm text-slate-600">{pauschal ? 'Pauschalierung' : `Absetzbar · gesamt ${formatEuro(sum, true)}`}</p>
         </div>
@@ -41,10 +41,10 @@ export function ExpenseDonut({
         </p>
       ) : sum === 0 ? (
         <Link
-          to="/ausgaben"
+          to="/ausgaben?neu"
           className="mt-6 block rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500 hover:border-primary hover:text-primary"
         >
-          Noch keine Ausgaben diesen Monat – erfasse deine erste Ausgabe →
+          Keine Ausgaben in diesem Zeitraum – erfasse eine Ausgabe →
         </Link>
       ) : (
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">

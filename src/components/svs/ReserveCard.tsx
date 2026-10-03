@@ -10,7 +10,7 @@ export function ReserveCard({ model, year }: { model: SvsTrackerModel; year: num
   const base = model.revenueProjected > 0 ? model.revenueProjected : model.projection.projected;
 
   return (
-    <section aria-labelledby="reserve-heading" className="rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
+    <section id="ruecklage" aria-labelledby="reserve-heading" className="rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
       <h2 id="reserve-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-900">
         <PiggyBank className="h-5 w-5 text-primary" aria-hidden="true" />
         Was du zurücklegen solltest

@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { CalendarClock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSvsTracker } from '@/hooks/useSvsTracker';
@@ -9,6 +10,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper';
 import { NachzahlungsRadar } from '@/components/svs/NachzahlungsRadar';
 import { ReserveCard } from '@/components/svs/ReserveCard';
 import { ThresholdMeter } from '@/components/svs/ThresholdMeter';
+import { YearBreakdown } from '@/components/svs/YearBreakdown';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -20,9 +22,15 @@ const ALERT_TYPE = { info: 'info', warning: 'warning', critical: 'critical' } as
 export default function SVSTracker() {
   const { profile } = useAuth();
   const { model, year, current, loading, error, reload } = useSvsTracker();
+  const { hash } = useLocation();
+
+  // Sprungmarken (z. B. #ruecklage vom Dashboard) erst nach dem Laden anspringen
+  useEffect(() => {
+    if (!loading && model && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [loading, model, hash]);
 
   return (
-    <PageWrapper title="SVS & Rücklagen" description="Wie viel dir wirklich bleibt – und was du für SVS und Steuer zur Seite legen solltest.">
+    <PageWrapper title="Gewinn & Rücklagen" description="Was dir nach SVS und Steuer wirklich bleibt – und was du zur Seite legen solltest.">
       {loading || !model ? (
         <div className="flex justify-center py-20 text-primary" role="status" aria-label="Wird berechnet">
           <Spinner className="h-8 w-8" />
@@ -55,7 +63,9 @@ export default function SVSTracker() {
             </Alert>
           )}
 
-          {/* Oberer Bereich: SVS-Jahr, Fälligkeit, Fortschritt */}
+          <YearBreakdown ytd={model.breakdown.ytd} projected={model.breakdown.projected} year={year} pauschal={profile?.profit_method === 'pauschal'} />
+
+          {/* SVS-Jahr, Fälligkeit, Fortschritt */}
           <section aria-labelledby="phase-heading" className="space-y-6 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
             <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
               <div>

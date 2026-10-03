@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Plus, Search, Users } from 'lucide-react';
 import { useClients, type ClientWithStats } from '@/hooks/useClients';
@@ -18,6 +19,16 @@ export default function Clients() {
   const [editing, setEditing] = useState<ClientWithStats | null>(null);
   const [deleting, setDeleting] = useState<ClientWithStats | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Vom Dashboard „Kunde anlegen“ → Formular direkt öffnen
+  useEffect(() => {
+    if (searchParams.get('neu') !== null) {
+      setEditing(null);
+      setFormOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

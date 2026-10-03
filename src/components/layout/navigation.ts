@@ -12,7 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Übersicht', icon: LayoutDashboard, mobile: true },
   { to: '/rechnungen', label: 'Rechnungen', icon: FileText, mobile: true },
   { to: '/ausgaben', label: 'Ausgaben', icon: ReceiptEuro, mobile: true },
-  { to: '/svs', label: 'SVS & Rücklagen', icon: PiggyBank, mobile: true },
+  { to: '/gewinn', label: 'Gewinn & Rücklagen', icon: PiggyBank, mobile: true },
   { to: '/kunden', label: 'Kunden', icon: Users, mobile: false },
   { to: '/einstellungen', label: 'Einstellungen', icon: Settings, mobile: false },
 ];

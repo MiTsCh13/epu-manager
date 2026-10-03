@@ -27,7 +27,7 @@ export function SVSDashboardCard({ model, year }: { model: SvsTrackerModel; year
             <strong>{formatDate(toISODate(model.nextDue))}</strong>.
           </p>
         </div>
-        <Link to="/svs" className="inline-flex min-h-[40px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        <Link to="/gewinn" className="inline-flex min-h-[40px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
           Details
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>

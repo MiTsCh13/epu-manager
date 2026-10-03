@@ -2,7 +2,7 @@
 import { SVS_2026 } from '@/constants/svs2026';
 import type { AppAlert, BusinessType, IndustryType, PauschType, ProfitMethod } from '@/types';
 import { round2 } from './money';
-import { calculateProfit } from './profit';
+import { calculateGrundfreibetrag, calculateProfit } from './profit';
 import {
   basisFromQuarterlyPrescription,
   calculateBeitragsgrundlage,
@@ -24,6 +24,19 @@ export interface YearFigures {
   revenueGross: number; // bezahlte Rechnungen brutto (für die Kleinunternehmergrenze)
   deductibleExpenses: number;
   svsPaid: number;
+}
+
+/** Eine Spalte der Jahresrechnung: Einnahmen → Ausgaben → SVS → Gewinn → Grundfreibetrag → ESt → was bleibt. */
+export interface BreakdownColumn {
+  revenue: number;
+  expenses: number; // absetzbar bzw. pauschal
+  basis: number; // Berechnungsbasis SVS = Gewinn vor SVS
+  svs: number;
+  profit: number; // Jahresgewinn (nach SVS)
+  grundfreibetrag: number;
+  taxable: number; // zu versteuerndes Einkommen
+  incomeTax: number | null; // nur für das ganze Jahr sinnvoll
+  remaining: number | null; // Gewinn − Einkommensteuer
 }
 
 export interface TrackerInput {
@@ -79,6 +92,29 @@ export function buildSvsTracker(input: TrackerInput) {
   });
   const reserveOpen = round2(Math.max(0, reserve.totalReserve - current.svsPaid));
 
+  // Jahresrechnung: bisher (YTD) und hochgerechnet (gleicher Faktor für Einnahmen und Ausgaben)
+  const factor = months > 0 ? 12 / months : 1;
+  const expensesYtd = round2(current.revenueNet - basisYtd);
+  const column = (revenue: number, expenses: number, basis: number, svs: number, incomeTax: number | null): BreakdownColumn => {
+    const profit = round2(basis - svs);
+    const grundfreibetrag = calculateGrundfreibetrag(profit);
+    return {
+      revenue: round2(revenue),
+      expenses: round2(expenses),
+      basis: round2(basis),
+      svs: round2(svs),
+      profit,
+      grundfreibetrag,
+      taxable: round2(profit - grundfreibetrag),
+      incomeTax,
+      remaining: incomeTax === null ? null : round2(profit - incomeTax),
+    };
+  };
+  const breakdown = {
+    ytd: column(current.revenueNet, expensesYtd, basisYtd, current.svsPaid, null),
+    projected: column(revenueProjected, expensesYtd * factor, projection.projected, contributions.total, reserve.incomeTaxAmount),
+  };
+
   // Vorläufige Basis: aus der echten Vorschreibung, sonst aus Phase/Vorjahr geschätzt
   const previousBasis = input.previous ? calculateBeitragsgrundlage(profitOf(input, input.previous), input.previous.svsPaid) : undefined;
   const prescription = input.quarterlyPrescription;
@@ -104,6 +140,7 @@ export function buildSvsTracker(input: TrackerInput) {
   });
 
   return {
+    breakdown,
     svsYear,
     phase,
     profitYtd,

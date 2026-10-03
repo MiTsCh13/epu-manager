@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FileText, Plus } from 'lucide-react';
+import { AlertCircle, Banknote, FileClock, FileText, Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useInvoices, type InvoiceListItem } from '@/hooks/useInvoices';
+import { StatCard } from '@/components/dashboard/StatCard';
 import { FILTER_LABELS, getDisplayStatus, matchesFilter, type InvoiceFilter } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -27,7 +29,13 @@ const newInvoiceLink = (
 
 export default function Invoices() {
   const { invoices, loading, error, reload, markPaid } = useInvoices();
-  const [filter, setFilter] = useState<InvoiceFilter>('all');
+  const { profile } = useAuth();
+  const year = new Date().getFullYear();
+  // Filter steht in der Adresse (?filter=open) – Links vom Dashboard kommen vorgefiltert an
+  const [searchParams, setSearchParams] = useSearchParams();
+  const param = searchParams.get('filter') as InvoiceFilter | null;
+  const filter: InvoiceFilter = param && FILTERS.includes(param) ? param : 'all';
+  const setFilter = (f: InvoiceFilter) => setSearchParams(f === 'all' ? {} : { filter: f }, { replace: true });
   const [paying, setPaying] = useState<InvoiceListItem | null>(null);
 
   const withStatus = useMemo(() => invoices.map((inv) => ({ inv, status: getDisplayStatus(inv) })), [invoices]);
@@ -37,15 +45,16 @@ export default function Invoices() {
   );
   const openSum = withStatus.filter((x) => matchesFilter(x.status, 'open')).reduce((s, x) => s + Number(x.inv.total), 0);
   const visible = withStatus.filter((x) => matchesFilter(x.status, filter)).map((x) => x.inv);
+  const overdueSum = withStatus.filter((x) => x.status === 'overdue').reduce((s, x) => s + Number(x.inv.total), 0);
+  // Einnahmen = bezahlte Rechnungen nach Zahlungsdatum (wie im Dashboard und in der Jahresrechnung)
+  const paidThisYear = invoices.filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getFullYear() === year);
+  const earnedNet = paidThisYear.reduce((s, i) => s + Number(i.subtotal), 0);
+  const earnedGross = paidThisYear.reduce((s, i) => s + Number(i.total), 0);
 
   return (
     <PageWrapper
       title="Rechnungen"
-      description={
-        counts.open > 0
-          ? `${counts.open} offen über ${formatEuro(openSum)}${counts.overdue > 0 ? ` · ${counts.overdue} überfällig` : ''}`
-          : 'Alle deine Rechnungen und Honorarnoten.'
-      }
+      description="Deine Einnahmen: alle Rechnungen und Honorarnoten."
       actions={invoices.length > 0 && newInvoiceLink}
     >
       {loading ? (
@@ -66,6 +75,30 @@ export default function Invoices() {
         />
       ) : (
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <StatCard
+              label={`Eingenommen ${year}`}
+              value={formatEuro(earnedNet, true)}
+              sub={profile?.is_kleinunternehmer ? 'bezahlte Rechnungen' : `netto · brutto ${formatEuro(earnedGross, true)}`}
+              icon={Banknote}
+              testId="invoices-earned"
+            />
+            <StatCard
+              label="Offen"
+              value={formatEuro(openSum, true)}
+              sub={counts.open === 1 ? '1 Rechnung' : `${counts.open} Rechnungen`}
+              icon={FileClock}
+              testId="invoices-open"
+            />
+            {counts.overdue > 0 && (
+              <StatCard
+                label="Davon überfällig"
+                value={formatEuro(overdueSum, true)}
+                sub={counts.overdue === 1 ? '1 Rechnung – Zeit für eine Erinnerung' : `${counts.overdue} Rechnungen – Zeit für eine Erinnerung`}
+                icon={AlertCircle}
+              />
+            )}
+          </div>
           <div role="tablist" aria-label="Rechnungen filtern" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             {FILTERS.map((f) => (
               <button
