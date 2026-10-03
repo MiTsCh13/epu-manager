@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EMPTY_CLIENT_FORM,
   formatIban,
+  isValidZipForCountry,
+  normalizeClient,
+  validateClient,
   isValidEmail,
+  isValidPhone,
   isValidIban,
   isValidUid,
   isValidZip,
@@ -151,5 +156,56 @@ describe('translateAuthError', () => {
     ['something else', 'schiefgelaufen'],
   ])('%s', (input, expected) => {
     expect(translateAuthError(input)).toContain(expected);
+  });
+});
+
+describe('Kunden', () => {
+  const base = { ...EMPTY_CLIENT_FORM, name: 'Alpenblick Hotel GmbH' };
+
+  it('nur Name ist Pflicht', () => {
+    expect(validateClient(base)).toEqual({});
+    expect(validateClient({ ...base, name: '  ' }).name).toBeDefined();
+  });
+
+  it('prüft E-Mail, PLZ und UID nur wenn ausgefüllt', () => {
+    const e = validateClient({ ...base, email: 'x@', phone: 'abc', zip_code: '123', uid_number: 'ATU1' });
+    expect(Object.keys(e).sort()).toEqual(['email', 'phone', 'uid_number', 'zip_code']);
+    expect(e.zip_code).toContain('4 Ziffern');
+  });
+
+  it.each(['+43 660 1234567', '0660/123 45 67', '+49 (89) 123-456'])('gültige Telefonnummer: %s', (p) => {
+    expect(isValidPhone(p)).toBe(true);
+  });
+
+  it.each(['abc', '12345', '+43 660 12x4567', '1234567890123456789012'])('ungültige Telefonnummer: %s', (p) => {
+    expect(isValidPhone(p)).toBe(false);
+  });
+
+  it('PLZ je nach Land', () => {
+    expect(isValidZipForCountry('6020', 'AT')).toBe(true);
+    expect(isValidZipForCountry('80331', 'AT')).toBe(false);
+    expect(isValidZipForCountry('80331', 'DE')).toBe(true);
+    expect(isValidZipForCountry('X', 'DE')).toBe(false);
+    expect(validateClient({ ...base, country: 'DE', zip_code: '!' }).zip_code).toBe('Bitte gib eine gültige PLZ ein.');
+  });
+
+  it('normalizeClient: nur Name → Rest null', () => {
+    expect(normalizeClient(base)).toMatchObject({ name: 'Alpenblick Hotel GmbH', email: null, uid_number: null, country: 'AT' });
+  });
+
+  it('normalizeClient: trimmt, leere Felder → null, UID/E-Mail normalisiert', () => {
+    expect(
+      normalizeClient({ ...base, name: ' Huber ', email: ' Anna@Example.COM ', phone: ' +43 660 1234567 ', uid_number: 'atu 1234 5678', city: ' ', country: '' }),
+    ).toEqual({
+      name: 'Huber',
+      email: 'anna@example.com',
+      phone: '+43 660 1234567',
+      address: null,
+      zip_code: null,
+      city: null,
+      country: 'AT',
+      uid_number: 'ATU12345678',
+      notes: null,
+    });
   });
 });

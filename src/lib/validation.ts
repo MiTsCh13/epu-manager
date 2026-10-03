@@ -35,6 +35,13 @@ export function isValidZip(value: string): boolean {
   return /^\d{4,5}$/.test(value.trim());
 }
 
+/** Telefonnummer: optional mit +, dann 6–20 Ziffern (Leerzeichen, /, -, Klammern erlaubt). */
+export function isValidPhone(value: string): boolean {
+  const v = value.trim();
+  const digits = v.replace(/\D/g, '').length;
+  return /^\+?[\d\s/()-]+$/.test(v) && digits >= 6 && digits <= 20;
+}
+
 export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -125,4 +132,69 @@ export function translateAuthError(message: string): string {
   if (m.includes('invalid') && m.includes('email')) return 'Bitte gib eine gültige E-Mail-Adresse ein.';
   if (m.includes('fetch') || m.includes('network')) return 'Keine Verbindung zum Server. Bitte prüfe deine Internetverbindung.';
   return 'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
+}
+
+// ─── Kunden ─────────────────────────────────────────────────
+
+export interface ClientFormData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  zip_code: string;
+  city: string;
+  country: string;
+  uid_number: string;
+  notes: string;
+}
+
+export type ClientFormErrors = Partial<Record<keyof ClientFormData, string>>;
+
+export const EMPTY_CLIENT_FORM: ClientFormData = {
+  name: '',
+  email: '',
+  phone: '',
+  address: '',
+  zip_code: '',
+  city: '',
+  country: 'AT',
+  uid_number: '',
+  notes: '',
+};
+
+/** Österreich: 4-stellige PLZ; andere Länder: 3–10 Zeichen (Ziffern, Buchstaben, Bindestrich). */
+export function isValidZipForCountry(zip: string, country: string): boolean {
+  const z = zip.trim();
+  if (country === 'AT') return /^\d{4}$/.test(z);
+  return /^[A-Z0-9][A-Z0-9 -]{2,9}$/i.test(z);
+}
+
+export function validateClient(data: ClientFormData): ClientFormErrors {
+  const e: ClientFormErrors = {};
+  if (blank(data.name)) e.name = 'Bitte gib einen Namen ein.';
+  if (!blank(data.email) && !isValidEmail(data.email)) e.email = 'Diese E-Mail-Adresse ist ungültig.';
+  if (!blank(data.phone) && !isValidPhone(data.phone)) e.phone = 'Diese Telefonnummer ist ungültig.';
+  if (!blank(data.zip_code) && !isValidZipForCountry(data.zip_code, data.country)) {
+    e.zip_code = data.country === 'AT' ? 'Österreichische PLZ haben 4 Ziffern.' : 'Bitte gib eine gültige PLZ ein.';
+  }
+  if (!blank(data.uid_number) && !isValidUid(data.uid_number)) {
+    e.uid_number = 'Diese UID-Nummer ist ungültig (z. B. ATU12345678).';
+  }
+  return e;
+}
+
+/** Formulardaten → DB-Felder (getrimmt, leere Felder als null, UID normalisiert). */
+export function normalizeClient(data: ClientFormData) {
+  const opt = (v: string) => (v.trim() ? v.trim() : null);
+  return {
+    name: data.name.trim(),
+    email: opt(data.email)?.toLowerCase() ?? null,
+    phone: opt(data.phone),
+    address: opt(data.address),
+    zip_code: opt(data.zip_code),
+    city: opt(data.city),
+    country: data.country || 'AT',
+    uid_number: data.uid_number.trim() ? normalizeUid(data.uid_number) : null,
+    notes: opt(data.notes),
+  };
 }
