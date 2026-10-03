@@ -1,0 +1,42 @@
+{
+  "name": "klaro",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "./node_modules/.bin/vite",
+    "build": "./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build",
+    "preview": "./node_modules/.bin/vite preview",
+    "typecheck": "./node_modules/.bin/tsc -b",
+    "test": "./node_modules/.bin/vitest run --passWithNoTests",
+    "test:watch": "./node_modules/.bin/vitest",
+    "test:coverage": "./node_modules/.bin/vitest run --coverage",
+    "test:e2e": "./node_modules/.bin/playwright test",
+    "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
+    "@stripe/stripe-js": "^10.0.0",
+    "@supabase/supabase-js": "^2.117.2",
+    "lucide-react": "^1.51.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.6.1",
+    "react-router-dom": "^6.30.6",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.4",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.3",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}
