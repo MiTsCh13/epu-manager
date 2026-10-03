@@ -10,7 +10,7 @@ import {
   validateInvoiceUStG11,
   type UStG11Input,
 } from '@/lib/tax';
-import { formatEuro, round2 } from '@/lib/money';
+import { formatDecimalInput, formatEuro, parseDecimal, round2 } from '@/lib/money';
 
 describe('calculateIncomeTax (Tarif 2026)', () => {
   it.each([
@@ -103,6 +103,7 @@ describe('validateInvoiceUStG11', () => {
     recipient: { name: 'Alpenblick Hotel GmbH', address: 'Hauptplatz 5', zip_code: '6020', city: 'Innsbruck' },
     invoiceNumber: '2026-001',
     invoiceDate: '2026-10-03',
+    serviceDate: '2026-09-30',
     lineItems: [{ description: 'Website', quantity: 1 }],
     total: 4200,
   };
@@ -117,6 +118,7 @@ describe('validateInvoiceUStG11', () => {
       recipient: null,
       invoiceNumber: '',
       invoiceDate: null,
+      serviceDate: null,
       lineItems: [],
       total: 500,
     });
@@ -129,6 +131,7 @@ describe('validateInvoiceUStG11', () => {
       'Deine UID-Nummer fehlt (Pflicht für USt-pflichtige Rechnungen über 400 €).',
       'Rechnungsnummer fehlt.',
       'Rechnungsdatum fehlt.',
+      'Leistungsdatum bzw. Leistungszeitraum fehlt.',
       'Mindestens eine Position ist erforderlich.',
       'IBAN fehlt – ohne sie kann dein Kunde nicht überweisen.',
     ]);
@@ -171,4 +174,19 @@ describe('money', () => {
     expect(formatEuro(1234.5, true)).toMatch(/1\.235/);
     expect(formatEuro(1234.5, true)).not.toMatch(/,/);
   });
+});
+
+describe('parseDecimal / formatDecimalInput', () => {
+  it.each([
+    ['95', 95],
+    ['1234,5', 1234.5],
+    ['1.234,50', 1234.5],
+    ['1234.50', 1234.5],
+    ['1.234', 1234],
+    ['€ 1.200', 1200],
+    ['0,333', 0.333],
+    ['-5', -5],
+  ])('%s → %f', (input, expected) => expect(parseDecimal(input)).toBe(expected));
+  it.each(['', 'abc', '1,2,3', '12a'])('ungültig: „%s“', (input) => expect(parseDecimal(input)).toBeNaN());
+  it('formatDecimalInput', () => expect(formatDecimalInput(1234.5)).toBe('1234,5'));
 });

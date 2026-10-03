@@ -10,6 +10,7 @@ import Onboarding from '@/pages/Onboarding';
 import Dashboard from '@/pages/Dashboard';
 import Invoices from '@/pages/Invoices';
 import NewInvoice from '@/pages/NewInvoice';
+import InvoiceView from '@/pages/InvoiceView';
 import Expenses from '@/pages/Expenses';
 import Clients from '@/pages/Clients';
 import SVSTracker from '@/pages/SVSTracker';
@@ -28,6 +29,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="rechnungen" element={<Invoices />} />
             <Route path="rechnungen/neu" element={<NewInvoice />} />
+            <Route path="rechnungen/:id" element={<InvoiceView />} />
             <Route path="ausgaben" element={<Expenses />} />
             <Route path="kunden" element={<Clients />} />
             <Route path="svs" element={<SVSTracker />} />

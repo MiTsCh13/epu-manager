@@ -110,15 +110,20 @@ export type Database = {
       invoices: {
         Row: {
           client_id: string | null
+          client_snapshot: Json | null
           created_at: string
           due_date: string | null
+          footer_text: string | null
           id: string
           invoice_date: string
           invoice_number: string
           is_honorarnote: boolean
+          issuer_snapshot: Json | null
           line_items: Json
           notes: string | null
           paid_at: string | null
+          service_date_from: string | null
+          service_date_to: string | null
           status: string
           subtotal: number
           total: number
@@ -128,15 +133,20 @@ export type Database = {
         }
         Insert: {
           client_id?: string | null
+          client_snapshot?: Json | null
           created_at?: string
           due_date?: string | null
+          footer_text?: string | null
           id?: string
           invoice_date: string
           invoice_number: string
           is_honorarnote?: boolean
+          issuer_snapshot?: Json | null
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          service_date_from?: string | null
+          service_date_to?: string | null
           status?: string
           subtotal?: number
           total?: number
@@ -146,15 +156,20 @@ export type Database = {
         }
         Update: {
           client_id?: string | null
+          client_snapshot?: Json | null
           created_at?: string
           due_date?: string | null
+          footer_text?: string | null
           id?: string
           invoice_date?: string
           invoice_number?: string
           is_honorarnote?: boolean
+          issuer_snapshot?: Json | null
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          service_date_from?: string | null
+          service_date_to?: string | null
           status?: string
           subtotal?: number
           total?: number

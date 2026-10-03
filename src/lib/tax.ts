@@ -94,6 +94,7 @@ export interface UStG11Input {
   recipient: InvoiceParty | null;
   invoiceNumber: string;
   invoiceDate: string | null;
+  serviceDate: string | null; // Tag der Lieferung bzw. Beginn des Leistungszeitraums
   lineItems: Pick<LineItem, 'description' | 'quantity'>[];
   total: number;
 }
@@ -130,6 +131,7 @@ export function validateInvoiceUStG11(input: UStG11Input): {
 
   if (!hasText(input.invoiceNumber)) errors.push('Rechnungsnummer fehlt.');
   if (!hasText(input.invoiceDate)) errors.push('Rechnungsdatum fehlt.');
+  if (!hasText(input.serviceDate)) errors.push('Leistungsdatum bzw. Leistungszeitraum fehlt.');
   if (input.lineItems.length === 0) errors.push('Mindestens eine Position ist erforderlich.');
   if (input.lineItems.some((li) => !hasText(li.description))) errors.push('Jede Position braucht eine Bezeichnung.');
   if (input.lineItems.some((li) => !(li.quantity > 0))) errors.push('Jede Position braucht eine Menge größer 0.');
