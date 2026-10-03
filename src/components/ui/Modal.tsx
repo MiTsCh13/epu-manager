@@ -20,7 +20,7 @@ export function Modal({
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'xl';
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -55,7 +55,7 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={`relative flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl focus:outline-none sm:rounded-2xl ${
-          size === 'sm' ? 'sm:max-w-md' : 'sm:max-w-lg'
+          size === 'sm' ? 'sm:max-w-md' : size === 'xl' ? 'h-[92vh] sm:max-w-4xl' : 'sm:max-w-lg'
         }`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >

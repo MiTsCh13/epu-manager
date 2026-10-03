@@ -61,6 +61,7 @@ export interface OnboardingData {
   zip_code: string;
   city: string;
   iban: string;
+  account_holder: string;
   uid_number: string;
   invoice_number_format: InvoiceNumberFormat;
 }
@@ -106,6 +107,9 @@ export function validateOnboardingStep(step: 1 | 2 | 3, data: OnboardingData, to
     if (blank(data.city)) e.city = 'Bitte gib deinen Ort ein.';
     if (blank(data.iban)) e.iban = 'Bitte gib deine IBAN ein – sie kommt auf deine Rechnungen.';
     else if (!isValidIban(data.iban)) e.iban = 'Diese IBAN ist ungültig. Bitte prüfe sie noch einmal.';
+    if (blank(data.account_holder)) {
+      e.account_holder = 'Bitte gib den Kontoinhaber an – genau so, wie er bei deiner Bank hinterlegt ist.';
+    }
     if (!blank(data.uid_number) && !isValidUid(data.uid_number)) {
       e.uid_number = 'Diese UID-Nummer ist ungültig (Format: ATU12345678).';
     }

@@ -189,6 +189,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_holder: string | null
           address: string | null
           business_name: string | null
           business_type: string | null
@@ -214,6 +215,7 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          account_holder?: string | null
           address?: string | null
           business_name?: string | null
           business_type?: string | null
@@ -239,6 +241,7 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          account_holder?: string | null
           address?: string | null
           business_name?: string | null
           business_type?: string | null

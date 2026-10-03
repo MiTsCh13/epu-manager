@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, FileDown, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { downloadBlob, renderInvoicePdf } from '@/lib/renderInvoicePdf';
 import { formatDate, getDisplayStatus } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
 import { KLEINUNTERNEHMER_NOTE } from '@/constants/tax2026';
@@ -11,6 +12,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { MarkPaidModal } from './MarkPaidModal';
+import { PdfPreviewModal } from './PdfPreviewModal';
 import type { Invoice, LineItem } from '@/types';
 
 interface PartySnapshot {
@@ -47,6 +49,19 @@ function Party({ title, party }: { title: string; party: PartySnapshot | null })
 /** Ausgestellte Rechnung (unveränderbar): Ansicht + Status-Aktionen. */
 export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChanged: (inv: Invoice) => void }) {
   const [paying, setPaying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const { blob, fileName } = await renderInvoicePdf(invoice);
+      downloadBlob(blob, fileName);
+    } catch {
+      toast.error('Das PDF konnte nicht erstellt werden. Bitte versuche es erneut.');
+    }
+    setDownloading(false);
+  }
   const status = getDisplayStatus(invoice);
   const items = (invoice.line_items as unknown as LineItem[]) ?? [];
   const issuer = invoice.issuer_snapshot as PartySnapshot | null;
@@ -70,6 +85,17 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Alle Rechnungen
           </Link>
+          <Button variant="secondary" icon={<Eye className="h-4 w-4" />} onClick={() => setPreviewing(true)}>
+            Vorschau
+          </Button>
+          <Button
+            variant={status === 'paid' ? 'primary' : 'secondary'}
+            icon={<FileDown className="h-4 w-4" />}
+            loading={downloading}
+            onClick={() => void handleDownload()}
+          >
+            PDF herunterladen
+          </Button>
           {(status === 'sent' || status === 'overdue') && (
             <Button icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => setPaying(true)}>
               Als bezahlt markieren
@@ -151,6 +177,8 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         Ausgestellte Rechnungen sind unveränderbar. Kunden- und Absenderdaten sind auf dem Stand vom Ausstellungstag.
       </p>
+
+      <PdfPreviewModal invoice={previewing ? invoice : null} onClose={() => setPreviewing(false)} />
 
       <MarkPaidModal
         invoice={paying ? { invoice_number: invoice.invoice_number, total: Number(invoice.total) } : null}

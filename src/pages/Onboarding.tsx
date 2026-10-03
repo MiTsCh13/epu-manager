@@ -34,6 +34,7 @@ function initialData(profile: Profile): OnboardingData {
     zip_code: profile.zip_code ?? '',
     city: profile.city ?? '',
     iban: profile.iban ?? '',
+    account_holder: profile.account_holder ?? '',
     uid_number: profile.uid_number ?? '',
     invoice_number_format: (profile.invoice_number_format as OnboardingData['invoice_number_format']) ?? 'YYYY-NNN',
   };
@@ -77,6 +78,7 @@ export default function Onboarding() {
         zip_code: data.zip_code.trim(),
         city: data.city.trim(),
         iban: formatIban(data.iban),
+        account_holder: data.account_holder.trim(),
         uid_number: data.uid_number.trim() ? normalizeUid(data.uid_number) : null,
         invoice_number_format: data.invoice_number_format,
         onboarding_completed: true,
@@ -103,6 +105,10 @@ export default function Onboarding() {
       await refreshProfile();
       toast.success('Profil gespeichert!');
     } else {
+      // Kontoinhaber mit Firmen- bzw. eigenem Namen vorbelegen
+      if (step === 2 && !data.account_holder.trim()) {
+        update({ account_holder: data.business_name.trim() || data.full_name.trim() });
+      }
       setStep((s) => (s + 1) as Step);
     }
     window.scrollTo({ top: 0 });
@@ -182,6 +188,7 @@ function Welcome({ data }: { data: OnboardingData }) {
         : (data.pausch_type ? PAUSCH_LABELS[data.pausch_type] : 'Pauschalierung') +
           (data.pausch_type === 'ku' ? (data.industry_code === 'trade' ? ' (Handel, 20 %)' : ' (Dienstleistung, 45 %)') : ''),
     ],
+    ['Konto', `${data.account_holder} · ${formatIban(data.iban)}`],
     ['Rechnungsnummern', data.invoice_number_format === 'KL-YYYY-NNN' ? `KL-${year}-001` : `${year}-001`],
   ];
 

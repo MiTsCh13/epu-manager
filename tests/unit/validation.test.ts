@@ -76,6 +76,7 @@ describe('validateOnboardingStep', () => {
     zip_code: '1060',
     city: 'Wien',
     iban: 'AT61 1904 3002 3457 3201',
+    account_holder: 'Max Mustermann',
     uid_number: '',
     invoice_number_format: 'YYYY-NNN',
   };
@@ -130,8 +131,8 @@ describe('validateOnboardingStep', () => {
   });
 
   it('Schritt 3: Adresse, PLZ, Ort, IBAN', () => {
-    const e = validateOnboardingStep(3, { ...complete, address: '', zip_code: 'x', city: '', iban: '' }, today);
-    expect(Object.keys(e).sort()).toEqual(['address', 'city', 'iban', 'zip_code']);
+    const e = validateOnboardingStep(3, { ...complete, address: '', zip_code: 'x', city: '', iban: '', account_holder: ' ' }, today);
+    expect(Object.keys(e).sort()).toEqual(['account_holder', 'address', 'city', 'iban', 'zip_code']);
   });
 
   it('Schritt 3: ungültige IBAN und UID', () => {

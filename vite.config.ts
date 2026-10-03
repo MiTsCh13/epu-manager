@@ -8,15 +8,17 @@ export default defineConfig({
   // Betrifft nur den lokalen Dev-Server. Entfernen, sobald das Projekt in einem einfachen Pfad liegt.
   server: { fs: { strict: false } },
   plugins: [react()],
+  // @react-pdf/renderer (~1,2 MB) wird nur bei PDF-Download nachgeladen – eigener Chunk, Warnung angepasst
+  build: { chunkSizeWarningLimit: 1300 },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.{ts,tsx}'],
     environment: 'node',
     coverage: {
       provider: 'v8',
-      include: ['src/lib/svs.ts', 'src/lib/profit.ts', 'src/lib/tax.ts', 'src/lib/money.ts', 'src/lib/validation.ts', 'src/lib/subscription.ts', 'src/lib/invoices.ts'],
+      include: ['src/lib/svs.ts', 'src/lib/profit.ts', 'src/lib/tax.ts', 'src/lib/money.ts', 'src/lib/validation.ts', 'src/lib/subscription.ts', 'src/lib/invoices.ts', 'src/lib/invoicePdf.ts', 'src/lib/epcQr.ts'],
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
     },
   },

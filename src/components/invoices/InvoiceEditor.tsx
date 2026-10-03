@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Eye, Plus, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
@@ -29,6 +29,7 @@ import { Field, Select, TextArea } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import { LineItemsEditor, newRow, type LineItemRow } from './LineItemsEditor';
+import { PdfPreviewModal } from './PdfPreviewModal';
 import type { Invoice, InvoiceNumberFormat, LineItem, VatRate } from '@/types';
 
 interface FormState {
@@ -108,10 +109,11 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const [errors, setErrors] = useState<InvoiceFormErrors>({});
   const [ustErrors, setUstErrors] = useState<string[]>([]);
   const [ustWarnings, setUstWarnings] = useState<string[]>([]);
-  const [saving, setSaving] = useState<'draft' | 'sent' | 'delete' | null>(null);
+  const [saving, setSaving] = useState<'draft' | 'sent' | 'delete' | 'pdf' | null>(null);
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [clientModal, setClientModal] = useState(false);
+  const [preview, setPreview] = useState<Invoice | null>(null);
   const [yearNumbers, setYearNumbers] = useState<{ year: number; numbers: string[] } | null>(null);
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
@@ -188,17 +190,24 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     return !hasFormErrors(e);
   }
 
-  async function save(status: 'draft' | 'sent') {
-    setSaving(status);
+  /** Speichert und liefert die gespeicherte Zeile (null bei Fehler). */
+  async function persist(status: 'draft' | 'sent'): Promise<Invoice | null> {
     const data = payload(status);
     const { data: saved, error } = invoice
-      ? await supabase.from('invoices').update(data).eq('id', invoice.id).select('id').single()
-      : await supabase.from('invoices').insert(data).select('id').single();
-    setSaving(null);
+      ? await supabase.from('invoices').update(data).eq('id', invoice.id).select().single()
+      : await supabase.from('invoices').insert(data).select().single();
     if (error) {
       toast.error(invoiceErrorMessage(error, 'Die Rechnung konnte nicht gespeichert werden.'));
-      return;
+      return null;
     }
+    return saved;
+  }
+
+  async function save(status: 'draft' | 'sent') {
+    setSaving(status);
+    const saved = await persist(status);
+    setSaving(null);
+    if (!saved) return;
     if (status === 'draft') {
       toast.success('Entwurf gespeichert');
       if (!invoice) navigate(`/rechnungen/${saved.id}`, { replace: true });
@@ -206,6 +215,16 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       toast.success(`${form.invoiceNumber} ausgestellt`);
       navigate(`/rechnungen/${saved.id}`, { replace: true, state: { refreshed: Date.now() } });
     }
+  }
+
+  /** Entwurf speichern und PDF-Vorschau (mit Wasserzeichen „ENTWURF“) öffnen. */
+  async function handlePreview() {
+    setUstErrors([]);
+    if (!validateForm()) return;
+    setSaving('pdf');
+    const saved = await persist('draft');
+    setSaving(null);
+    if (saved) setPreview(saved);
   }
 
   function handleSaveDraft() {
@@ -496,6 +515,17 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
                 <span className="sr-only sm:hidden">Entwurf löschen</span>
               </Button>
             )}
+            <Button
+              variant="ghost"
+              icon={<Eye className="h-4 w-4" />}
+              loading={saving === 'pdf'}
+              disabled={!!saving}
+              onClick={() => void handlePreview()}
+              title="Entwurf speichern und PDF-Vorschau öffnen"
+            >
+              <span className="hidden sm:inline">Vorschau</span>
+              <span className="sr-only sm:hidden">Vorschau</span>
+            </Button>
             <Button type="submit" variant="secondary" className="flex-1 lg:flex-none" loading={saving === 'draft'} disabled={!!saving}>
               Entwurf speichern
             </Button>
@@ -505,6 +535,15 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
           </div>
         </div>
       </form>
+
+      <PdfPreviewModal
+        invoice={preview}
+        onClose={() => {
+          // Neue Rechnung: nach dem ersten Speichern zur Entwurfs-URL wechseln
+          if (!invoice && preview) navigate(`/rechnungen/${preview.id}`, { replace: true });
+          setPreview(null);
+        }}
+      />
 
       <ClientFormModal open={clientModal} client={null} onClose={() => setClientModal(false)} onSubmit={handleCreateClient} />
 

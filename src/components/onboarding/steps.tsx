@@ -207,6 +207,14 @@ export function StepInvoicing({ data, errors, update }: StepProps) {
         onBlur={() => data.iban && update({ iban: formatIban(data.iban) })}
       />
       <Field
+        label="Kontoinhaber"
+        autoComplete="cc-name"
+        hint="Genau wie bei deiner Bank. Seit 2025 prüfen Banken bei jeder Überweisung, ob Name und IBAN zusammenpassen – steht so auch auf deinen Rechnungen."
+        value={data.account_holder}
+        error={errors.account_holder}
+        onChange={(e) => update({ account_holder: e.target.value })}
+      />
+      <Field
         label={<Term k="uid" />}
         optional
         placeholder="ATU12345678"
