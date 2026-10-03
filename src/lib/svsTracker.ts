@@ -114,7 +114,10 @@ export function buildSvsTracker(input: TrackerInput) {
     reserve,
     reserveOpen,
     provisionalBasis,
+    // SVS-Jahresbeitrag (inkl. UV) auf die vorläufige bzw. die erwartete Basis – für das Nachzahlungs-Radar
+    provisionalSvs: calculateSVSContributions(provisionalBasis, options).total,
     expectedBasis: contributions.basisGrundlage,
+    expectedSvs: contributions.total,
     quarterlyAmount,
     prescriptionKnown: prescription !== null && prescription > 0,
     nextDue: getNextSVSDueDate(today),

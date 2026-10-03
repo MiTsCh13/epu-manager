@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, CheckCircle2, Info, Radar, XCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SVS_2026 } from '@/constants/svs2026';
 import { formatDecimalInput, formatEuro, parseDecimal, round2 } from '@/lib/money';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -15,17 +16,62 @@ const URGENCY = {
   critical: { Icon: XCircle, box: 'bg-red-50 text-red-900 ring-red-200', label: 'Wichtig' },
 } as const;
 
-function Bar({ label, value, max, muted }: { label: string; value: number; max: number; muted?: boolean }) {
+const pct = (part: number, whole: number) => `${whole > 0 ? Math.min(Math.max(part / whole, 0), 1) * 100 : 0}%`;
+
+/**
+ * Ein Balken = Jahresbasis (hell). Darin eingefärbt: der SVS-Beitrag darauf (kräftig),
+ * optional am Ende des SVS-Teils die Nachzahlung (Amber). Alle Werte direkt beschriftet.
+ */
+function BasisBar({
+  title,
+  basis,
+  svs,
+  nachzahlung = 0,
+  max,
+  variant,
+}: {
+  title: string;
+  basis: number;
+  svs: number;
+  nachzahlung?: number;
+  max: number;
+  variant: 'provisional' | 'expected';
+}) {
+  const light = variant === 'expected' ? 'bg-primary-100' : 'bg-slate-200';
+  const strong = variant === 'expected' ? 'bg-primary' : 'bg-slate-500';
+  const svsBase = Math.max(svs - nachzahlung, 0);
   return (
     <div>
-      <div className="flex justify-between text-sm">
-        <span className="text-slate-600">{label}</span>
-        <span className="font-semibold tabular-nums text-slate-900">{formatEuro(value, true)}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+        <span className="font-medium text-slate-800">{title}</span>
+        <span className="text-slate-600">
+          Jahresbasis <strong className="tabular-nums text-slate-900">{formatEuro(basis, true)}</strong>
+        </span>
       </div>
-      <div className="mt-1 h-3 rounded-full bg-slate-100">
-        <div className={`h-3 rounded-full ${muted ? 'bg-slate-400' : 'bg-primary'}`} style={{ width: `${max > 0 ? (value / max) * 100 : 0}%` }} />
+      <div className="mt-1.5 h-5 rounded-md bg-slate-50" aria-hidden="true">
+        <div className={`flex h-5 overflow-hidden rounded-md ${light}`} style={{ width: pct(basis, max) }}>
+          <div className={`h-full ${strong}`} style={{ width: pct(svsBase, basis) }} />
+          {nachzahlung > 0 && <div className="h-full border-l-2 border-white bg-amber-500" style={{ width: pct(nachzahlung, basis) }} />}
+        </div>
       </div>
+      <p className="mt-1 text-xs text-slate-600">
+        davon SVS <strong className="tabular-nums text-slate-900">{formatEuro(svs, true)}</strong> pro Jahr
+        {nachzahlung > 0 && (
+          <>
+            {' '}– inkl. Nachzahlung <strong className="tabular-nums text-amber-800">{formatEuro(nachzahlung, true)}</strong>
+          </>
+        )}
+      </p>
     </div>
+  );
+}
+
+function Swatch({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`h-3 w-3 rounded-sm ${className}`} aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
@@ -72,14 +118,39 @@ export function NachzahlungsRadar({ model }: { model: SvsTrackerModel }) {
         </p>
       ) : (
         <>
-          <div className="mt-4 space-y-3" role="group" aria-label="Vergleich der Berechnungsbasis">
-            <Bar label="Vorläufig vorgeschrieben (Jahresbasis)" value={model.provisionalBasis} max={max} muted />
-            <Bar label={`Erwartet nach deinem Gewinn`} value={model.expectedBasis} max={max} />
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            <Term k="berechnungsbasis">Berechnungsbasis für deine SVS-Beiträge</Term> pro Jahr.
-            {!model.prescriptionKnown && ' Die vorläufige Basis ist geschätzt.'}
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            <strong className="text-slate-800">So rechnet die SVS:</strong> Deine Beiträge sind rund{' '}
+            {Math.round(SVS_2026.reserveRate * 100)} % deiner{' '}
+            <Term k="berechnungsbasis">Jahresbasis</Term> (≈ Gewinn vor SVS) plus {formatEuro(SVS_2026.accidentFixed, true)} Unfallversicherung.
+            Vorgeschrieben wird zunächst auf einer vorläufigen Basis – ist dein echter Gewinn höher, wird die Differenz nachverrechnet.
           </p>
+
+          <div
+            className="mt-5 space-y-5"
+            role="img"
+            aria-label={`Bisher vorgeschrieben: Jahresbasis ${formatEuro(model.provisionalBasis, true)}, SVS ${formatEuro(model.provisionalSvs, true)}. Erwartet: Jahresbasis ${formatEuro(model.expectedBasis, true)}, SVS ${formatEuro(model.expectedSvs, true)}${warning.hasWarning ? `, davon Nachzahlung ${formatEuro(warning.estimatedNachzahlung, true)}` : ''}.`}
+          >
+            <BasisBar
+              title={model.prescriptionKnown ? 'Bisher vorgeschrieben (laut SVS-Brief)' : 'Bisher vorgeschrieben (geschätzt)'}
+              basis={model.provisionalBasis}
+              svs={model.provisionalSvs}
+              max={max}
+              variant="provisional"
+            />
+            <BasisBar
+              title="Erwartet nach deinem Gewinn"
+              basis={model.expectedBasis}
+              svs={model.expectedSvs}
+              nachzahlung={warning.hasWarning ? warning.estimatedNachzahlung : 0}
+              max={max}
+              variant="expected"
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+            <Swatch className="bg-slate-200 ring-1 ring-inset ring-slate-300" label="Jahresbasis (Gewinn vor SVS)" />
+            <Swatch className="bg-primary" label="SVS-Beiträge" />
+            {warning.hasWarning && <Swatch className="bg-amber-500" label="davon Nachzahlung" />}
+          </div>
 
           {warning.hasWarning ? (
             <div className={`mt-4 flex gap-3 rounded-lg p-3 text-sm ring-1 ring-inset ${u.box}`} role={warning.urgency === 'critical' ? 'alert' : 'status'}>

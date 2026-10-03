@@ -49,6 +49,9 @@ describe('buildSvsTracker', () => {
 
   it('Jahr 3 ohne Vorschreibung: Mindestbasis vorläufig, Nachzahlung erwartet', () => {
     expect(m.provisionalBasis).toBe(6613.2);
+    expect(m.provisionalSvs).toBe(1929.72);
+    // Nachzahlung ist Teil des erwarteten SVS-Beitrags (Jahr 3: alle Zweige)
+    expect(m.expectedSvs - m.provisionalSvs).toBeCloseTo(m.warning.estimatedNachzahlung, 0);
     expect(m.quarterlyAmount).toBe(482.43);
     expect(m.prescriptionKnown).toBe(false);
     expect(m.warning.hasWarning).toBe(true);

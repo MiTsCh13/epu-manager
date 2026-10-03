@@ -1,13 +1,13 @@
 import { Lightbulb, PiggyBank } from 'lucide-react';
 import { formatEuro } from '@/lib/money';
-import { Term } from '@/components/ui/Tooltip';
+import { InfoTip, Term } from '@/components/ui/Tooltip';
 import type { SvsTrackerModel } from '@/lib/svsTracker';
 
 /** „Was du zurücklegen solltest“ – konkrete €-Empfehlung + Aufschlüsselung. */
 export function ReserveCard({ model, year }: { model: SvsTrackerModel; year: number }) {
   const { reserve, reserveOpen } = model;
   const percent = Math.round(reserve.perInvoiceRate * 100);
-  const example = 1000 * reserve.perInvoiceRate;
+  const base = model.revenueProjected > 0 ? model.revenueProjected : model.projection.projected;
 
   return (
     <section aria-labelledby="reserve-heading" className="rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
@@ -17,11 +17,23 @@ export function ReserveCard({ model, year }: { model: SvsTrackerModel; year: num
       </h2>
 
       <p className="mt-4 text-slate-700">Von deinen nächsten Einnahmen:</p>
-      <p className="mt-1 flex flex-wrap items-baseline gap-x-3">
+      <p className="mt-1 flex flex-wrap items-center gap-x-2">
         <span className="text-5xl font-bold tabular-nums text-primary-800" data-testid="reserve-rate">
           {percent} %
         </span>
-        <span className="text-slate-600">zur Seite legen – z. B. {formatEuro(example, true)} von 1.000 €</span>
+        <span className="text-slate-600">zur Seite legen</span>
+        <InfoTip
+          label="Warum dieser Prozentsatz?"
+          content={
+            <>
+              <strong>Warum {percent} %?</strong>
+              <br />
+              {model.revenueProjected > 0 ? `Hochgerechnet nimmst du ${year} ca. ${formatEuro(base, true)} ein.` : `Dein Gewinn ${year} liegt hochgerechnet bei ca. ${formatEuro(base, true)}.`}{' '}
+              Darauf fallen voraussichtlich {formatEuro(reserve.svsAmount, true)} SVS und {formatEuro(reserve.incomeTaxAmount, true)} Einkommensteuer an –
+              zusammen {formatEuro(reserve.totalReserve, true)}. Das sind {percent} % {model.revenueProjected > 0 ? 'deiner Einnahmen' : 'deines Gewinns'} (aufgerundet, damit du auf der sicheren Seite bist).
+            </>
+          }
+        />
       </p>
 
       <dl className="mt-6 grid gap-3 sm:grid-cols-3">
