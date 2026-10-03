@@ -29,5 +29,17 @@ npm run dev                  # http://localhost:5173
 ## Jährliches Update
 SVS-Werte liegen ausschließlich in `src/constants/svs2026.ts`. Für ein neues Jahr eine neue Datei anlegen – nie Werte im Code hardcoden.
 
+## Stripe (Abo „Klaro Pro“, 19 €/Monat)
+Checkout, Kundenportal und Webhook laufen als Supabase Edge Functions (`supabase/functions/`).
+Secrets liegen nur in Supabase (`supabase secrets list`): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `APP_URL`.
+
+```bash
+supabase functions deploy create-checkout-session create-portal-session stripe-webhook --use-api
+```
+
+Der Webhook (`/functions/v1/stripe-webhook`) aktualisiert `profiles.subscription_status`. Nach Ablauf der Testphase
+ohne Abo verhindert die Datenbank neue bzw. ausgestellte Rechnungen (weicher Paywall).
+Testkarte: `4242 4242 4242 4242`, beliebiges Datum in der Zukunft, beliebige CVC.
+
 ## Hosting
 Frontend: Vercel · Backend: Supabase (Region Frankfurt, DSGVO)

@@ -207,6 +207,8 @@ export type Database = {
           pausch_type: string | null
           profit_method: string
           stripe_customer_id: string | null
+          subscription_cancel_at_period_end: boolean
+          subscription_renews_at: string | null
           subscription_status: string
           svs_exempt: boolean
           svs_quarterly_prescription: number | null
@@ -234,6 +236,8 @@ export type Database = {
           pausch_type?: string | null
           profit_method?: string
           stripe_customer_id?: string | null
+          subscription_cancel_at_period_end?: boolean
+          subscription_renews_at?: string | null
           subscription_status?: string
           svs_exempt?: boolean
           svs_quarterly_prescription?: number | null
@@ -261,6 +265,8 @@ export type Database = {
           pausch_type?: string | null
           profit_method?: string
           stripe_customer_id?: string | null
+          subscription_cancel_at_period_end?: boolean
+          subscription_renews_at?: string | null
           subscription_status?: string
           svs_exempt?: boolean
           svs_quarterly_prescription?: number | null
@@ -309,7 +315,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_active_access: { Args: { p_user: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

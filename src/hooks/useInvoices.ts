@@ -12,6 +12,8 @@ type ActionResult = { error: string | null };
 /** Fehlermeldung für Rechnungs-Schreibzugriffe (DB-Trigger liefern bereits deutsche Texte). */
 export function invoiceErrorMessage(err: { code?: string; message: string }, fallback: string): string {
   if (err.code === '23505') return 'Diese Rechnungsnummer gibt es bereits. Bitte wähle eine andere.';
+  // 42501 = RLS: Testphase abgelaufen (Paywall serverseitig)
+  if (err.code === '42501') return 'Deine Testphase ist abgelaufen. Mit Klaro Pro kannst du wieder Rechnungen erstellen.';
   if (err.code === '23514' && /Rechnung/.test(err.message)) return err.message;
   return fallback;
 }

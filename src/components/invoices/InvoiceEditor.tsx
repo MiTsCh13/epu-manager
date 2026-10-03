@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { supabase } from '@/lib/supabase';
+import { getAccessState } from '@/lib/subscription';
 import {
   addDays,
   DEFAULT_PAYMENT_DAYS,
@@ -103,6 +104,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
+  const expired = !!profile && getAccessState(profile).kind === 'expired';
   const { clients, loading: clientsLoading, create: createClient } = useClients();
 
   const [form, setForm] = useState<FormState>(() => initialState(invoice, profile?.invoice_footer_text ?? '', isKU));
@@ -312,6 +314,16 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
         }}
         className="space-y-6 pb-24 lg:pb-0"
       >
+        {expired && (
+          <Alert type="warning" title="Deine Testphase ist abgelaufen">
+            Entwürfe kannst du weiter bearbeiten. Zum Ausstellen brauchst du{' '}
+            <Link to="/einstellungen" className="font-semibold underline">
+              Klaro Pro
+            </Link>
+            .
+          </Alert>
+        )}
+
         {ustErrors.length > 0 && (
           <Alert type="critical" title="Bevor du die Rechnung ausstellen kannst, fehlt noch:">
             <ul className="list-disc space-y-0.5 pl-5">
@@ -529,7 +541,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
             <Button type="submit" variant="secondary" className="flex-1 lg:flex-none" loading={saving === 'draft'} disabled={!!saving}>
               Entwurf speichern
             </Button>
-            <Button className="flex-1 lg:flex-none" icon={<Send className="h-4 w-4" />} onClick={handleIssue} disabled={!!saving}>
+            <Button className="flex-1 lg:flex-none" icon={<Send className="h-4 w-4" />} onClick={handleIssue} disabled={!!saving || expired}>
               Ausstellen
             </Button>
           </div>

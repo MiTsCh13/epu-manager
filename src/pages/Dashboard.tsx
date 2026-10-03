@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Banknote, FilePlus, FileClock, PiggyBank, ReceiptEuro, TrendingUp, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAccessState } from '@/lib/subscription';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useSvsTracker } from '@/hooks/useSvsTracker';
 import { openInvoicesSummary, topCategories } from '@/lib/dashboard';
@@ -79,6 +80,16 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-6">
+          {profile && getAccessState(profile).kind === 'expired' && (
+            <Alert type="warning" title="Deine Testphase ist abgelaufen">
+              Deine Daten bleiben sichtbar. Für neue Rechnungen brauchst du{' '}
+              <Link to="/einstellungen" className="font-semibold underline">
+                Klaro Pro (19 €/Monat)
+              </Link>
+              .
+            </Alert>
+          )}
+
           {/* Wichtige Hinweise (Phasenhinweis steckt bereits in der SVS-Karte) */}
           {svs.model.alerts
             .filter((a) => !a.id.startsWith('phase'))
