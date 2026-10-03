@@ -106,7 +106,7 @@ export default function Clients() {
         </div>
       )}
 
-      <ClientFormModal open={formOpen} client={editing} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} />
+      <ClientFormModal key={editing?.id ?? 'new'} open={formOpen} client={editing} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} />
 
       <Modal
         open={!!deleting}

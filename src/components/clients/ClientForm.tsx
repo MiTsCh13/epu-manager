@@ -34,7 +34,7 @@ export function ClientFormModal({
   onClose: () => void;
   onSubmit: (data: ClientFormData) => Promise<boolean>;
 }) {
-  const [form, setForm] = useState<ClientFormData>(EMPTY_CLIENT_FORM);
+  const [form, setForm] = useState<ClientFormData>(() => toForm(client));
   const [errors, setErrors] = useState<ClientFormErrors>({});
   const [saving, setSaving] = useState(false);
 

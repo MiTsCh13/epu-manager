@@ -48,6 +48,14 @@ export const GLOSSARY = {
     term: 'IBAN',
     text: 'Deine Kontonummer für Überweisungen (beginnt in Österreich mit AT). Sie steht auf deinen Rechnungen, damit Kund:innen bezahlen können.',
   },
+  grundfreibetrag: {
+    term: 'Grundfreibetrag',
+    text: '15 % deines Gewinns (bis 33.000 € Gewinn, also max. 4.950 €) sind automatisch steuerfrei – ohne dass du dafür etwas investieren musst.',
+  },
+  absetzbar: {
+    term: 'absetzbar',
+    text: 'Absetzbare Ausgaben ziehst du von deinen Einnahmen ab – dadurch sinkt dein Gewinn und damit Steuer und SVS. Manche Ausgaben zählen nur zur Hälfte (z. B. Geschäftsessen).',
+  },
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSSARY;
