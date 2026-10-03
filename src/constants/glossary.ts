@@ -56,6 +56,14 @@ export const GLOSSARY = {
     term: 'absetzbar',
     text: 'Absetzbare Ausgaben ziehst du von deinen Einnahmen ab – dadurch sinkt dein Gewinn und damit Steuer und SVS. Manche Ausgaben zählen nur zur Hälfte (z. B. Geschäftsessen).',
   },
+  berechnungsbasis: {
+    term: 'Berechnungsbasis',
+    text: 'Der Betrag, von dem die SVS deine Beiträge berechnet: dein Gewinn plus die SVS-Beiträge, die du im Jahr bezahlt hast (die zählen bei der SVS nicht als Ausgabe). Mindestens 6.613 €, höchstens 97.020 € im Jahr.',
+  },
+  vorschreibung: {
+    term: 'Vorschreibung',
+    text: 'Die Rechnung der SVS, die du jedes Quartal bekommst (Ende Februar, Mai, August, November). Sie basiert zunächst auf einer Schätzung – daher die spätere Nachbemessung.',
+  },
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

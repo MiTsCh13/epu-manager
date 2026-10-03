@@ -209,6 +209,7 @@ export type Database = {
           stripe_customer_id: string | null
           subscription_status: string
           svs_exempt: boolean
+          svs_quarterly_prescription: number | null
           svs_registration_date: string | null
           trial_ends_at: string
           uid_number: string | null
@@ -235,6 +236,7 @@ export type Database = {
           stripe_customer_id?: string | null
           subscription_status?: string
           svs_exempt?: boolean
+          svs_quarterly_prescription?: number | null
           svs_registration_date?: string | null
           trial_ends_at?: string
           uid_number?: string | null
@@ -261,6 +263,7 @@ export type Database = {
           stripe_customer_id?: string | null
           subscription_status?: string
           svs_exempt?: boolean
+          svs_quarterly_prescription?: number | null
           svs_registration_date?: string | null
           trial_ends_at?: string
           uid_number?: string | null

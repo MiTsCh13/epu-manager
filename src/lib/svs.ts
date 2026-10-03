@@ -153,6 +153,15 @@ export function getVorlaeufigeBeitragsgrundlage(phase: SVSPhase, previousYearPro
   return round2(clampBasis(previousYearProfit));
 }
 
+/**
+ * Vorläufige Beitragsgrundlage aus dem Betrag der aktuellen SVS-Quartalsvorschreibung zurückrechnen
+ * (Quartal × 4 − UV) / Beitragssatz. Genauer als jede Schätzung, weil es die echte Vorschreibung ist.
+ */
+export function basisFromQuarterlyPrescription(quarterlyAmount: number): number {
+  const annual = Math.max(quarterlyAmount * 4 - SVS_2026.accidentFixed, 0);
+  return round2(clampBasis(annual / TOTAL_RATE));
+}
+
 /** Vorläufige Quartalsvorschreibung (inkl. UV). */
 export function calculateQuarterlyPrescription(
   phase: SVSPhase,
@@ -167,6 +176,7 @@ export function getNachzahlungsWarning(params: {
   phase: SVSPhase;
   projectedProfit: number;
   previousYearProfit?: number; // Gewinn aus Vorjahr (für Nachbemessungs-Schätzung)
+  provisionalBasis?: number; // bekannte vorläufige Basis (z. B. aus der Vorschreibung) – hat Vorrang
 }): {
   hasWarning: boolean;
   estimatedNachzahlung: number;
@@ -175,7 +185,7 @@ export function getNachzahlungsWarning(params: {
 } {
   const { phase, projectedProfit } = params;
   const finalBasis = clampBasis(projectedProfit);
-  const provisionalBasis = getVorlaeufigeBeitragsgrundlage(phase, params.previousYearProfit);
+  const provisionalBasis = params.provisionalBasis ?? getVorlaeufigeBeitragsgrundlage(phase, params.previousYearProfit);
   // Jahr 1–2: KV ist endgültig auf Mindestbasis → nur PV + Selbständigenvorsorge werden nachbemessen
   const rate = phase === 'year1_2' ? pension + provision : TOTAL_RATE;
   const estimatedNachzahlung = round2(Math.max(0, finalBasis - provisionalBasis) * rate);

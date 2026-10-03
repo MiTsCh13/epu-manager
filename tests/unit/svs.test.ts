@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SVS_2026 } from '@/constants/svs2026';
 import {
+  basisFromQuarterlyPrescription,
   calculateBeitragsgrundlage,
   calculateQuarterlyPrescription,
   calculateReserveRecommendation,
@@ -225,6 +226,21 @@ describe('getNachzahlungsWarning', () => {
 
   it('keine Nachzahlung bei Gewinn unter Mindestbasis', () => {
     expect(getNachzahlungsWarning({ phase: 'year3', projectedProfit: 5000 }).hasWarning).toBe(false);
+  });
+});
+
+describe('basisFromQuarterlyPrescription', () => {
+  it('rechnet die Vorschreibung exakt auf die Basis zurück', () => {
+    expect(basisFromQuarterlyPrescription(calculateQuarterlyPrescription('year4plus', 40000))).toBeCloseTo(40000, 0);
+    expect(basisFromQuarterlyPrescription(482.43)).toBe(6613.2);
+  });
+  it('begrenzt auf Mindest-/Höchstbasis', () => {
+    expect(basisFromQuarterlyPrescription(0)).toBe(6613.2);
+    expect(basisFromQuarterlyPrescription(100000)).toBe(97020);
+  });
+  it('Nachzahlung mit bekannter vorläufiger Basis', () => {
+    const w = getNachzahlungsWarning({ phase: 'year4plus', projectedProfit: 50000, provisionalBasis: 40000 });
+    expect(w.estimatedNachzahlung).toBe(2683);
   });
 });
 
