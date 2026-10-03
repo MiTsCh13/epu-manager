@@ -1,0 +1,53 @@
+// Fachbegriffe in einfacher Sprache – für Tooltips (<Term>) im gesamten UI.
+export const GLOSSARY = {
+  svs: {
+    term: 'SVS',
+    text: 'Die Sozialversicherung der Selbständigen. Sie kümmert sich um deine Kranken-, Pensions- und Unfallversicherung – und schickt dir dafür vierteljährlich eine Vorschreibung.',
+  },
+  nachbemessung: {
+    term: 'Nachbemessung',
+    text: 'Die SVS verrechnet zuerst vorläufige Beiträge. Sobald dein Einkommensteuerbescheid da ist, rechnet sie mit deinem echten Gewinn nach – war er höher, kommt eine Nachzahlung.',
+  },
+  pauschalierung: {
+    term: 'Pauschalierung',
+    text: 'Statt jede Ausgabe einzeln zu sammeln, ziehst du einfach einen fixen Prozentsatz deiner Einnahmen als Ausgaben ab. Weniger Aufwand – lohnt sich, wenn du wenige echte Ausgaben hast.',
+  },
+  kuPauschalierung: {
+    term: 'Kleinunternehmerpauschalierung',
+    text: 'Nur für Kleinunternehmer (bis 55.000 € Umsatz): 45 % der Einnahmen gelten als Ausgaben bei Dienstleistungen, 20 % bei Handel und Produktion.',
+  },
+  basisPauschalierung: {
+    term: 'Basispauschalierung',
+    text: 'Für alle bis 420.000 € Umsatz: 15 % der Einnahmen gelten als Ausgaben. Für Beratung, Vorträge, Unterricht, schriftstellerische oder wissenschaftliche Tätigkeit nur 6 %.',
+  },
+  euer: {
+    term: 'Einnahmen-Ausgaben-Rechnung (EÜR)',
+    text: 'Du erfasst alle Einnahmen und alle Ausgaben einzeln. Gewinn = Einnahmen minus Ausgaben. Lohnt sich, wenn du viele echte Ausgaben hast.',
+  },
+  kleinunternehmer: {
+    term: 'Kleinunternehmer',
+    text: 'Wenn dein Umsatz unter 55.000 € im Jahr liegt, musst du keine Umsatzsteuer verrechnen. Dafür darfst du dir auch keine Vorsteuer zurückholen.',
+  },
+  uid: {
+    term: 'UID-Nummer',
+    text: 'Deine Umsatzsteuer-Identifikationsnummer (z. B. ATU12345678). Brauchst du, wenn du Umsatzsteuer verrechnest oder mit Firmen im EU-Ausland arbeitest. Beantragst du über FinanzOnline.',
+  },
+  ustg11: {
+    term: '§ 11 UStG',
+    text: 'Der Paragraf im Umsatzsteuergesetz, der festlegt, was auf einer Rechnung stehen muss – z. B. Name, Anschrift, Datum, Rechnungsnummer und Leistung. Klaro achtet darauf für dich.',
+  },
+  gsvg: {
+    term: 'Gewerbetreibend (GSVG)',
+    text: 'Du hast einen Gewerbeschein (z. B. Handel, Werbeagentur, IT-Dienstleister mit Gewerbe). Du bist ab dem ersten Euro bei der SVS versichert.',
+  },
+  neueSelbstaendige: {
+    term: 'Neue Selbständige',
+    text: 'Du arbeitest selbständig ohne Gewerbeschein (z. B. Vortragende, Psychotherapeut:innen, viele Fotograf:innen und Trainer:innen). Versichert bist du erst ab 6.613,20 € Gewinn im Jahr.',
+  },
+  iban: {
+    term: 'IBAN',
+    text: 'Deine Kontonummer für Überweisungen (beginnt in Österreich mit AT). Sie steht auf deinen Rechnungen, damit Kund:innen bezahlen können.',
+  },
+} as const;
+
+export type GlossaryKey = keyof typeof GLOSSARY;
