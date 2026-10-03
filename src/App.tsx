@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -6,20 +7,24 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
-import Onboarding from '@/pages/Onboarding';
-import Dashboard from '@/pages/Dashboard';
-import Invoices from '@/pages/Invoices';
-import NewInvoice from '@/pages/NewInvoice';
-import InvoiceView from '@/pages/InvoiceView';
-import Expenses from '@/pages/Expenses';
-import Clients from '@/pages/Clients';
-import SVSTracker from '@/pages/SVSTracker';
-import Settings from '@/pages/Settings';
+import { FullPageSpinner } from '@/components/ui/Spinner';
+
+// Seiten einzeln nachladen: Login/Registrierung bleiben klein, Diagramme & Co. kommen erst bei Bedarf
+const Onboarding = lazy(() => import('@/pages/Onboarding'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Invoices = lazy(() => import('@/pages/Invoices'));
+const NewInvoice = lazy(() => import('@/pages/NewInvoice'));
+const InvoiceView = lazy(() => import('@/pages/InvoiceView'));
+const Expenses = lazy(() => import('@/pages/Expenses'));
+const Clients = lazy(() => import('@/pages/Clients'));
+const SVSTracker = lazy(() => import('@/pages/SVSTracker'));
+const Settings = lazy(() => import('@/pages/Settings'));
 
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           <Route path="/login" element={<RedirectIfAuthenticated><Login /></RedirectIfAuthenticated>} />
           <Route path="/registrieren" element={<RedirectIfAuthenticated><Register /></RedirectIfAuthenticated>} />
@@ -38,6 +43,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         <Toaster position="top-center" toastOptions={{ duration: 4000 }} />
       </AuthProvider>
     </ErrorBoundary>

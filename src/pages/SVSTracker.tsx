@@ -1,12 +1,10 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useYearFigures } from '@/hooks/useYearFigures';
-import { buildSvsTracker } from '@/lib/svsTracker';
+import { useSvsTracker } from '@/hooks/useSvsTracker';
 import { formatEuro } from '@/lib/money';
 import { toISODate, formatDate } from '@/lib/invoices';
-import type { SVSPhase } from '@/lib/svs';
+import { PHASE_INFO } from '@/constants/svsPhases';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { NachzahlungsRadar } from '@/components/svs/NachzahlungsRadar';
 import { ReserveCard } from '@/components/svs/ReserveCard';
@@ -15,51 +13,13 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Term } from '@/components/ui/Tooltip';
-import type { BusinessType, IndustryType, PauschType, ProfitMethod } from '@/types';
 
-export const PHASE_INFO: Record<SVSPhase, { title: string; text: string; tone: string }> = {
-  year1_2: {
-    title: 'Gründungsphase',
-    text: 'Du zahlst vorläufig nur Mindestbeiträge. Die Pensionsversicherung wird später auf Basis deines echten Gewinns nachberechnet – dieses Geld solltest du jetzt schon zur Seite legen.',
-    tone: 'bg-primary-50 text-primary-900 ring-primary-100',
-  },
-  year3: {
-    title: 'Erste Nachbemessung',
-    text: 'Sobald dein erster Einkommensteuerbescheid da ist, rechnet die SVS dein erstes Jahr nach. Ab jetzt kommt jedes Jahr eine Nachbemessung – und Kranken- und Pensionsversicherung richten sich nach deinem echten Gewinn.',
-    tone: 'bg-amber-50 text-amber-900 ring-amber-200',
-  },
-  year4plus: {
-    title: 'Volle Nachbemessung',
-    text: 'Die SVS schreibt auf Basis deines letzten Steuerbescheids vor und rechnet jedes Jahr nach. Steigt dein Gewinn, kommt eine Nachzahlung – sinkt er, bekommst du Geld zurück.',
-    tone: 'bg-amber-50 text-amber-900 ring-amber-200',
-  },
-};
 
 const ALERT_TYPE = { info: 'info', warning: 'warning', critical: 'critical' } as const;
 
 export default function SVSTracker() {
   const { profile } = useAuth();
-  const year = new Date().getFullYear();
-  const { current, previous, loading, error, reload } = useYearFigures(year);
-
-  const model = useMemo(
-    () =>
-      profile &&
-      buildSvsTracker({
-        today: new Date(),
-        registrationDate: profile.svs_registration_date ? new Date(profile.svs_registration_date) : null,
-        businessType: profile.business_type as BusinessType | null,
-        exempt: profile.svs_exempt,
-        isKleinunternehmer: profile.is_kleinunternehmer,
-        profitMethod: profile.profit_method as ProfitMethod,
-        pauschType: profile.pausch_type as PauschType | null,
-        industryType: profile.industry_code as IndustryType | null,
-        quarterlyPrescription: profile.svs_quarterly_prescription === null ? null : Number(profile.svs_quarterly_prescription),
-        current,
-        previous,
-      }),
-    [profile, current, previous],
-  );
+  const { model, year, current, loading, error, reload } = useSvsTracker();
 
   return (
     <PageWrapper title="SVS & Rücklagen" description="Wie viel dir wirklich bleibt – und was du für SVS und Steuer zur Seite legen solltest.">
