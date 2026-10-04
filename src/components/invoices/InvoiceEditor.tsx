@@ -44,7 +44,6 @@ interface FormState {
   serviceTouched: boolean;
   serviceTo: string;
   isPeriod: boolean;
-  isHonorarnote: boolean;
   rows: LineItemRow[];
   vatRate: VatRate;
   notes: string;
@@ -65,7 +64,6 @@ function initialState(invoice: Invoice | null, footerDefault: string, isKU: bool
       serviceTouched: false,
       serviceTo: '',
       isPeriod: false,
-      isHonorarnote: false,
       rows: [newRow()],
       vatRate: isKU ? 0 : 20,
       notes: '',
@@ -84,7 +82,6 @@ function initialState(invoice: Invoice | null, footerDefault: string, isKU: bool
     serviceTouched: true,
     serviceTo: invoice.service_date_to ?? '',
     isPeriod: !!invoice.service_date_to,
-    isHonorarnote: invoice.is_honorarnote,
     rows: items.length
       ? items.map((i) => ({
           key: crypto.randomUUID(),
@@ -104,6 +101,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
+  // Neue Selbständige stellen Honorarnoten aus, Gewerbetreibende Rechnungen. Entwürfe folgen dem aktuellen Profil.
+  const isHonorarnote = profile?.business_type === 'neue_selbstaendige';
   const expired = !!profile && getAccessState(profile).kind === 'expired';
   const { clients, loading: clientsLoading, create: createClient } = useClients();
 
@@ -169,7 +168,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       due_date: form.dueDate || null,
       service_date_from: form.serviceFrom || null,
       service_date_to: form.isPeriod && form.serviceTo ? form.serviceTo : null,
-      is_honorarnote: form.isHonorarnote,
+      is_honorarnote: isHonorarnote,
       line_items: lineItems as unknown as Invoice['line_items'],
       vat_rate: totals.vatRate,
       subtotal: totals.subtotal,
@@ -288,7 +287,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     return true;
   }
 
-  const docLabel = form.isHonorarnote ? 'Honorarnote' : 'Rechnung';
+  const docLabel = isHonorarnote ? 'Honorarnote' : 'Rechnung';
   const clientOptions = [
     { value: '', label: clientsLoading ? 'Kunden werden geladen …' : 'Kunde auswählen …' },
     ...clients.map((c) => ({ value: c.id, label: c.name })),
@@ -345,31 +344,14 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
           </Alert>
         )}
 
-        {/* Art + Kunde */}
+        {/* Kunde */}
         <section className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6">
-          <div role="radiogroup" aria-label="Art des Dokuments" className="inline-flex rounded-lg bg-slate-100 p-1">
-            {[
-              { value: false, label: 'Rechnung' },
-              { value: true, label: 'Honorarnote' },
-            ].map((opt) => (
-              <button
-                key={opt.label}
-                type="button"
-                role="radio"
-                aria-checked={form.isHonorarnote === opt.value}
-                onClick={() => set({ isHonorarnote: opt.value })}
-                className={`min-h-[40px] rounded-md px-4 text-sm font-medium transition-colors ${
-                  form.isHonorarnote === opt.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-slate-500">
-            Honorarnote ist die übliche Bezeichnung bei freiberuflicher Tätigkeit (z. B. Vortragende, Therapeut:innen) –
-            rechtlich gelten dieselben Regeln.
-          </p>
+          {isHonorarnote && (
+            <p className="text-xs text-slate-500">
+              Als Neue:r Selbständige:r heißt dein Dokument <strong className="font-medium text-slate-700">Honorarnote</strong>.
+              Rechtlich ist es eine Rechnung, es gelten dieselben Regeln.
+            </p>
+          )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <Select
@@ -394,7 +376,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
         {/* Nummer + Daten */}
         <section className="grid gap-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
           <Field
-            label={`${docLabel}snummer`}
+            label={isHonorarnote ? 'Honorarnoten-Nummer' : 'Rechnungsnummer'}
             value={form.invoiceNumber}
             error={errors.invoiceNumber}
             hint="Fortlaufend vergeben – du kannst sie anpassen."

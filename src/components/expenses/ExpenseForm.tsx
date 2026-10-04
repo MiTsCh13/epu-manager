@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { CategoryGrid } from './CategoryGrid';
-import type { Expense, ExpenseInsert, VatRate } from '@/types';
+import type { BusinessType, Expense, ExpenseInsert, VatRate } from '@/types';
 
 function toForm(expense: Expense | null, isKU: boolean): ExpenseFormInput {
   if (!expense) {
@@ -139,7 +139,12 @@ export function ExpenseFormModal({
       }
     >
       <form id={formId} onSubmit={handleSubmit} noValidate className="space-y-5">
-        <CategoryGrid value={form.categoryId} onChange={(categoryId) => set({ categoryId })} error={errors.categoryId} />
+        <CategoryGrid
+          value={form.categoryId}
+          onChange={(categoryId) => set({ categoryId })}
+          error={errors.categoryId}
+          businessType={(profile?.business_type as BusinessType | null) ?? null}
+        />
 
         {category?.hasKm && (
           <Field

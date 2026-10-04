@@ -110,6 +110,13 @@ describe('describeSvsChange', () => {
     const [n] = describeSvsChange(saved, with_({ business_type: 'neue_selbstaendige' }), today);
     expect(n?.id).toBe('business-type');
     expect(n?.text).toContain('6.613,20');
+    expect(n?.text).toContain('Honorarnote');
+    expect(n?.text).toContain('vertan');
+  });
+
+  it('Wechsel zu Gewerbetreibend: Rechnung statt Honorarnote', () => {
+    const [n] = describeSvsChange(with_({ business_type: 'neue_selbstaendige' }), with_({ business_type: 'gewerbetreibend' }), today);
+    expect(n?.text).toContain('Rechnung statt Honorarnote');
   });
 
   it('Anmeldedatum verschiebt die SVS-Phase → Warnung', () => {
@@ -144,6 +151,7 @@ describe('describeTaxChange', () => {
     expect(n?.type).toBe('warning');
     expect(n?.text).toContain('2 Entwürfe');
     expect(n?.text).toContain('UID-Nummer');
+    expect(n?.text).toContain('fünf Jahre an diese Entscheidung gebunden');
   });
 
   it('USt-pflichtig → Kleinunternehmer: Entwürfe werden umgestellt', () => {
@@ -151,6 +159,7 @@ describe('describeTaxChange', () => {
     const [n] = describeTaxChange(before, with_({ pausch_type: 'basis_15', industry_code: null }), 1);
     expect(n?.id).toBe('ku-on');
     expect(n?.text).toContain('1 Entwurf wird automatisch auf 0 % USt umgestellt');
+    expect(n?.text).toContain('nicht in den letzten fünf Jahren');
   });
 
   it('ohne Entwürfe kein Entwurfs-Hinweis', () => {

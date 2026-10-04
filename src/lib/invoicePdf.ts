@@ -82,8 +82,8 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
     : formatDate(invoice.service_date_from ?? invoice.invoice_date);
 
   const meta: [string, string][] = [
-    [`${title}snummer`, invoice.invoice_number],
-    [`${title}sdatum`, formatDate(invoice.invoice_date)],
+    [invoice.is_honorarnote ? 'Honorarnoten-Nummer' : 'Rechnungsnummer', invoice.invoice_number],
+    [invoice.is_honorarnote ? 'Ausstellungsdatum' : 'Rechnungsdatum', formatDate(invoice.invoice_date)],
     [invoice.service_date_to ? 'Leistungszeitraum' : 'Leistungsdatum', service],
   ];
   if (invoice.due_date) meta.push(['Zahlbar bis', formatDate(invoice.due_date)]);

@@ -100,6 +100,9 @@ export interface ChangeNotice {
 
 const validDate = (iso: string) => (iso && !Number.isNaN(new Date(iso).getTime()) ? new Date(iso) : null);
 
+const BUSINESS_TYPE_CHANGE_NOTE =
+  'Ändere das nur, wenn du dich bei der Einrichtung vertan hast oder dein Gewerbe an- bzw. abgemeldet hast. Klaro rechnet dann dein ganzes Jahr mit der neuen Tätigkeitsart.';
+
 /** Tätigkeitsart oder Anmeldedatum geändert → was sich bei der SVS-Berechnung ändert. */
 export function describeSvsChange(saved: SettingsData, next: SettingsData, today: Date = new Date()): ChangeNotice[] {
   const notices: ChangeNotice[] = [];
@@ -111,13 +114,13 @@ export function describeSvsChange(saved: SettingsData, next: SettingsData, today
             id: 'business-type',
             type: 'info',
             title: 'Neue Selbständige',
-            text: `Du bist erst ab ${formatEuro(SVS_2026.registrationThreshold)} Gewinn im Jahr bei der SVS pflichtversichert. Klaro berechnet deine Beiträge und Rücklagen ab sofort danach.`,
+            text: `Du bist erst ab ${formatEuro(SVS_2026.registrationThreshold)} Einkünften im Jahr bei der SVS pflichtversichert. Neue Rechnungen und Entwürfe heißen ab jetzt Honorarnote. ${BUSINESS_TYPE_CHANGE_NOTE}`,
           }
         : {
             id: 'business-type',
             type: 'info',
             title: 'Gewerbetreibend',
-            text: 'Du bist ab dem ersten Euro bei der SVS versichert – auch ohne Gewinn fällt mindestens der Mindestbeitrag an. Klaro berechnet deine Beiträge und Rücklagen ab sofort danach.',
+            text: `Du bist ab dem ersten Euro bei der SVS versichert, auch ohne Gewinn fällt mindestens der Mindestbeitrag an. Neue Rechnungen und Entwürfe heißen ab jetzt Rechnung statt Honorarnote. ${BUSINESS_TYPE_CHANGE_NOTE}`,
           },
     );
   }
@@ -158,7 +161,8 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
       text: [
         'Diese Änderung beeinflusst deine Rechnungsstellung: Neue Rechnungen weisen Umsatzsteuer aus, der Kleinunternehmer-Hinweis entfällt. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `Du hast ${drafts} – prüfe dort den USt-Satz.` : '',
-        'Melde dich beim Finanzamt für die Umsatzsteuer an (UID-Nummer, Umsatzsteuervoranmeldung) – am besten gemeinsam mit deiner Steuerberatung.',
+        'Melde dich beim Finanzamt für die Umsatzsteuer an (UID-Nummer, Umsatzsteuervoranmeldung), am besten gemeinsam mit deiner Steuerberatung.',
+        `Wichtig: Verzichtest du freiwillig auf die Kleinunternehmerregelung, obwohl dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} liegt, bist du fünf Jahre an diese Entscheidung gebunden.`,
         next.uid_number.trim() ? '' : 'Trage danach deine UID-Nummer unter „Adresse, Bank & Rechnungen“ ein.',
       ]
         .filter(Boolean)
@@ -173,6 +177,7 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
         'Diese Änderung beeinflusst deine Rechnungsstellung: Neue Rechnungen enthalten keine Umsatzsteuer mehr, dafür automatisch den Hinweis „§ 6 Abs. 1 Z 27 UStG“. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `${drafts} ${draftCount === 1 ? 'wird' : 'werden'} automatisch auf 0 % USt umgestellt.` : '',
         'Beachte: Als Kleinunternehmer kannst du dir keine Vorsteuer zurückholen.',
+        `Das geht nur, wenn dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} brutto liegt und du nicht in den letzten fünf Jahren freiwillig auf die Kleinunternehmerregelung verzichtet hast.`,
       ]
         .filter(Boolean)
         .join(' '),

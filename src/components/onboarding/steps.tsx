@@ -31,25 +31,67 @@ export function StepIdentity({ data, errors, update }: StepProps) {
         value={data.business_name}
         onChange={(e) => update({ business_name: e.target.value })}
       />
-      <ChoiceCards<BusinessType>
-        legend="Wie bist du selbständig?"
-        name="business_type"
-        value={data.business_type}
-        error={errors.business_type}
-        onChange={(business_type) => update({ business_type })}
-        options={[
-          {
-            value: 'gewerbetreibend',
-            title: <Term k="gsvg" />,
-            description: 'Du hast einen Gewerbeschein.',
-          },
-          {
-            value: 'neue_selbstaendige',
-            title: <Term k="neueSelbstaendige" />,
-            description: 'Ohne Gewerbeschein – z. B. Fotograf:in, Trainer:in, Entwickler:in.',
-          },
-        ]}
-      />
+      <div className="space-y-2">
+        <ChoiceCards<BusinessType>
+          legend="Wie bist du selbständig?"
+          name="business_type"
+          value={data.business_type}
+          error={errors.business_type}
+          onChange={(business_type) => update({ business_type })}
+          options={[
+            {
+              value: 'gewerbetreibend',
+              title: <Term k="gsvg" />,
+              description: (
+                <>
+                  Du hast ein Gewerbe angemeldet: Du bist im Gewerberegister (GISA) eingetragen und zahlst die
+                  Grundumlage an die Wirtschaftskammer (WKO).
+                  <span className="mt-1 block text-xs">
+                    Typisch: IT-Dienstleistung und Programmierung, Fotografie, Grafikdesign, Unternehmensberatung,
+                    Handel, Handwerk.
+                  </span>
+                </>
+              ),
+            },
+            {
+              value: 'neue_selbstaendige',
+              title: <Term k="neueSelbstaendige" />,
+              description: (
+                <>
+                  Du bist ohne Gewerbe selbständig: kein Eintrag im Gewerberegister, keine Post von der WKO.
+                  <span className="mt-1 block text-xs">
+                    Typisch: Vortragende, Trainer:innen in der Erwachsenenbildung, Psychotherapeut:innen,
+                    Journalist:innen, Autor:innen, Künstler:innen.
+                  </span>
+                </>
+              ),
+            },
+          ]}
+        />
+        <details className="group rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <summary className="cursor-pointer list-none font-medium text-primary [&::-webkit-details-marker]:hidden">
+            Nicht sicher? So findest du es heraus
+          </summary>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5">
+            <li>
+              Such deinen Namen in der{' '}
+              <a href="https://www.gisa.gv.at/abfrage" target="_blank" rel="noreferrer" className="font-medium text-primary underline">
+                GISA-Abfrage
+              </a>{' '}
+              (öffentlich und kostenlos). Findest du dort eine Gewerbeberechtigung, bist du gewerbetreibend.
+            </li>
+            <li>Bekommst du jedes Jahr eine Vorschreibung der Grundumlage von der Wirtschaftskammer, bist du gewerbetreibend.</li>
+            <li>
+              Auch ohne Prüfung braucht man für viele Tätigkeiten ein Gewerbe, z. B. für Fotografie oder IT-Dienstleistungen
+              (sogenannte freie Gewerbe).
+            </li>
+            <li>
+              Ärzt:innen, Anwält:innen, Notar:innen und Ziviltechniker:innen sind anders versichert. Für sie passt Klaro
+              derzeit nicht.
+            </li>
+          </ul>
+        </details>
+      </div>
       <Field
         label={
           <>

@@ -16,7 +16,7 @@ test('neue:r Nutzer:in stellt die erste Rechnung aus und lädt das PDF herunter'
 
   // Schritt 1 – Wer bist du?
   await expect(page.getByRole('heading', { name: 'Wer bist du?' })).toBeVisible();
-  await page.getByText('Ohne Gewerbeschein').click();
+  await page.getByText('Du bist ohne Gewerbe selbständig').click();
   await page.getByLabel(/Seit wann bist du/).fill(`${new Date().getFullYear() - 1}-03-01`);
   await page.getByRole('button', { name: 'Weiter' }).click();
 
@@ -38,6 +38,8 @@ test('neue:r Nutzer:in stellt die erste Rechnung aus und lädt das PDF herunter'
   await expect(page.getByRole('heading', { name: 'Willkommen bei Klaro!' })).toBeVisible();
   await page.getByRole('link', { name: 'Erste Rechnung erstellen' }).click();
   await expect(page).toHaveURL(/\/rechnungen\/neu/);
+  // Neue Selbständige stellen Honorarnoten aus – ohne Auswahl
+  await expect(page.getByRole('heading', { name: 'Neue Honorarnote' })).toBeVisible();
 
   // Kunde anlegen
   await page.getByRole('button', { name: 'Neuer Kunde' }).click();
@@ -57,7 +59,7 @@ test('neue:r Nutzer:in stellt die erste Rechnung aus und lädt das PDF herunter'
   await expect(page.getByText('§ 6 Abs. 1 Z 27 UStG')).toBeVisible();
 
   // Ausstellen (die fortlaufende Nummer wird asynchron vorgeschlagen)
-  await expect(page.getByLabel('Rechnungsnummer')).toHaveValue(/^\d{4}-\d{3}$/);
+  await expect(page.getByLabel('Honorarnoten-Nummer')).toHaveValue(/^\d{4}-\d{3}$/);
   await page.getByRole('button', { name: 'Ausstellen' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Jetzt ausstellen' }).click();
 

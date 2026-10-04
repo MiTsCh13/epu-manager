@@ -136,6 +136,8 @@ describe('buildInvoicePdfData – Varianten', () => {
     expect(d.isDraft).toBe(true);
     expect(d.fileName).toBe('Entwurf_Honorarnote_KL_2026_001.pdf');
     expect(d.meta).toContainEqual(['Leistungszeitraum', '01.04.2026 – 30.04.2026']);
+    expect(d.meta).toContainEqual(['Honorarnoten-Nummer', 'KL 2026/001']);
+    expect(d.meta.map(([k]) => k)).toContain('Ausstellungsdatum');
     expect(d.meta.map(([k]) => k)).not.toContain('Zahlbar bis');
     expect(d.recipientLines).toEqual(['Muster AG', '80331 München', 'Deutschland']);
     expect(d.issuerName).toBe('Nora Neu');

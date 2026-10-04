@@ -41,11 +41,11 @@ export const GLOSSARY = {
   },
   gsvg: {
     term: 'Gewerbetreibend (GSVG)',
-    text: 'Du hast einen Gewerbeschein (z. B. Handel, Werbeagentur, IT-Dienstleister mit Gewerbe). Du bist ab dem ersten Euro bei der SVS versichert.',
+    text: 'Du hast ein Gewerbe angemeldet und bist damit Mitglied der Wirtschaftskammer (z. B. IT-Dienstleistung, Fotografie, Grafikdesign, Handel). Bei der SVS bist du ab dem ersten Euro versichert.',
   },
   neueSelbstaendige: {
     term: 'Neue Selbständige',
-    text: 'Du arbeitest selbständig ohne Gewerbeschein (z. B. Vortragende, Psychotherapeut:innen, viele Fotograf:innen und Trainer:innen). Versichert bist du erst ab 6.613,20 € Gewinn im Jahr.',
+    text: `Du arbeitest selbständig ohne Gewerbe (z. B. Vortragende, Psychotherapeut:innen, Journalist:innen, Künstler:innen). Bei der SVS bist du erst ab ${formatEuro(SVS_2026.registrationThreshold)} Einkünften im Jahr versichert.`,
   },
   iban: {
     term: 'IBAN',
