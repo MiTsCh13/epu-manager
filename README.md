@@ -26,6 +26,13 @@ npm run dev                  # http://localhost:5173
 | `npm run test:coverage` | Coverage (100 % Pflicht für svs/profit/tax) |
 | `npm run test:e2e` | E2E-Tests (Playwright) |
 
+## E2E-Tests (Playwright)
+`npm run test:e2e` startet den Dev-Server und prüft die drei kritischen Flows auf Desktop und Handy:
+Registrierung → Onboarding → Rechnung → PDF · Ausgaben → Gewinn · Umsatzgrenze 45.000 € → Warnung.
+Die Tests laufen gegen das Supabase-Projekt aus `.env.local`, legen eigene Testnutzer (`klaro-e2e-…@example.com`) an
+und löschen sie danach über `delete-account`. Voraussetzung: „Confirm email“ ist im Projekt ausgeschaltet –
+**vor dem Launch wieder einschalten** (dann ein eigenes Test-Projekt verwenden).
+
 ## Jährliches Update
 SVS-Werte liegen ausschließlich in `src/constants/svs2026.ts`. Für ein neues Jahr eine neue Datei anlegen – nie Werte im Code hardcoden.
 

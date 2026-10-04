@@ -142,6 +142,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     if (!yearNumbers || form.numberTouched) return;
     const format = (profile?.invoice_number_format ?? 'YYYY-NNN') as InvoiceNumberFormat;
     set({ invoiceNumber: generateInvoiceNumber(format, yearNumbers.year, yearNumbers.numbers) });
+    // Wurde schon vor dem Laden der Nummer geprüft, die Fehlermeldung wieder ausblenden
+    setErrors((e) => ({ ...e, invoiceNumber: undefined }));
   }, [yearNumbers, form.numberTouched, profile?.invoice_number_format]);
 
   const lineItems = useMemo(() => parseLineItems(form.rows), [form.rows]);

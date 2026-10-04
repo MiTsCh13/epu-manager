@@ -84,8 +84,12 @@ export default function Onboarding() {
 
     if (step === 3) {
       if (!(await save())) return;
-      setStep(4);
+      // Erst das abgeschlossene Profil laden, dann „Willkommen“ zeigen – sonst schickt ein schneller Klick
+      // auf „Erste Rechnung erstellen“ noch einmal ins Onboarding (Profil gilt dort noch als unvollständig)
+      setSaving(true);
       await refreshProfile();
+      setSaving(false);
+      setStep(4);
       toast.success('Profil gespeichert!');
     } else {
       // Kontoinhaber mit Firmen- bzw. eigenem Namen vorbelegen
