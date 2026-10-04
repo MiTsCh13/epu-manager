@@ -2,13 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { isValidEmail, translateAuthError } from '@/lib/validation';
+import { isValidEmail, MIN_PASSWORD_LENGTH, translateAuthError } from '@/lib/validation';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
-
-const MIN_PASSWORD_LENGTH = 8;
 
 export default function Register() {
   const navigate = useNavigate();

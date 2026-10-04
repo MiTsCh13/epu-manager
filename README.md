@@ -34,12 +34,17 @@ Checkout, Kundenportal und Webhook laufen als Supabase Edge Functions (`supabase
 Secrets liegen nur in Supabase (`supabase secrets list`): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `APP_URL`.
 
 ```bash
-supabase functions deploy create-checkout-session create-portal-session stripe-webhook --use-api
+supabase functions deploy create-checkout-session create-portal-session stripe-webhook delete-account --use-api
 ```
 
 Der Webhook (`/functions/v1/stripe-webhook`) aktualisiert `profiles.subscription_status`. Nach Ablauf der Testphase
 ohne Abo verhindert die Datenbank neue bzw. ausgestellte Rechnungen (weicher Paywall).
 Testkarte: `4242 4242 4242 4242`, beliebiges Datum in der Zukunft, beliebige CVC.
+
+## Konto löschen (DSGVO Art. 17)
+Die Edge Function `delete-account` beendet laufende Stripe-Abos, löscht alle Belegfotos und über
+`delete_user_data()` sämtliche Daten des Nutzers, danach den Auth-Nutzer. Der Stripe-Kunde bleibt wegen der
+Aufbewahrungspflicht für Zahlungsbelege (§ 132 BAO) bestehen.
 
 ## Hosting
 Frontend: Vercel · Backend: Supabase (Region Frankfurt, DSGVO)

@@ -118,6 +118,30 @@ export function validateOnboardingStep(step: 1 | 2 | 3, data: OnboardingData, to
   return e;
 }
 
+// ─── Passwort ändern ────────────────────────────────────────
+
+export const MIN_PASSWORD_LENGTH = 8;
+
+export interface PasswordChangeData {
+  current: string;
+  next: string;
+  confirm: string;
+}
+
+export type PasswordChangeErrors = Partial<Record<keyof PasswordChangeData, string>>;
+
+export function validatePasswordChange(data: PasswordChangeData): PasswordChangeErrors {
+  const e: PasswordChangeErrors = {};
+  if (!data.current) e.current = 'Bitte gib dein aktuelles Passwort ein.';
+  if (data.next.length < MIN_PASSWORD_LENGTH) {
+    e.next = `Dein neues Passwort braucht mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`;
+  } else if (data.next === data.current) {
+    e.next = 'Das neue Passwort muss sich von deinem aktuellen unterscheiden.';
+  }
+  if (!e.next && data.confirm !== data.next) e.confirm = 'Die beiden Passwörter stimmen nicht überein.';
+  return e;
+}
+
 // ─── Supabase-Auth-Fehler auf Deutsch ───────────────────────
 
 export function translateAuthError(message: string): string {
@@ -127,6 +151,8 @@ export function translateAuthError(message: string): string {
   if (m.includes('already registered') || m.includes('already been registered')) {
     return 'Für diese E-Mail-Adresse gibt es bereits ein Konto. Melde dich stattdessen an.';
   }
+  if (m.includes('different from the old password')) return 'Das neue Passwort muss sich von deinem aktuellen unterscheiden.';
+  if (m.includes('reauthenticat')) return 'Bitte melde dich aus Sicherheitsgründen neu an und versuche es dann erneut.';
   if (m.includes('password') && (m.includes('at least') || m.includes('short') || m.includes('weak'))) {
     return 'Dein Passwort ist zu kurz oder zu schwach. Bitte verwende mindestens 8 Zeichen.';
   }

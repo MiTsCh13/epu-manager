@@ -64,14 +64,18 @@ export function getKleinunternehmerStatus(annualRevenue: number): Kleinunternehm
 
 // ─── Rechnungsnummern ───────────────────────────────────────
 
-/** Nächste fortlaufende Nummer im Jahr, z. B. 2026-001 bzw. KL-2026-001. */
+/**
+ * Nächste fortlaufende Nummer im Jahr, z. B. 2026-001 bzw. KL-2026-001.
+ * Die Zählung läuft über beide Formate weiter (2026-007 → KL-2026-008), damit ein
+ * Formatwechsel mitten im Jahr keine Lücken oder doppelten Nummern erzeugt.
+ */
 export function generateInvoiceNumber(
   format: InvoiceNumberFormat,
   year: number,
   existingNumbers: readonly string[],
 ): string {
   const prefix = format === 'KL-YYYY-NNN' ? `KL-${year}-` : `${year}-`;
-  const pattern = new RegExp(`^${prefix}(\\d+)$`);
+  const pattern = new RegExp(`^(?:KL-)?${year}-(\\d+)$`);
   const max = existingNumbers.reduce((acc, n) => {
     const match = pattern.exec(n);
     return match ? Math.max(acc, Number(match[1])) : acc;

@@ -236,10 +236,20 @@ export function getSVSAlerts(params: {
   isKleinunternehmer: boolean;
   phase: SVSPhase;
   quarterlyAmount: number;
+  /** Ausnahme beantragt, aber Gewinn oder Umsatz liegen voraussichtlich über der Grenze */
+  exemptionLost?: boolean;
   today?: Date;
 }): AppAlert[] {
   const alerts: AppAlert[] = [];
   const today = params.today ?? new Date();
+
+  if (params.exemptionLost) {
+    alerts.push({
+      id: 'exemption-lost',
+      urgency: 'critical',
+      message: `Du bist von der SVS-Pflichtversicherung ausgenommen – dein Gewinn (über ${formatEuro(SVS_2026.registrationThreshold, true)}) oder Umsatz (über ${formatEuro(SVS_2026.exemptionRevenueLimit, true)}) liegt aber voraussichtlich über der Grenze. Dann fällt die Ausnahme für das ganze Jahr weg und die SVS verrechnet die vollen Beiträge nach. Klaro rechnet deshalb mit vollen Beiträgen.`,
+    });
+  }
 
   if (params.isKleinunternehmer) {
     if (params.annualRevenue > SVS_2026.kleinunternehmerThreshold) {

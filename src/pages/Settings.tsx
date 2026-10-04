@@ -1,11 +1,19 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { SubscriptionCard } from '@/components/billing/SubscriptionCard';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { AccountSection } from '@/components/settings/AccountSection';
+import { AccountingSection, IdentitySection, InvoicingSection } from '@/components/settings/ProfileSections';
+
+const SECTIONS = [
+  { id: 'abo', label: 'Abo' },
+  { id: 'profil', label: 'Über dich & SVS' },
+  { id: 'steuer', label: 'Steuer' },
+  { id: 'rechnungen', label: 'Adresse & Rechnungen' },
+  { id: 'konto', label: 'Konto' },
+];
 
 export default function Settings() {
   const { refreshProfile } = useAuth();
@@ -31,10 +39,29 @@ export default function Settings() {
   }, [searchParams, setSearchParams, refreshProfile]);
 
   return (
-    <PageWrapper title="Einstellungen" description="Dein Geschäftsprofil, Abrechnung und Abo.">
-      <div className="space-y-6">
-        <SubscriptionCard />
-        <EmptyState icon={SettingsIcon} title="Profil-Einstellungen folgen" description="Geschäftsprofil, Steuer-Einstellungen und Rechnungsformat entstehen in Schritt 13." />
+    <PageWrapper title="Einstellungen" description="Dein Geschäftsprofil, Steuer-Einstellungen, Abo und Konto.">
+      <nav aria-label="Abschnitte" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <ul className="flex gap-2 whitespace-nowrap">
+          {SECTIONS.map((s) => (
+            <li key={s.id}>
+              <a
+                href={`#${s.id}`}
+                className="inline-flex min-h-[36px] items-center rounded-full bg-white px-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {s.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div id="abo" className="scroll-mt-20">
+          <SubscriptionCard />
+        </div>
+        <IdentitySection />
+        <AccountingSection />
+        <InvoicingSection />
+        <AccountSection />
       </div>
     </PageWrapper>
   );

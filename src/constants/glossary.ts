@@ -1,4 +1,7 @@
 // Fachbegriffe in einfacher Sprache – für Tooltips (<Term>) im gesamten UI.
+import { formatEuro } from '@/lib/money';
+import { SVS_2026 } from './svs2026';
+
 export const GLOSSARY = {
   svs: {
     term: 'SVS',
@@ -59,6 +62,10 @@ export const GLOSSARY = {
   berechnungsbasis: {
     term: 'Berechnungsbasis',
     text: 'Der Betrag, von dem die SVS deine Beiträge berechnet: dein Gewinn plus die SVS-Beiträge, die du im Jahr bezahlt hast (die zählen bei der SVS nicht als Ausgabe). Mindestens 6.613 €, höchstens 97.020 € im Jahr.',
+  },
+  kleinstunternehmer: {
+    term: 'Ausnahme von der Pflichtversicherung',
+    text: `Kleinstunternehmerregelung für Gewerbetreibende: Liegt dein Umsatz unter ${formatEuro(SVS_2026.exemptionRevenueLimit, true)} und dein Gewinn unter ${formatEuro(SVS_2026.registrationThreshold)} im Jahr, kannst du dich auf Antrag bei der SVS von Kranken- und Pensionsversicherung befreien lassen. Die Unfallversicherung zahlst du weiter. Überschreitest du eine Grenze, wirst du rückwirkend pflichtversichert.`,
   },
   vorschreibung: {
     term: 'Vorschreibung',

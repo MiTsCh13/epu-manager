@@ -282,6 +282,12 @@ describe('getSVSAlerts', () => {
     expect(a[0]?.urgency).toBe('critical');
   });
 
+  it('Ausnahme verloren: kritischer Hinweis', () => {
+    const a = getSVSAlerts({ ...base, annualRevenue: 0, exemptionLost: true, today: farFromDue });
+    expect(ids(a)).toEqual(['exemption-lost']);
+    expect(a[0]?.urgency).toBe('critical');
+  });
+
   it('keine KU-Warnung für USt-pflichtige Unternehmer', () => {
     expect(getSVSAlerts({ ...base, isKleinunternehmer: false, annualRevenue: 80000, today: farFromDue })).toEqual([]);
   });

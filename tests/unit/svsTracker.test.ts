@@ -116,10 +116,41 @@ describe('buildSvsTracker', () => {
   });
 
   it('Kleinstunternehmer-Ausnahme bzw. unter Versicherungsgrenze: keine Nachzahlung', () => {
-    expect(buildSvsTracker({ ...base, exempt: true }).warning.hasWarning).toBe(false);
+    const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 };
+    const exempt = buildSvsTracker({ ...base, businessType: 'gewerbetreibend', exempt: true, current: small });
+    expect(exempt.notInsured).toBe(true);
+    expect(exempt.exemptionLost).toBe(false);
+    expect(exempt.warning.hasWarning).toBe(false);
+    expect(exempt.expectedSvs).toBe(155.4); // nur Unfallversicherung
     const low = buildSvsTracker({ ...base, current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 } });
     expect(low.notInsured).toBe(true);
     expect(low.warning.hasWarning).toBe(false);
+  });
+
+  it('Ausnahme fällt weg, wenn der Gewinn über der Versicherungsgrenze liegt → volle Beiträge + Alert', () => {
+    const t = buildSvsTracker({ ...base, businessType: 'gewerbetreibend', exempt: true });
+    expect(t.exemptionLost).toBe(true);
+    expect(t.notInsured).toBe(false);
+    expect(t.expectedSvs).toBe(buildSvsTracker({ ...base, businessType: 'gewerbetreibend' }).expectedSvs);
+    expect(t.alerts.map((a) => a.id)).toContain('exemption-lost');
+  });
+
+  it('Ausnahme fällt weg, wenn der Umsatz über 55.000 € liegt (auch bei kleinem Gewinn)', () => {
+    const t = buildSvsTracker({
+      ...base,
+      businessType: 'gewerbetreibend',
+      exempt: true,
+      current: { revenueNet: 50000, revenueGross: 50000, deductibleExpenses: 49000, svsPaid: 0 },
+    });
+    expect(t.projection.projected).toBeLessThan(6613.2);
+    expect(t.exemptionLost).toBe(true);
+  });
+
+  it('Ausnahme gilt nicht für Neue Selbständige', () => {
+    const t = buildSvsTracker({ ...base, exempt: true });
+    expect(t.exemptionLost).toBe(false);
+    expect(t.notInsured).toBe(false);
+    expect(t.warning.hasWarning).toBe(buildSvsTracker(base).warning.hasWarning);
   });
 
   it('Pauschalierung und keine Einnahmen', () => {

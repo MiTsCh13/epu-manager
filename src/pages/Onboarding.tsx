@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { formatIban, normalizeUid, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
+import { formatIban, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
+import { toProfilePatch } from '@/lib/profileSettings';
 import { KlaroLogo } from '@/components/auth/AuthLayout';
 import { StepIndicator } from '@/components/onboarding/StepIndicator';
 import { StepAccounting, StepIdentity, StepInvoicing } from '@/components/onboarding/steps';
@@ -62,27 +63,9 @@ export default function Onboarding() {
 
   async function save(): Promise<boolean> {
     setSaving(true);
-    const pauschal = data.profit_method === 'pauschal';
     const { error } = await supabase
       .from('profiles')
-      .update({
-        full_name: data.full_name.trim(),
-        business_name: data.business_name.trim() || null,
-        business_type: data.business_type,
-        svs_registration_date: data.svs_registration_date,
-        is_kleinunternehmer: data.is_kleinunternehmer ?? true,
-        profit_method: data.profit_method ?? 'pauschal',
-        pausch_type: pauschal ? data.pausch_type : null,
-        industry_code: pauschal && data.pausch_type === 'ku' ? data.industry_code : null,
-        address: data.address.trim(),
-        zip_code: data.zip_code.trim(),
-        city: data.city.trim(),
-        iban: formatIban(data.iban),
-        account_holder: data.account_holder.trim(),
-        uid_number: data.uid_number.trim() ? normalizeUid(data.uid_number) : null,
-        invoice_number_format: data.invoice_number_format,
-        onboarding_completed: true,
-      })
+      .update({ ...toProfilePatch(data), onboarding_completed: true })
       .eq('id', profile!.id);
     setSaving(false);
     if (error) {

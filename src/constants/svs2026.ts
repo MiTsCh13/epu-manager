@@ -28,6 +28,10 @@ export const SVS_2026 = {
   kleinunternehmerThreshold: 55000,
   kleinunternehmerWarningThreshold: 45000, // Ab hier Vorwarnung
 
+  // Ausnahme von der Pflichtversicherung (Kleinstunternehmerregelung, nur GSVG, auf Antrag):
+  // Umsatz höchstens 55.000 € und Gewinn höchstens registrationThreshold – sonst rückwirkend pflichtversichert
+  exemptionRevenueLimit: 55000,
+
   // Gesamtquote für Rücklagen-Empfehlung (= Summe der Beitragssätze)
   reserveRate: 0.2683,
   reserveFixed: 155.4, // Plus UV-Fixbetrag

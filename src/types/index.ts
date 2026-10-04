@@ -9,6 +9,7 @@ export type Invoice = Tables['invoices']['Row'];
 export type Expense = Tables['expenses']['Row'];
 export type SvsPayment = Tables['svs_payments']['Row'];
 
+export type ProfileUpdate = Tables['profiles']['Update'];
 export type ClientInsert = Tables['clients']['Insert'];
 export type InvoiceInsert = Tables['invoices']['Insert'];
 export type ExpenseInsert = Tables['expenses']['Insert'];

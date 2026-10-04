@@ -1,15 +1,10 @@
 // Stripe Checkout & Kundenportal über Supabase Edge Functions (Secret Key bleibt serverseitig)
-import { supabase } from './supabase';
+import { invokeFunction } from './functions';
 
 async function redirectTo(fn: 'create-checkout-session' | 'create-portal-session', fallback: string): Promise<string | null> {
-  const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(fn, { method: 'POST' });
-  if (error || !data?.url) {
-    // Fehlermeldung der Function (deutsch) bevorzugen
-    const ctx = (error as { context?: Response } | null)?.context;
-    const body = ctx ? await ctx.json().catch(() => null) : null;
-    return (body as { error?: string } | null)?.error ?? data?.error ?? fallback;
-  }
-  window.location.assign(data.url);
+  const result = await invokeFunction<{ url?: string }>(fn, fallback);
+  if (result.error !== null || !result.data.url) return result.error ?? fallback;
+  window.location.assign(result.data.url);
   return null;
 }
 

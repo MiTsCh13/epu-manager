@@ -76,7 +76,6 @@ export function buildSvsTracker(input: TrackerInput) {
   const reg = input.registrationDate;
   const svsYear = reg ? getSVSYear(reg, today) : 1;
   const phase: SVSPhase = reg ? getSVSPhase(reg, today) : 'year1_2';
-  const options = { businessType: input.businessType ?? undefined, exempt: input.exempt };
 
   // Gewinn bis heute und SVS-Berechnungsbasis (Gewinn + bezahlte SVS-Beiträge)
   const profitYtd = profitOf(input, current);
@@ -84,6 +83,13 @@ export function buildSvsTracker(input: TrackerInput) {
   const months = monthsElapsedInYear(today);
   const projection = projectAnnualProfit({ currentProfit: basisYtd, monthsElapsed: months });
   const revenueProjected = projectAnnualProfit({ currentProfit: current.revenueNet, monthsElapsed: months }).projected;
+
+  // Kleinstunternehmer-Ausnahme gilt nur im GSVG und nur, solange Gewinn und Umsatz unter den Grenzen bleiben
+  const exemptRequested = input.exempt && input.businessType === 'gewerbetreibend';
+  const exemptionLost =
+    exemptRequested &&
+    (projection.projected > SVS_2026.registrationThreshold || revenueProjected > SVS_2026.exemptionRevenueLimit);
+  const options = { businessType: input.businessType ?? undefined, exempt: exemptRequested && !exemptionLost };
 
   const contributions = calculateSVSContributions(projection.projected, options);
   const reserve = calculateReserveRecommendation(projection.projected, {
@@ -126,7 +132,7 @@ export function buildSvsTracker(input: TrackerInput) {
     prescription !== null && prescription > 0 ? prescription : calculateQuarterlyPrescription(phase, previousBasis, options);
 
   // Keine Nachbemessung bei Ausnahme bzw. Neuen Selbständigen unter der Versicherungsgrenze
-  const notInsured = input.exempt || contributions.basisGrundlage === 0;
+  const notInsured = options.exempt || contributions.basisGrundlage === 0;
   const warning = notInsured
     ? { hasWarning: false, estimatedNachzahlung: 0, message: '', urgency: 'info' as const }
     : getNachzahlungsWarning({ phase, projectedProfit: projection.projected, provisionalBasis });
@@ -136,6 +142,7 @@ export function buildSvsTracker(input: TrackerInput) {
     isKleinunternehmer: input.isKleinunternehmer,
     phase,
     quarterlyAmount,
+    exemptionLost,
     today,
   });
 
@@ -161,6 +168,7 @@ export function buildSvsTracker(input: TrackerInput) {
     warning,
     alerts,
     notInsured,
+    exemptionLost,
     thresholds: {
       svs: SVS_2026.registrationThreshold,
       incomeTax: SVS_2026.incomeTaxThreshold,

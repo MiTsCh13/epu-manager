@@ -13,6 +13,8 @@ import {
   normalizeUid,
   translateAuthError,
   validateOnboardingStep,
+  validatePasswordChange,
+  MIN_PASSWORD_LENGTH,
   type OnboardingData,
 } from '@/lib/validation';
 
@@ -154,6 +156,8 @@ describe('translateAuthError', () => {
     ['Email rate limit exceeded', 'Zu viele Versuche'],
     ['Unable to validate email address: invalid format', 'gültige E-Mail'],
     ['Failed to fetch', 'Keine Verbindung'],
+    ['New password should be different from the old password.', 'unterscheiden'],
+    ['Password update requires reauthentication', 'neu an'],
     ['something else', 'schiefgelaufen'],
   ])('%s', (input, expected) => {
     expect(translateAuthError(input)).toContain(expected);
@@ -208,5 +212,20 @@ describe('Kunden', () => {
       uid_number: 'ATU12345678',
       notes: null,
     });
+  });
+});
+
+describe('validatePasswordChange', () => {
+  const ok = { current: 'altesPasswort', next: 'neuesPasswort', confirm: 'neuesPasswort' };
+  it('gültige Eingabe', () => {
+    expect(validatePasswordChange(ok)).toEqual({});
+  });
+  it('fehlendes aktuelles, zu kurzes oder gleiches Passwort', () => {
+    expect(validatePasswordChange({ ...ok, current: '' })).toHaveProperty('current');
+    expect(validatePasswordChange({ ...ok, next: 'kurz', confirm: 'kurz' }).next).toContain(String(MIN_PASSWORD_LENGTH));
+    expect(validatePasswordChange({ ...ok, next: ok.current, confirm: ok.current })).toHaveProperty('next');
+  });
+  it('Wiederholung stimmt nicht überein', () => {
+    expect(validatePasswordChange({ ...ok, confirm: 'anders' })).toEqual({ confirm: 'Die beiden Passwörter stimmen nicht überein.' });
   });
 });

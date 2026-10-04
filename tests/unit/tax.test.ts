@@ -80,10 +80,14 @@ describe('generateInvoiceNumber', () => {
     expect(generateInvoiceNumber('YYYY-NNN', 2026, [])).toBe('2026-001');
     expect(generateInvoiceNumber('KL-YYYY-NNN', 2026, [])).toBe('KL-2026-001');
   });
-  it('fortlaufend nach höchster Nummer, ignoriert andere Jahre und Formate', () => {
-    expect(generateInvoiceNumber('YYYY-NNN', 2026, ['2026-001', '2026-007', '2025-099', 'KL-2026-050', 'x'])).toBe(
+  it('fortlaufend nach höchster Nummer, ignoriert andere Jahre und fremde Nummern', () => {
+    expect(generateInvoiceNumber('YYYY-NNN', 2026, ['2026-001', '2026-007', '2025-099', 'KL-2025-050', 'RE-2026-090', 'x'])).toBe(
       '2026-008',
     );
+  });
+  it('Formatwechsel mitten im Jahr: Zählung läuft weiter', () => {
+    expect(generateInvoiceNumber('KL-YYYY-NNN', 2026, ['2026-001', '2026-007'])).toBe('KL-2026-008');
+    expect(generateInvoiceNumber('YYYY-NNN', 2026, ['2026-003', 'KL-2026-012'])).toBe('2026-013');
   });
   it('über 999 hinaus', () => {
     expect(generateInvoiceNumber('YYYY-NNN', 2026, ['2026-999'])).toBe('2026-1000');
