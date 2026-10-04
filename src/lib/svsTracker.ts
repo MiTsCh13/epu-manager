@@ -35,8 +35,8 @@ export interface BreakdownColumn {
   profit: number; // Jahresgewinn (nach SVS)
   grundfreibetrag: number;
   taxable: number; // zu versteuerndes Einkommen
-  incomeTax: number | null; // nur für das ganze Jahr sinnvoll
-  remaining: number | null; // Gewinn − Einkommensteuer
+  incomeTax: number; // bisher: anteilig mit dem Jahres-Steuersatz
+  remaining: number; // Gewinn − Einkommensteuer
 }
 
 export interface TrackerInput {
@@ -101,7 +101,7 @@ export function buildSvsTracker(input: TrackerInput) {
   // Jahresrechnung: bisher (YTD) und hochgerechnet (gleicher Faktor für Einnahmen und Ausgaben)
   const factor = months > 0 ? 12 / months : 1;
   const expensesYtd = round2(current.revenueNet - basisYtd);
-  const column = (revenue: number, expenses: number, basis: number, svs: number, incomeTax: number | null): BreakdownColumn => {
+  const column = (revenue: number, expenses: number, basis: number, svs: number, incomeTax: number): BreakdownColumn => {
     const profit = round2(basis - svs);
     const grundfreibetrag = calculateGrundfreibetrag(profit);
     return {
@@ -113,12 +113,17 @@ export function buildSvsTracker(input: TrackerInput) {
       grundfreibetrag,
       taxable: round2(profit - grundfreibetrag),
       incomeTax,
-      remaining: incomeTax === null ? null : round2(profit - incomeTax),
+      remaining: round2(profit - incomeTax),
     };
   };
+  const projectedColumn = column(revenueProjected, expensesYtd * factor, projection.projected, contributions.total, reserve.incomeTaxAmount);
+  // Einkommensteuer bisher: anteilig mit dem Durchschnittssteuersatz des ganzen Jahres.
+  // (Der Stufentarif gilt fürs Jahr – auf den Gewinn bis heute angewendet, wäre die Steuer viel zu niedrig.)
+  const averageTaxRate = projectedColumn.profit > 0 ? reserve.incomeTaxAmount / projectedColumn.profit : 0;
+  const incomeTaxYtd = round2(Math.max(0, round2(basisYtd - current.svsPaid)) * averageTaxRate);
   const breakdown = {
-    ytd: column(current.revenueNet, expensesYtd, basisYtd, current.svsPaid, null),
-    projected: column(revenueProjected, expensesYtd * factor, projection.projected, contributions.total, reserve.incomeTaxAmount),
+    ytd: column(current.revenueNet, expensesYtd, basisYtd, current.svsPaid, incomeTaxYtd),
+    projected: projectedColumn,
   };
 
   // Vorläufige Basis: aus der echten Vorschreibung, sonst aus Phase/Vorjahr geschätzt

@@ -36,7 +36,9 @@ describe('buildSvsTracker', () => {
     expect(m.basisYtd).toBe(13999.15);
   });
 
-  it('Jahresrechnung bisher: Einnahmen → … → zu versteuern (ESt nur fürs ganze Jahr)', () => {
+  it('Jahresrechnung bisher: Einnahmen → … → was bleibt (ESt anteilig mit dem Jahres-Steuersatz)', () => {
+    const p = m.breakdown.projected;
+    const ytdTax = Math.round(12551.83 * ((p.incomeTax ?? 0) / p.profit) * 100) / 100;
     expect(m.breakdown.ytd).toEqual({
       revenue: 15450,
       expenses: 1450.85,
@@ -45,9 +47,19 @@ describe('buildSvsTracker', () => {
       profit: 12551.83,
       grundfreibetrag: 1882.77,
       taxable: 10669.06,
-      incomeTax: null,
-      remaining: null,
+      incomeTax: ytdTax,
+      remaining: Math.round((12551.83 - ytdTax) * 100) / 100,
     });
+  });
+
+  it('ESt bisher anteilig: gleicher Steuersatz wie fürs ganze Jahr, obwohl der Gewinn bisher unter der Steuergrenze liegt', () => {
+    const t = buildSvsTracker({ ...base, current: { revenueNet: 18000, revenueGross: 18000, deductibleExpenses: 0, svsPaid: 3000 } });
+    const { ytd, projected } = t.breakdown;
+    expect(ytd.taxable).toBeLessThan(13539);
+    expect(projected.incomeTax).toBeGreaterThan(0);
+    expect(ytd.incomeTax).toBeGreaterThan(0);
+    expect((ytd.incomeTax ?? 0) / ytd.profit).toBeCloseTo((projected.incomeTax ?? 0) / projected.profit, 4);
+    expect(ytd.remaining).toBeCloseTo(ytd.profit - (ytd.incomeTax ?? 0), 2);
   });
 
   it('Jahresrechnung hochgerechnet: konsistent mit Rücklage und SVS', () => {
@@ -166,6 +178,8 @@ describe('buildSvsTracker', () => {
     expect(t.reserve.perInvoiceRate).toBe(0);
     // Gewerbetreibende zahlen auch ohne Gewinn den Mindestbeitrag
     expect(t.reserve.svsAmount).toBe(1929.72);
+    // Kein Gewinn → keine Einkommensteuer, auch nicht anteilig
+    expect(t.breakdown.ytd.incomeTax).toBe(0);
   });
 
   it('Kleinunternehmergrenze: Alert ab 45.000 € Umsatz', () => {

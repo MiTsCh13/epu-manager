@@ -32,7 +32,7 @@ export function YearBreakdown({
     { op: '=', label: 'Jahresgewinn', key: 'profit', strong: true },
     { op: '−', label: <Term k="grundfreibetrag" />, key: 'grundfreibetrag', hint: '15 %, max. 4.950 €' },
     { op: '=', label: 'Zu versteuerndes Einkommen', key: 'taxable', strong: true },
-    { op: '−', label: 'Einkommensteuer (ca.)', key: 'incomeTax', hint: 'Tarif 2026, ohne andere Einkünfte' },
+    { op: '−', label: 'Einkommensteuer (ca.)', key: 'incomeTax', hint: 'Tarif 2026, ohne andere Einkünfte; bisher anteilig nach deinem Jahres-Steuersatz' },
   ];
 
   const cell = (v: number | null) => (v === null ? <span className="text-slate-400">–</span> : formatEuro(v, true));

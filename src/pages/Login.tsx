@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { isValidEmail, translateAuthError } from '@/lib/validation';
+import { BILLING_ENABLED } from '@/lib/subscription';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -58,7 +59,7 @@ export default function Login() {
       <p className="mt-6 text-center text-sm text-slate-600">
         Noch kein Konto?{' '}
         <Link to="/registrieren" className="font-semibold text-primary hover:underline">
-          14 Tage kostenlos testen
+          {BILLING_ENABLED ? '14 Tage kostenlos testen' : 'Kostenlos registrieren'}
         </Link>
       </p>
     </AuthLayout>

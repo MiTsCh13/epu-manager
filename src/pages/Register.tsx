@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { isValidEmail, MIN_PASSWORD_LENGTH, translateAuthError } from '@/lib/validation';
+import { BILLING_ENABLED } from '@/lib/subscription';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -68,7 +69,7 @@ export default function Register() {
   return (
     <AuthLayout
       title="Konto erstellen"
-      subtitle="14 Tage kostenlos testen – keine Kreditkarte nötig."
+      subtitle={BILLING_ENABLED ? '14 Tage kostenlos testen – keine Kreditkarte nötig.' : 'Kostenlos – keine Kreditkarte nötig.'}
     >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && <Alert type="critical">{error}</Alert>}

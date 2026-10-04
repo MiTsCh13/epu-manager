@@ -4,11 +4,12 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { SubscriptionCard } from '@/components/billing/SubscriptionCard';
+import { BILLING_ENABLED } from '@/lib/subscription';
 import { AccountSection } from '@/components/settings/AccountSection';
 import { AccountingSection, IdentitySection, InvoicingSection } from '@/components/settings/ProfileSections';
 
 const SECTIONS = [
-  { id: 'abo', label: 'Abo' },
+  ...(BILLING_ENABLED ? [{ id: 'abo', label: 'Abo' }] : []),
   { id: 'profil', label: 'Über dich & SVS' },
   { id: 'steuer', label: 'Steuer' },
   { id: 'rechnungen', label: 'Adresse & Rechnungen' },
@@ -39,7 +40,7 @@ export default function Settings() {
   }, [searchParams, setSearchParams, refreshProfile]);
 
   return (
-    <PageWrapper title="Einstellungen" description="Dein Geschäftsprofil, Steuer-Einstellungen, Abo und Konto.">
+    <PageWrapper title="Einstellungen" description={`Dein Geschäftsprofil, Steuer-Einstellungen${BILLING_ENABLED ? ', Abo' : ''} und Konto.`}>
       <nav aria-label="Abschnitte" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ul className="flex gap-2 whitespace-nowrap">
           {SECTIONS.map((s) => (
@@ -55,9 +56,11 @@ export default function Settings() {
         </ul>
       </nav>
       <div className="mx-auto max-w-3xl space-y-6">
-        <div id="abo" className="scroll-mt-20">
-          <SubscriptionCard />
-        </div>
+        {BILLING_ENABLED && (
+          <div id="abo" className="scroll-mt-20">
+            <SubscriptionCard />
+          </div>
+        )}
         <IdentitySection />
         <AccountingSection />
         <InvoicingSection />

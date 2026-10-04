@@ -8,7 +8,7 @@ export function TrialBadge({ onNavigate }: { onNavigate?: () => void }) {
   const { profile } = useAuth();
   if (!profile) return null;
   const access = getAccessState(profile);
-  if (access.kind === 'active') return null;
+  if (access.kind === 'active' || access.kind === 'free') return null;
 
   const expired = access.kind === 'expired';
   return (

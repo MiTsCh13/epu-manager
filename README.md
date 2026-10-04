@@ -36,7 +36,12 @@ und löschen sie danach über `delete-account`. Voraussetzung: „Confirm email�
 ## Jährliches Update
 SVS-Werte liegen ausschließlich in `src/constants/svs2026.ts`. Für ein neues Jahr eine neue Datei anlegen – nie Werte im Code hardcoden.
 
-## Stripe (Abo „Klaro Pro“, 19 €/Monat)
+## Kostenlos-Modus
+Klaro ist vorerst **kostenlos und unbegrenzt** nutzbar: keine Testphase, kein Abo-Hinweis, keine Paywall.
+Die Stripe-Integration unten bleibt im Code. Einschalten: `VITE_BILLING_ENABLED=true` (Vercel + `.env.local`) und
+`has_active_access()` per Migration wieder auf die Abo-Prüfung umstellen (siehe `20261005000001_free_access.sql`).
+
+## Stripe (Abo „Klaro Pro“, 19 €/Monat) – derzeit ausgeschaltet
 Checkout, Kundenportal und Webhook laufen als Supabase Edge Functions (`supabase/functions/`).
 Secrets liegen nur in Supabase (`supabase secrets list`): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `APP_URL`.
 
