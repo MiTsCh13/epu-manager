@@ -18,7 +18,7 @@ export default defineConfig({
     environment: 'node',
     coverage: {
       provider: 'v8',
-      include: ['src/lib/svs.ts', 'src/lib/profit.ts', 'src/lib/tax.ts', 'src/lib/money.ts', 'src/lib/validation.ts', 'src/lib/subscription.ts', 'src/lib/invoices.ts', 'src/lib/invoicePdf.ts', 'src/lib/epcQr.ts', 'src/lib/expenses.ts', 'src/lib/svsTracker.ts', 'src/lib/dashboard.ts', 'src/lib/period.ts'],
+      include: ['src/lib/svs.ts', 'src/lib/profit.ts', 'src/lib/tax.ts', 'src/lib/money.ts', 'src/lib/validation.ts', 'src/lib/subscription.ts', 'src/lib/invoices.ts', 'src/lib/invoicePdf.ts', 'src/lib/epcQr.ts', 'src/lib/expenses.ts', 'src/lib/svsTracker.ts', 'src/lib/incomeSplit.ts', 'src/lib/dashboard.ts', 'src/lib/period.ts'],
       thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
     },
   },
