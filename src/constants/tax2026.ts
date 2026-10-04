@@ -43,6 +43,12 @@ export const ARBEITSPLATZPAUSCHALE = {
   otherIncomeLimit: 13539, // Wert 2026 (= Grenze der ersten Tarifstufe)
 } as const;
 
+// Einkommensteuer-Vorauszahlungen: fällig am 15. Februar, Mai, August, November (Monat 1–12)
+export const EST_PREPAYMENT_DUE_MONTHS = [2, 5, 8, 11] as const;
+export const EST_PREPAYMENT_DUE_DAY = 15;
+// Steuererklärung über FinanzOnline bis 30. Juni des Folgejahres
+export const TAX_RETURN_DEADLINE = { month: 6, day: 30 } as const;
+
 // Sonderregeln Ausgaben
 export const BEWIRTUNG_DEDUCTIBLE_RATE = 0.5; // Bewirtung nur zu 50 % absetzbar
 export const KILOMETERGELD_PER_KM = 0.5; // Amtliches Kilometergeld PKW

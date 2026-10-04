@@ -6,6 +6,7 @@ import {
   calculateQuarterlyPrescription,
   calculateReserveRecommendation,
   calculateSVSContributions,
+  calculateSvsYear,
   getNachzahlungsWarning,
   getNextSVSDueDate,
   getSVSAlerts,
@@ -204,26 +205,27 @@ describe('getVorlaeufigeBeitragsgrundlage / calculateQuarterlyPrescription', () 
 });
 
 describe('getNachzahlungsWarning', () => {
-  it('Neugründer Jahr 3, 40.000 €: ~9.036 € Nachzahlung, kritisch', () => {
+  it('Neugründer Jahr 3, 40.000 €: PV + KV nachbemessen (ohne Selbständigenvorsorge), kritisch', () => {
     const w = getNachzahlungsWarning({ phase: 'year3', projectedProfit: 40000 });
-    within2Percent(w.estimatedNachzahlung, 9036);
-    expect(w.estimatedNachzahlung).toBe(8957.68);
+    // (40.000 − 6.613,20) × (18,5 % + 6,8 %). Der Prompt nannte ~9.036 € inkl. Selbständigenvorsorge –
+    // die wird laut WKO aber nicht nachverrechnet.
+    expect(w.estimatedNachzahlung).toBe(8446.86);
     expect(w.hasWarning).toBe(true);
     expect(w.urgency).toBe('critical');
     expect(w.message).toContain('Erwartete Nachzahlung');
   });
 
-  it('Jahr 1–2: nur PV + Selbständigenvorsorge, Hinweis auf späteren Zeitpunkt', () => {
+  it('Jahr 1–2: nur PV (KV bleibt Mindestbeitrag), Hinweis auf späteren Zeitpunkt', () => {
     const w = getNachzahlungsWarning({ phase: 'year1_2', projectedProfit: 20000 });
-    // (20.000 − 6.613,20) × (18,5 % + 1,53 %)
-    expect(w.estimatedNachzahlung).toBe(2681.38);
+    // (20.000 − 6.613,20) × 18,5 %
+    expect(w.estimatedNachzahlung).toBe(2476.56);
     expect(w.urgency).toBe('info');
     expect(w.message).toContain('2 bis 3 Jahre');
   });
 
   it('Jahr 4+: Differenz zur Vorjahresbasis, Warnung', () => {
     const w = getNachzahlungsWarning({ phase: 'year4plus', projectedProfit: 35000, previousYearProfit: 30000 });
-    expect(w.estimatedNachzahlung).toBe(1341.5);
+    expect(w.estimatedNachzahlung).toBe(1265);
     expect(w.urgency).toBe('warning');
   });
 
@@ -234,6 +236,53 @@ describe('getNachzahlungsWarning', () => {
 
   it('keine Nachzahlung bei Gewinn unter Mindestbasis', () => {
     expect(getNachzahlungsWarning({ phase: 'year3', projectedProfit: 5000 }).hasWarning).toBe(false);
+  });
+});
+
+describe('calculateSvsYear', () => {
+  it('Neugründer Jahr 2: PV nachbemessen, KV und Selbständigenvorsorge bleiben vorläufig', () => {
+    const r = calculateSvsYear({ einkuenfte: 28640.23, provisionalBasis: 6613.2, svsYear: 2 });
+    expect(r.provisional).toEqual({ pv: 1223.44, kv: 449.7, sv: 101.18, uv: 155.4, total: 1929.72 });
+    // Hinzurechnung PV + KV
+    expect(r.hinzurechnung).toBe(1673.14);
+    expect(r.basis).toBe(30313.37);
+    expect(r.final).toEqual({ pv: 5607.97, kv: 449.7, sv: 101.18, uv: 155.4, total: 6314.25 });
+    expect(r.difference).toBe(4384.53);
+  });
+
+  it('ab Jahr 3 wird auch die KV nachbemessen', () => {
+    const r = calculateSvsYear({ einkuenfte: 28640.23, provisionalBasis: 6613.2, svsYear: 3 });
+    expect(r.final.kv).toBe(2061.31);
+    expect(r.final.sv).toBe(101.18);
+  });
+
+  it('Nachzahlungen für Vorjahre zählen zur Hinzurechnung', () => {
+    const r = calculateSvsYear({ einkuenfte: 20000, provisionalBasis: 6613.2, extraPrescribed: 500, svsYear: 4 });
+    expect(r.hinzurechnung).toBe(2173.14);
+  });
+
+  it('Höchstbeitragsgrundlage deckelt, Gutschrift bei niedrigeren Einkünften', () => {
+    expect(calculateSvsYear({ einkuenfte: 200000, provisionalBasis: 50000, svsYear: 6 }).basis).toBe(97020);
+    expect(calculateSvsYear({ einkuenfte: 10000, provisionalBasis: 40000, svsYear: 6 }).difference).toBeLessThan(0);
+  });
+
+  it('Anmeldejahr: Grenzen und Unfallversicherung anteilig', () => {
+    const r = calculateSvsYear({ einkuenfte: 0, provisionalBasis: 5511, months: 10, svsYear: 1 });
+    expect(r.minBasis).toBe(5511);
+    expect(r.provisional.uv).toBe(129.5);
+  });
+
+  it('Neue Selbständige unter der Versicherungsgrenze: nicht versichert', () => {
+    const r = calculateSvsYear({ einkuenfte: 3000, provisionalBasis: 6613.2, svsYear: 2, options: { businessType: 'neue_selbstaendige' } });
+    expect(r.notInsured).toBe(true);
+    expect(r.final.total).toBe(0);
+    expect(r.difference).toBe(-1929.72);
+  });
+
+  it('Ausnahme (Kleinstunternehmer): nur Unfallversicherung, keine Nachzahlung', () => {
+    const r = calculateSvsYear({ einkuenfte: 3000, provisionalBasis: 6613.2, svsYear: 2, options: { exempt: true } });
+    expect(r.provisional.total).toBe(155.4);
+    expect(r.difference).toBe(0);
   });
 });
 
@@ -248,7 +297,7 @@ describe('basisFromQuarterlyPrescription', () => {
   });
   it('Nachzahlung mit bekannter vorläufiger Basis', () => {
     const w = getNachzahlungsWarning({ phase: 'year4plus', projectedProfit: 50000, provisionalBasis: 40000 });
-    expect(w.estimatedNachzahlung).toBe(2683);
+    expect(w.estimatedNachzahlung).toBe(2530);
   });
 });
 

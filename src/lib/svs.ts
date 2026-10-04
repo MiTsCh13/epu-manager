@@ -4,7 +4,9 @@
 // Einkommensteuerbescheid vorliegt, wird nachbemessen – die Differenz wird nachverrechnet.
 // Neugründer zahlen in den ersten 3 Jahren vorläufig nur auf Basis der Mindestbeitragsgrundlage.
 // In den ersten 2 Jahren ist die Krankenversicherung endgültig auf Mindestbasis
-// (keine KV-Nachbemessung); Pensionsversicherung und Selbständigenvorsorge werden nachbemessen.
+// (keine KV-Nachbemessung). Die Selbständigenvorsorge wird nie nachbemessen (WKO).
+// Endgültige Basis = Einkünfte laut Steuerbescheid (nach Grundfreibetrag)
+//                    + im Jahr vorgeschriebene PV- und KV-Beiträge (Hinzurechnung).
 import { SVS_2026 } from '@/constants/svs2026';
 import type { AlertUrgency, AppAlert, BusinessType } from '@/types';
 import { formatEuro, round2 } from './money';
@@ -186,8 +188,8 @@ export function getNachzahlungsWarning(params: {
   const { phase, projectedProfit } = params;
   const finalBasis = clampBasis(projectedProfit);
   const provisionalBasis = params.provisionalBasis ?? getVorlaeufigeBeitragsgrundlage(phase, params.previousYearProfit);
-  // Jahr 1–2: KV ist endgültig auf Mindestbasis → nur PV + Selbständigenvorsorge werden nachbemessen
-  const rate = phase === 'year1_2' ? pension + provision : TOTAL_RATE;
+  // Selbständigenvorsorge wird nie nachbemessen; Jahr 1–2: auch KV bleibt auf Mindestbasis
+  const rate = phase === 'year1_2' ? pension : pension + health;
   const estimatedNachzahlung = round2(Math.max(0, finalBasis - provisionalBasis) * rate);
 
   if (estimatedNachzahlung === 0) {
@@ -212,6 +214,86 @@ export function getNachzahlungsWarning(params: {
       : ' Stelle sicher, dass du genug zurückgelegt hast.';
 
   return { hasWarning: true, estimatedNachzahlung, message: base + timing, urgency };
+}
+
+// ─── Vorläufig vs. endgültig (ein Kalenderjahr) ─────────────
+
+export interface SvsAmounts {
+  pv: number;
+  kv: number;
+  sv: number; // Selbständigenvorsorge
+  uv: number; // Unfallversicherung
+  total: number;
+}
+
+export interface SvsYearResult {
+  provisional: SvsAmounts; // vorläufig verrechnet (Quartalsvorschreibungen)
+  final: SvsAmounts; // endgültig nach dem Steuerbescheid
+  hinzurechnung: number; // wieder dazugezählte PV- und KV-Beiträge
+  basisRaw: number; // Einkünfte + Hinzurechnung, vor Mindest-/Höchstgrenze
+  basis: number; // endgültige Beitragsgrundlage (Jahr)
+  minBasis: number;
+  maxBasis: number;
+  difference: number; // > 0 Nachzahlung, < 0 Gutschrift
+  notInsured: boolean; // Neue Selbständige unter der Versicherungsgrenze bzw. Ausnahme
+}
+
+const amounts = (pv: number, kv: number, sv: number, uv: number): SvsAmounts => ({
+  pv: round2(pv),
+  kv: round2(kv),
+  sv: round2(sv),
+  uv: round2(uv),
+  total: round2(pv + kv + sv + uv),
+});
+
+/**
+ * SVS eines Kalenderjahres: vorläufig verrechnet vs. endgültig nach dem Steuerbescheid.
+ * - `einkuenfte`: Einkünfte laut Steuerbescheid (Gewinn nach SVS und Grundfreibetrag)
+ * - `provisionalBasis`: vorläufige Beitragsgrundlage fürs ganze Jahr (bzw. die versicherten Monate)
+ * - `extraPrescribed`: im Jahr zusätzlich vorgeschriebene Nachzahlungen für Vorjahre (zählen zur Hinzurechnung)
+ * - `months`: versicherte Monate im Jahr (Anmeldejahr anteilig)
+ * - `svsYear`: Kalenderjahr der Versicherung (Anmeldejahr = 1) – in Jahr 1–2 bleibt die KV beim Mindestbeitrag
+ */
+export function calculateSvsYear(params: {
+  einkuenfte: number;
+  provisionalBasis: number;
+  extraPrescribed?: number;
+  months?: number;
+  svsYear: number;
+  options?: SVSOptions;
+}): SvsYearResult {
+  const months = params.months ?? 12;
+  const minBasis = round2(SVS_2026.minBasisMonthly * months);
+  const maxBasis = round2(SVS_2026.maxBasisMonthly * months);
+  const uv = (SVS_2026.accidentFixed * months) / 12;
+  const B0 = Math.min(Math.max(params.provisionalBasis, minBasis), maxBasis);
+
+  if (params.options?.exempt) {
+    const onlyUv = amounts(0, 0, 0, uv);
+    return { provisional: onlyUv, final: onlyUv, hinzurechnung: 0, basisRaw: 0, basis: 0, minBasis, maxBasis, difference: 0, notInsured: true };
+  }
+
+  const provisional = amounts(B0 * pension, B0 * health, B0 * provision, uv);
+  const hinzurechnung = round2(provisional.pv + provisional.kv + (params.extraPrescribed ?? 0));
+  const basisRaw = round2(params.einkuenfte + hinzurechnung);
+  const notInsured =
+    params.options?.businessType === 'neue_selbstaendige' && basisRaw < (SVS_2026.registrationThreshold * months) / 12;
+  const basis = round2(Math.min(Math.max(basisRaw, minBasis), maxBasis));
+  const final = notInsured
+    ? amounts(0, 0, 0, 0)
+    : amounts(basis * pension, params.svsYear <= 2 ? provisional.kv : basis * health, provisional.sv, uv);
+
+  return {
+    provisional,
+    final,
+    hinzurechnung,
+    basisRaw,
+    basis: notInsured ? 0 : basis,
+    minBasis,
+    maxBasis,
+    difference: round2(final.total - provisional.total),
+    notInsured,
+  };
 }
 
 // ─── Fälligkeiten & Alerts ──────────────────────────────────

@@ -61,11 +61,27 @@ export const GLOSSARY = {
   },
   berechnungsbasis: {
     term: 'Berechnungsbasis',
-    text: 'Der Betrag, von dem die SVS deine Beiträge berechnet: dein Gewinn plus die SVS-Beiträge, die du im Jahr bezahlt hast (die zählen bei der SVS nicht als Ausgabe). Mindestens 6.613 €, höchstens 97.020 € im Jahr.',
+    text: `Der Betrag, von dem die SVS deine Beiträge berechnet: deine Einkünfte laut Steuerbescheid plus die Pensions- und Krankenversicherungsbeiträge, die du im Jahr vorgeschrieben bekommen hast. Mindestens ${formatEuro(SVS_2026.minBasisMonthly * 12, true)}, höchstens ${formatEuro(SVS_2026.maxBasisMonthly * 12, true)} im Jahr.`,
   },
   kleinstunternehmer: {
     term: 'Ausnahme von der Pflichtversicherung',
     text: `Kleinstunternehmerregelung für Gewerbetreibende: Liegt dein Umsatz unter ${formatEuro(SVS_2026.exemptionRevenueLimit, true)} und dein Gewinn unter ${formatEuro(SVS_2026.registrationThreshold)} im Jahr, kannst du dich auf Antrag bei der SVS von Kranken- und Pensionsversicherung befreien lassen. Die Unfallversicherung zahlst du weiter. Überschreitest du eine Grenze, wirst du rückwirkend pflichtversichert.`,
+  },
+  einkuenfte: {
+    term: 'Einkünfte',
+    text: 'So heißt dein steuerpflichtiger Gewinn im Steuerbescheid: Umsatz minus Ausgaben, SVS-Beiträge und Grundfreibetrag. Auf diesen Betrag rechnen Finanzamt und SVS.',
+  },
+  vorlaeufig: {
+    term: 'vorläufig',
+    text: 'Die SVS kennt deine Einkünfte erst aus dem Steuerbescheid. Bis dahin verrechnet sie jedes Quartal einen vorläufigen Betrag: in den ersten drei Jahren den Mindestbeitrag, danach nach deinen Einkünften von vor drei Jahren.',
+  },
+  endgueltig: {
+    term: 'endgültig',
+    text: 'Der Betrag, den die SVS nach deinem Steuerbescheid für das Jahr festlegt. Die Differenz zum vorläufigen Betrag zahlst du nach oder bekommst sie gutgeschrieben.',
+  },
+  vorauszahlung: {
+    term: 'Einkommensteuer-Vorauszahlung',
+    text: 'Nach einem Steuerbescheid mit Einkommensteuer verlangt das Finanzamt die Steuer für die Folgejahre vierteljährlich im Voraus (15.2., 15.5., 15.8., 15.11.). Sie ist keine Betriebsausgabe und senkt deinen Gewinn nicht.',
   },
   arbeitsplatzpauschale: {
     term: 'Arbeitsplatzpauschale',

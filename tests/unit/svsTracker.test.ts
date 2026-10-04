@@ -1,210 +1,219 @@
 import { describe, expect, it } from 'vitest';
-import { buildSvsTracker, monthsElapsedInYear, type TrackerInput } from '@/lib/svsTracker';
+import { buildSvsTracker, insuredMonths, monthsElapsedInYear, svsDueDates, type TrackerInput } from '@/lib/svsTracker';
 
-// Testdaten wie „Klaro Test GmbH“: EÜR, Kleinunternehmer, Anmeldung 01.03.2024, Stichtag 03.10.2026
+// „Lena“ aus dem Mockup: Grafikdesignerin, Gewerbe seit März 2025 (2. Jahr), Kleinunternehmerin, EÜR,
+// erwarteter Umsatz 42.000 €, drei SVS-Quartale à 482,43 € bezahlt. Stichtag 4.10.2026.
 const base: TrackerInput = {
-  today: new Date(2026, 9, 3),
-  registrationDate: new Date(2024, 2, 1),
-  businessType: 'neue_selbstaendige',
+  today: new Date(2026, 9, 4),
+  registrationDate: new Date(2025, 2, 1),
+  businessType: 'gewerbetreibend',
   exempt: false,
   isKleinunternehmer: true,
   profitMethod: 'euer',
   pauschType: null,
   industryType: null,
   quarterlyPrescription: null,
-  current: { revenueNet: 15450, revenueGross: 15450, deductibleExpenses: 1450.85, svsPaid: 1447.32 },
-  previous: null,
+  revenueEstimate: 42000,
+  current: { revenueNet: 31800, revenueGross: 31800, deductibleExpenses: 4900, svsPaid: 1447.29 },
+  previous: { revenueNet: 19800, revenueGross: 19800, deductibleExpenses: 3400, svsPaid: 1608.1 },
 };
 
-describe('monthsElapsedInYear', () => {
-  it('Jahresanfang 0, Jahresmitte ~6', () => {
+describe('Hilfsfunktionen', () => {
+  it('monthsElapsedInYear', () => {
     expect(monthsElapsedInYear(new Date(2026, 0, 1))).toBe(0);
-    expect(monthsElapsedInYear(new Date(2026, 6, 2))).toBeCloseTo(6, 1);
+    expect(monthsElapsedInYear(new Date(2026, 9, 4))).toBeCloseTo(9.07, 2);
+  });
+
+  it('insuredMonths: Anmeldemonat zählt voll', () => {
+    expect(insuredMonths(new Date(2025, 2, 15), 2025)).toBe(10);
+    expect(insuredMonths(new Date(2025, 2, 15), 2026)).toBe(12);
+    expect(insuredMonths(new Date(2027, 0, 1), 2026)).toBe(0);
+    expect(insuredMonths(null, 2026)).toBe(12);
+  });
+
+  it('svsDueDates: nur Fälligkeiten ab der Anmeldung', () => {
+    expect(svsDueDates(2026, null).map((d) => d.getMonth())).toEqual([1, 4, 7, 10]);
+    expect(svsDueDates(2026, new Date(2026, 5, 10)).map((d) => d.getMonth())).toEqual([7, 10]);
   });
 });
 
-describe('buildSvsTracker', () => {
+describe('buildSvsTracker – Lena', () => {
   const m = buildSvsTracker(base);
+  // Ausgaben bis heute (4.900 €) aufs Jahr hochgerechnet: 6.481,05 € (die Sommerzeit kürzt das Jahr bis 4.10. um eine Stunde)
+  const expenses = Math.round(((4900 * 12) / monthsElapsedInYear(base.today)) * 100) / 100;
 
-  it('SVS-Jahr und Phase', () => {
-    expect(m.svsYear).toBe(3);
-    expect(m.phase).toBe('year3');
+  it('Jahr und Umsatz-Erwartung', () => {
+    expect(m.svsYear).toBe(2);
+    expect(m.revenue).toMatchObject({ expected: 42000, estimated: true });
   });
 
-  it('Gewinn bis heute und Berechnungsbasis (+ SVS-Hinzurechnung)', () => {
-    expect(m.profitYtd).toBe(12551.83);
-    expect(m.basisYtd).toBe(13999.15);
-  });
-
-  it('Arbeitsplatzpauschale: bis heute anteilig, senkt Gewinn und Berechnungsbasis', () => {
-    const t = buildSvsTracker({ ...base, arbeitsplatzpauschale: 1200 });
-    const share = Math.round(((1200 * monthsElapsedInYear(base.today)) / 12) * 100) / 100;
-    expect(t.profitYtd).toBe(Math.round((12551.83 - share) * 100) / 100);
-    expect(t.basisYtd).toBeLessThan(m.basisYtd);
-  });
-
-  it('Vorjahr: Arbeitsplatzpauschale des Vorjahres fließt in die vorläufige Basis ein', () => {
-    const previous = { revenueNet: 40000, revenueGross: 40000, deductibleExpenses: 0, svsPaid: 2000 };
-    const year4 = { ...base, registrationDate: new Date(2021, 0, 1), previous };
-    expect(buildSvsTracker({ ...year4, arbeitsplatzpauschalePrevious: 1200 }).provisionalBasis).toBe(
-      buildSvsTracker(year4).provisionalBasis - 1200,
-    );
-  });
-
-  it('andere Einkünfte erhöhen die geschätzte Einkommensteuer, nicht die SVS', () => {
-    const t = buildSvsTracker({ ...base, otherIncome: 18000 });
-    expect(t.reserve.incomeTaxAmount).toBeGreaterThan(m.reserve.incomeTaxAmount);
-    expect(t.reserve.svsAmount).toBe(m.reserve.svsAmount);
-  });
-
-  it('Jahresrechnung bisher: Einnahmen → … → was bleibt (ESt anteilig mit dem Jahres-Steuersatz)', () => {
-    const p = m.breakdown.projected;
-    const ytdTax = Math.round(12551.83 * ((p.incomeTax ?? 0) / p.profit) * 100) / 100;
-    expect(m.breakdown.ytd).toEqual({
-      revenue: 15450,
-      expenses: 1450.85,
-      basis: 13999.15,
-      svs: 1447.32,
-      profit: 12551.83,
-      grundfreibetrag: 1882.77,
-      taxable: 10669.06,
-      incomeTax: ytdTax,
-      remaining: Math.round((12551.83 - ytdTax) * 100) / 100,
+  it('1 Jahresrechnung ganzes Jahr: Umsatz − Ausgaben − SVS − Grundfreibetrag = Einkünfte, darauf ESt', () => {
+    expect(m.full).toEqual({
+      revenue: 42000,
+      expenses: 6481.05,
+      arbeitsplatzpauschale: 0,
+      svs: 1929.72, // 4 Quartale à 482,43 €
+      gewinn: 33589.23,
+      grundfreibetrag: 4950,
+      einkuenfte: 28639.23,
+      incomeTax: 3684.77, // 1.690,60 + (28.639,23 − 21.992) × 30 %
     });
+    expect(m.full.expenses).toBe(expenses);
   });
 
-  it('ESt bisher anteilig: gleicher Steuersatz wie fürs ganze Jahr, obwohl der Gewinn bisher unter der Steuergrenze liegt', () => {
-    const t = buildSvsTracker({ ...base, current: { revenueNet: 18000, revenueGross: 18000, deductibleExpenses: 0, svsPaid: 3000 } });
-    const { ytd, projected } = t.breakdown;
-    expect(ytd.taxable).toBeLessThan(13539);
-    expect(projected.incomeTax).toBeGreaterThan(0);
-    expect(ytd.incomeTax).toBeGreaterThan(0);
-    expect((ytd.incomeTax ?? 0) / ytd.profit).toBeCloseTo((projected.incomeTax ?? 0) / projected.profit, 4);
-    expect(ytd.remaining).toBeCloseTo(ytd.profit - (ytd.incomeTax ?? 0), 2);
+  it('1 Jahresrechnung bis heute: ESt anteilig mit dem Jahres-Durchschnittssteuersatz', () => {
+    expect(m.ytd).toMatchObject({ revenue: 31800, expenses: 4900, svs: 1447.29, grundfreibetrag: 3817.91, einkuenfte: 21634.8 });
+    expect(m.ytd.incomeTax).toBeCloseTo(21634.8 * (3684.77 / 28639.23), 0);
   });
 
-  it('Jahresrechnung hochgerechnet: konsistent mit Rücklage und SVS', () => {
-    const p = m.breakdown.projected;
-    expect(p.basis).toBe(m.projection.projected);
-    expect(p.basis).toBeCloseTo(p.revenue - p.expenses, 1);
-    expect(p.svs).toBe(m.expectedSvs);
-    expect(p.incomeTax).toBe(m.reserve.incomeTaxAmount);
-    expect(p.svs + (p.incomeTax ?? 0)).toBeCloseTo(m.reserve.totalReserve, 2);
-    expect(p.remaining).toBeCloseTo(p.profit - (p.incomeTax ?? 0), 2);
+  it('2 SVS: Basis = Einkünfte + PV/KV, KV und Selbständigenvorsorge bleiben vorläufig (Jahr 2)', () => {
+    expect(m.svs.provisionalReason).toBe('minimum');
+    expect(m.svs.quarterlyAmount).toBe(482.43);
+    expect(m.svs.hinzurechnung).toBe(1673.14);
+    expect(m.svs.basis).toBe(30312.37);
+    expect(m.svs.final.total).toBe(6314.07); // PV 18,5 % von 30.312,37 + KV/SV vorläufig + UV
+    expect(m.svs.provisional.total).toBe(1929.72);
+    expect(m.svs.difference).toBe(4384.35);
+    expect(m.svs.unrecorded).toBe(0);
   });
 
-  it('Am 1. Jänner: keine Hochrechnung (Faktor 1)', () => {
-    const t = buildSvsTracker({ ...base, today: new Date(2026, 0, 1) });
-    expect(t.breakdown.projected.revenue).toBe(15450);
+  it('3 Einkommensteuer ohne Vorauszahlungen: alles noch offen', () => {
+    expect(m.incomeTax).toEqual({ total: 3684.77, prepaymentQuarterly: 0, prepaymentTotal: 0, prepaymentPaid: 0, open: 3684.77 });
   });
 
-  it('Hochrechnung auf 12 Monate', () => {
-    expect(m.projection.projected).toBeCloseTo(13999.15 / monthsElapsedInYear(base.today) * 12, 1);
-    expect(m.revenueProjected).toBeGreaterThan(15450);
+  it('Vorjahr 2025 noch offen: SVS-Nachzahlung (10 Monate, Mindestbasis vorläufig), keine ESt unter der Grenze', () => {
+    expect(m.previous?.year).toBe(2025);
+    expect(m.previous?.svs?.provisional.total).toBe(1608.1);
+    expect(m.previous?.svs?.difference).toBeCloseTo(1564.4, 0);
+    expect(m.previous?.incomeTax).toBe(0);
   });
 
-  it('Rücklage: Gesamt minus bereits bezahlte SVS', () => {
-    expect(m.reserve.totalReserve).toBeGreaterThan(0);
-    expect(m.reserveOpen).toBeCloseTo(m.reserve.totalReserve - 1447.32, 2);
-    expect(m.reserve.perInvoiceRate).toBeGreaterThan(0);
+  it('4 Rücklage getrennt nach SVS und Finanzamt', () => {
+    expect(m.reserve.items.map((i) => [i.id, i.payee])).toEqual([
+      ['svs-quarters', 'svs'],
+      ['svs-previous', 'svs'],
+      ['svs-current', 'svs'],
+      ['est-current', 'finanzamt'],
+    ]);
+    expect(m.reserve.items[0]).toMatchObject({ label: '4. Quartal 2026', amount: 482.43 });
+    expect(m.reserve.finanzamt).toBe(3684.77);
+    expect(m.reserve.total).toBeCloseTo(482.43 + m.previous!.svs!.difference + 4384.35 + 3684.77, 2);
   });
 
-  it('Jahr 3 ohne Vorschreibung: Mindestbasis vorläufig, Nachzahlung erwartet', () => {
-    expect(m.provisionalBasis).toBe(6613.2);
-    expect(m.provisionalSvs).toBe(1929.72);
-    // Nachzahlung ist Teil des erwarteten SVS-Beitrags (Jahr 3: alle Zweige)
-    expect(m.expectedSvs - m.provisionalSvs).toBeCloseTo(m.warning.estimatedNachzahlung, 0);
-    expect(m.quarterlyAmount).toBe(482.43);
-    expect(m.prescriptionKnown).toBe(false);
-    expect(m.warning.hasWarning).toBe(true);
-    expect(m.warning.estimatedNachzahlung).toBeGreaterThan(3000);
+  it('was bleibt: Umsatz − Ausgaben − SVS endgültig − ESt', () => {
+    expect(m.remaining).toBe(Math.round((42000 - 6481.05 - 6314.07 - 3684.77) * 100) / 100);
   });
 
-  it('Alerts: Phase 3 + Fälligkeit 30.11. noch > 30 Tage entfernt', () => {
-    expect(m.alerts.map((a) => a.id)).toEqual(['phase-year3']);
-    expect(m.nextDue).toEqual(new Date(2026, 10, 30));
+  it('5 Zeitplan: Quartale, nächster Termin, Vorjahr, Folgejahr', () => {
+    const ids = m.timeline.map((e) => e.id);
+    expect(ids.slice(0, 4)).toEqual(['svs-q0', 'svs-q1', 'svs-q2', 'svs-q3']);
+    expect(m.timeline.filter((e) => e.status === 'paid')).toHaveLength(3);
+    expect(m.timeline.find((e) => e.status === 'next')?.id).toBe('svs-q3');
+    expect(ids).toContain('prev-svs');
+    expect(ids.slice(-4)).toEqual(['tax-return', 'est-current', 'svs-current', 'outlook']);
+    expect(m.timeline.at(-1)?.note).toContain('3. Jahr');
+    expect(m.timeline.at(-1)?.note).toContain('Vorauszahlungen');
   });
 
-  it('bekannte Vorschreibung hat Vorrang', () => {
-    const t = buildSvsTracker({ ...base, quarterlyPrescription: 1200 });
-    expect(t.prescriptionKnown).toBe(true);
-    expect(t.quarterlyAmount).toBe(1200);
-    expect(t.provisionalBasis).toBeGreaterThan(17000);
+  it('keine Phasen-Hinweise mehr (ersetzt durch den Zeitplan)', () => {
+    expect(m.alerts.some((a) => a.id.startsWith('phase-'))).toBe(false);
+  });
+});
+
+describe('buildSvsTracker – Varianten', () => {
+  it('ohne eigene Schätzung: lineare Hochrechnung', () => {
+    const m = buildSvsTracker({ ...base, revenueEstimate: null });
+    expect(m.revenue.estimated).toBe(false);
+    expect(m.revenue.expected).toBeCloseTo((31800 / monthsElapsedInYear(base.today)) * 12, 1);
   });
 
-  it('Jahr 4+: Vorjahresbasis aus Vorjahresdaten', () => {
-    const t = buildSvsTracker({
+  it('nicht erfasste SVS-Zahlungen: Klaro rechnet mit den fälligen Quartalen', () => {
+    const m = buildSvsTracker({ ...base, current: { ...base.current, svsPaid: 0 } });
+    expect(m.svs.unrecorded).toBe(1447.29);
+    expect(m.ytd.svs).toBe(1447.29);
+  });
+
+  it('bezahlte Nachzahlung für Vorjahre: steuerlich abzugsfähig und Teil der Hinzurechnung', () => {
+    const m = buildSvsTracker({ ...base, current: { ...base.current, svsPaid: 2447.29 } });
+    expect(m.svs.extraPaid).toBe(1000);
+    expect(m.full.svs).toBe(2929.72);
+    expect(m.svs.hinzurechnung).toBe(2673.14);
+  });
+
+  it('Vorschreibung laut SVS-Brief hat Vorrang', () => {
+    const m = buildSvsTracker({ ...base, quarterlyPrescription: 900 });
+    expect(m.svs).toMatchObject({ provisionalReason: 'prescription', quarterlyAmount: 900, prescriptionKnown: true });
+  });
+
+  it('ab Jahr 4: vorläufige Basis aus dem Vorjahr', () => {
+    const m = buildSvsTracker({ ...base, registrationDate: new Date(2021, 4, 1) });
+    expect(m.svs.provisionalReason).toBe('previous');
+    expect(m.previous?.svs).toBeNull(); // vorläufige Basis des Vorjahres unbekannt
+  });
+
+  it('Vorauszahlungen: bezahlte, offene und Rest-Steuer; Termine nach Datum sortiert', () => {
+    const m = buildSvsTracker({ ...base, estPrepaymentQuarterly: 800 });
+    expect(m.incomeTax).toMatchObject({ prepaymentTotal: 3200, prepaymentPaid: 2400, open: 484.77 });
+    expect(m.reserve.items.find((i) => i.id === 'est-prepayments')?.amount).toBe(800);
+    expect(m.previous?.incomeTax).toBeNull();
+    // 15.11. (Vorauszahlung) kommt vor 30.11. (SVS)
+    expect(m.timeline.find((e) => e.status === 'next')?.id).toBe('est-q3');
+  });
+
+  it('Vorjahr als erledigt markiert: keine offenen Vorjahresbeträge', () => {
+    const m = buildSvsTracker({ ...base, assessedThroughYear: 2025 });
+    expect(m.previous).toBeNull();
+    expect(m.reserve.items.some((i) => i.id.endsWith('previous'))).toBe(false);
+  });
+
+  it('Arbeitsplatzpauschale und andere Einkünfte', () => {
+    const m = buildSvsTracker({ ...base, arbeitsplatzpauschale: 1200, otherIncome: 18000 });
+    expect(m.full.arbeitsplatzpauschale).toBe(1200);
+    // Gewinn 32.389,23 € liegt jetzt unter 33.000 € → Grundfreibetrag 15 % = 4.858,38 €
+    expect(m.full.einkuenfte).toBe(27530.85);
+    expect(m.incomeTax.total).toBeGreaterThan(buildSvsTracker(base).incomeTax.total);
+    expect(m.ytd.arbeitsplatzpauschale).toBeCloseTo((1200 * monthsElapsedInYear(base.today)) / 12, 1);
+  });
+
+  it('Pauschalierung: Ausgaben = Satz × Umsatz, kein „was bleibt“', () => {
+    const m = buildSvsTracker({ ...base, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service' });
+    expect(m.full.expenses).toBe(18900);
+    expect(m.ytd.expenses).toBe(14310);
+    expect(m.remaining).toBeNull();
+  });
+
+  it('Neue Selbständige unter der Versicherungsgrenze: nicht versichert, keine SVS-Nachzahlung in der Rücklage', () => {
+    const m = buildSvsTracker({
       ...base,
-      registrationDate: new Date(2020, 0, 1),
-      previous: { revenueNet: 30000, revenueGross: 30000, deductibleExpenses: 5000, svsPaid: 2000 },
+      businessType: 'neue_selbstaendige',
+      revenueEstimate: 4000,
+      current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 },
+      previous: null,
     });
-    expect(t.phase).toBe('year4plus');
-    expect(t.provisionalBasis).toBe(25000); // 30.000 − 5.000 − 2.000 + 2.000
+    expect(m.svs.notInsured).toBe(true);
+    expect(m.reserve.items.some((i) => i.id === 'svs-current')).toBe(false);
   });
 
-  it('ohne Anmeldedatum: Jahr 1', () => {
-    const t = buildSvsTracker({ ...base, registrationDate: null, businessType: null });
-    expect(t.svsYear).toBe(1);
-    expect(t.phase).toBe('year1_2');
-  });
-
-  it('Kleinstunternehmer-Ausnahme bzw. unter Versicherungsgrenze: keine Nachzahlung', () => {
+  it('Kleinstunternehmer-Ausnahme: nur UV; fällt weg, wenn die Grenze überschritten wird', () => {
     const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 };
-    const exempt = buildSvsTracker({ ...base, businessType: 'gewerbetreibend', exempt: true, current: small });
-    expect(exempt.notInsured).toBe(true);
-    expect(exempt.exemptionLost).toBe(false);
-    expect(exempt.warning.hasWarning).toBe(false);
-    expect(exempt.expectedSvs).toBe(155.4); // nur Unfallversicherung
-    const low = buildSvsTracker({ ...base, current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 } });
-    expect(low.notInsured).toBe(true);
-    expect(low.warning.hasWarning).toBe(false);
+    const exempt = buildSvsTracker({ ...base, exempt: true, revenueEstimate: 4000, current: small });
+    expect(exempt.svs.exempt).toBe(true);
+    expect(exempt.svs.final.total).toBe(155.4);
+    const lost = buildSvsTracker({ ...base, exempt: true });
+    expect(lost.exemptionLost).toBe(true);
+    expect(lost.svs.exempt).toBe(false);
+    expect(lost.alerts.map((a) => a.id)).toContain('exemption-lost');
   });
 
-  it('Ausnahme fällt weg, wenn der Gewinn über der Versicherungsgrenze liegt → volle Beiträge + Alert', () => {
-    const t = buildSvsTracker({ ...base, businessType: 'gewerbetreibend', exempt: true });
-    expect(t.exemptionLost).toBe(true);
-    expect(t.notInsured).toBe(false);
-    expect(t.expectedSvs).toBe(buildSvsTracker({ ...base, businessType: 'gewerbetreibend' }).expectedSvs);
-    expect(t.alerts.map((a) => a.id)).toContain('exemption-lost');
+  it('Anmeldung im laufenden Jahr: Quartale ab Anmeldung, kein Vorjahr', () => {
+    const m = buildSvsTracker({ ...base, registrationDate: new Date(2026, 5, 10), previous: null });
+    expect(m.insuredMonths).toBe(7);
+    expect(m.svs.quartersDue + m.svs.quartersOpen).toBe(2);
+    expect(m.previous).toBeNull();
   });
 
-  it('Ausnahme fällt weg, wenn der Umsatz über 55.000 € liegt (auch bei kleinem Gewinn)', () => {
-    const t = buildSvsTracker({
-      ...base,
-      businessType: 'gewerbetreibend',
-      exempt: true,
-      current: { revenueNet: 50000, revenueGross: 50000, deductibleExpenses: 49000, svsPaid: 0 },
-    });
-    expect(t.projection.projected).toBeLessThan(6613.2);
-    expect(t.exemptionLost).toBe(true);
-  });
-
-  it('Ausnahme gilt nicht für Neue Selbständige', () => {
-    const t = buildSvsTracker({ ...base, exempt: true });
-    expect(t.exemptionLost).toBe(false);
-    expect(t.notInsured).toBe(false);
-    expect(t.warning.hasWarning).toBe(buildSvsTracker(base).warning.hasWarning);
-  });
-
-  it('Pauschalierung und keine Einnahmen', () => {
-    const t = buildSvsTracker({
-      ...base,
-      profitMethod: 'pauschal',
-      pauschType: 'ku',
-      industryType: 'service',
-      businessType: 'gewerbetreibend',
-      current: { revenueNet: 0, revenueGross: 0, deductibleExpenses: 0, svsPaid: 0 },
-    });
-    expect(t.revenueProjected).toBe(0);
-    expect(t.reserve.perInvoiceRate).toBe(0);
-    // Gewerbetreibende zahlen auch ohne Gewinn den Mindestbeitrag
-    expect(t.reserve.svsAmount).toBe(1929.72);
-    // Kein Gewinn → keine Einkommensteuer, auch nicht anteilig
-    expect(t.breakdown.ytd.incomeTax).toBe(0);
-  });
-
-  it('Kleinunternehmergrenze: Alert ab 45.000 € Umsatz', () => {
-    const t = buildSvsTracker({ ...base, current: { ...base.current, revenueGross: 47000 } });
-    expect(t.alerts.map((a) => a.id)).toContain('ku-approaching');
+  it('Umsatzgrenze: Hinweis ab 45.000 € brutto (nur Kleinunternehmer)', () => {
+    const m = buildSvsTracker({ ...base, current: { ...base.current, revenueGross: 47000 } });
+    expect(m.alerts.map((a) => a.id)).toContain('ku-approaching');
   });
 });

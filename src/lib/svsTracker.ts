@@ -1,42 +1,30 @@
-// Rechenmodell für den SVS-Tracker: führt Gewinn, Hochrechnung, Rücklage, Fälligkeit, Nachzahlung und Alerts zusammen.
+// Rechenmodell für „Gewinn & Rücklagen“:
+// 1 Jahresrechnung (Umsatz → Einkünfte) → 2 SVS (vorläufig vs. endgültig) → 3 Einkommensteuer (inkl. Vorauszahlungen)
+// → 4 Rücklage (was noch offen ist, getrennt nach SVS und Finanzamt) → 5 Zeitplan.
 import { SVS_2026 } from '@/constants/svs2026';
+import { EST_PREPAYMENT_DUE_DAY, EST_PREPAYMENT_DUE_MONTHS, TAX_RETURN_DEADLINE } from '@/constants/tax2026';
 import type { AppAlert, BusinessType, IndustryType, PauschType, ProfitMethod } from '@/types';
 import { round2 } from './money';
-import { calculateGrundfreibetrag, calculateProfit } from './profit';
+import { calculateGrundfreibetrag, getPauschRate } from './profit';
 import {
   basisFromQuarterlyPrescription,
-  calculateBeitragsgrundlage,
-  calculateQuarterlyPrescription,
-  calculateReserveRecommendation,
-  calculateSVSContributions,
-  getNachzahlungsWarning,
-  getNextSVSDueDate,
+  calculateSvsYear,
   getSVSAlerts,
   getSVSPhase,
   getSVSYear,
   getVorlaeufigeBeitragsgrundlage,
   projectAnnualProfit,
+  type SVSOptions,
   type SVSPhase,
+  type SvsYearResult,
 } from './svs';
+import { calculateAdditionalIncomeTax } from './tax';
 
 export interface YearFigures {
   revenueNet: number; // bezahlte Rechnungen netto
   revenueGross: number; // bezahlte Rechnungen brutto (für die Kleinunternehmergrenze)
   deductibleExpenses: number;
-  svsPaid: number;
-}
-
-/** Eine Spalte der Jahresrechnung: Einnahmen → Ausgaben → SVS → Gewinn → Grundfreibetrag → ESt → was bleibt. */
-export interface BreakdownColumn {
-  revenue: number;
-  expenses: number; // absetzbar bzw. pauschal
-  basis: number; // Berechnungsbasis SVS = Gewinn vor SVS
-  svs: number;
-  profit: number; // Jahresgewinn (nach SVS)
-  grundfreibetrag: number;
-  taxable: number; // zu versteuerndes Einkommen
-  incomeTax: number; // bisher: anteilig mit dem Jahres-Steuersatz
-  remaining: number; // Gewinn − Einkommensteuer
+  svsPaid: number; // erfasste SVS-Zahlungen im Jahr
 }
 
 export interface TrackerInput {
@@ -48,15 +36,60 @@ export interface TrackerInput {
   profitMethod: ProfitMethod;
   pauschType: PauschType | null;
   industryType: IndustryType | null;
-  quarterlyPrescription: number | null;
+  quarterlyPrescription: number | null; // SVS-Vorschreibung pro Quartal laut Brief
   /** Arbeitsplatzpauschale fürs ganze laufende Jahr bzw. das Vorjahr */
   arbeitsplatzpauschale?: number;
   arbeitsplatzpauschalePrevious?: number;
   /** Zu versteuerndes Einkommen aus Gehalt/Pension (für die Einkommensteuer) */
   otherIncome?: number;
+  /** Einkommensteuer-Vorauszahlung pro Quartal laut Bescheid */
+  estPrepaymentQuarterly?: number | null;
+  /** Vom Nutzer geschätzter Jahresumsatz (netto) – ersetzt die Hochrechnung */
+  revenueEstimate?: number | null;
+  /** Steuerbescheid und SVS-Nachbemessung erledigt bis einschließlich dieses Jahres */
+  assessedThroughYear?: number | null;
   current: YearFigures;
   previous: YearFigures | null;
 }
+
+/** Eine Spalte der Jahresrechnung: Umsatz − Ausgaben − Arbeitsplatzpauschale − SVS − Grundfreibetrag = Einkünfte. */
+export interface YearColumn {
+  revenue: number;
+  expenses: number; // absetzbar bzw. pauschal
+  arbeitsplatzpauschale: number;
+  svs: number; // im Jahr bezahlt (steuerlich zählt die Zahlung)
+  gewinn: number;
+  grundfreibetrag: number;
+  einkuenfte: number; // Einkünfte aus Gewerbebetrieb bzw. selbständiger Arbeit
+  incomeTax: number; // bis heute: anteilig mit dem Jahres-Durchschnittssteuersatz
+}
+
+export type Payee = 'svs' | 'finanzamt';
+
+export interface ReserveItem {
+  id: string;
+  payee: Payee;
+  label: string;
+  note: string;
+  amount: number; // negativ = Gutschrift
+}
+
+export type TimelineStatus = 'paid' | 'next' | 'open' | 'estimate' | 'info';
+
+export interface TimelineEvent {
+  id: string;
+  payee: Payee | null;
+  group: string; // Überschrift, z. B. „2026“, „Offen aus 2025“
+  date: Date | null; // konkretes Fälligkeitsdatum, falls bekannt
+  dateLabel: string;
+  title: string;
+  amount: number | null;
+  status: TimelineStatus;
+  note: string;
+}
+
+const DAY = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const fmt = (d: Date) => d.toLocaleDateString('de-AT');
 
 /** Anteil des Jahres in Monaten (z. B. 3. Oktober ≈ 9,07). */
 export function monthsElapsedInYear(today: Date): number {
@@ -65,91 +98,334 @@ export function monthsElapsedInYear(today: Date): number {
   return ((today.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 12;
 }
 
-function profitOf(input: TrackerInput, y: YearFigures, arbeitsplatzpauschale: number): number {
-  return calculateProfit({
-    profitMethod: input.profitMethod,
-    pauschType: input.pauschType ?? undefined,
-    industryType: input.industryType ?? undefined,
-    totalRevenue: y.revenueNet,
-    totalExpenses: y.deductibleExpenses,
-    svsPayments: y.svsPaid,
-    arbeitsplatzpauschale,
-  }).netProfit;
+/** Versicherte Monate im Kalenderjahr (Anmeldemonat zählt voll). */
+export function insuredMonths(registrationDate: Date | null, year: number): number {
+  if (!registrationDate || registrationDate.getFullYear() < year) return 12;
+  if (registrationDate.getFullYear() > year) return 0;
+  return 12 - registrationDate.getMonth();
+}
+
+/** SVS-Fälligkeiten eines Jahres (letzter Tag im Feb/Mai/Aug/Nov), ab der Anmeldung. */
+export function svsDueDates(year: number, registrationDate: Date | null): Date[] {
+  return SVS_2026.quarterlyDueMonths
+    .map((m) => new Date(year, m, 0))
+    .filter((d) => !registrationDate || d >= DAY(registrationDate));
+}
+
+/** Fälligkeiten der Einkommensteuer-Vorauszahlungen eines Jahres. */
+export function estPrepaymentDueDates(year: number): Date[] {
+  return EST_PREPAYMENT_DUE_MONTHS.map((m) => new Date(year, m - 1, EST_PREPAYMENT_DUE_DAY));
+}
+
+function column(revenue: number, expenses: number, arbeitsplatzpauschale: number, svs: number): Omit<YearColumn, 'incomeTax'> {
+  const gewinn = round2(revenue - expenses - arbeitsplatzpauschale - svs);
+  const grundfreibetrag = calculateGrundfreibetrag(gewinn);
+  return {
+    revenue: round2(revenue),
+    expenses: round2(expenses),
+    arbeitsplatzpauschale: round2(arbeitsplatzpauschale),
+    svs: round2(svs),
+    gewinn,
+    grundfreibetrag,
+    einkuenfte: round2(gewinn - grundfreibetrag),
+  };
 }
 
 export function buildSvsTracker(input: TrackerInput) {
   const { today, current } = input;
+  const year = today.getFullYear();
+  const todayStart = DAY(today);
   const reg = input.registrationDate;
   const svsYear = reg ? getSVSYear(reg, today) : 1;
   const phase: SVSPhase = reg ? getSVSPhase(reg, today) : 'year1_2';
-
-  // Gewinn bis heute und SVS-Berechnungsbasis (Gewinn + bezahlte SVS-Beiträge).
-  // Die Arbeitsplatzpauschale gilt fürs Jahr – bis heute zählt der anteilige Teil.
   const months = monthsElapsedInYear(today);
-  const profitYtd = profitOf(input, current, round2(((input.arbeitsplatzpauschale ?? 0) * months) / 12));
-  const basisYtd = calculateBeitragsgrundlage(profitYtd, current.svsPaid);
-  const projection = projectAnnualProfit({ currentProfit: basisYtd, monthsElapsed: months });
-  const revenueProjected = projectAnnualProfit({ currentProfit: current.revenueNet, monthsElapsed: months }).projected;
+  const insured = insuredMonths(reg, year);
+  const otherIncome = input.otherIncome ?? 0;
+  const app = input.arbeitsplatzpauschale ?? 0;
+  const pauschRate = input.profitMethod === 'pauschal' ? getPauschRate(input.pauschType ?? 'ku', input.industryType ?? undefined) : null;
+  const expensesFor = (revenue: number, deductible: number) => (pauschRate !== null ? round2(revenue * pauschRate) : deductible);
 
-  // Kleinstunternehmer-Ausnahme gilt nur im GSVG und nur, solange Gewinn und Umsatz unter den Grenzen bleiben
+  // ─── Umsatz bis Jahresende ───
+  const revenueProjected = projectAnnualProfit({ currentProfit: current.revenueNet, monthsElapsed: months }).projected;
+  const revenueEstimated = input.revenueEstimate != null;
+  const revenueExpected = revenueEstimated ? round2(input.revenueEstimate!) : revenueProjected;
+  const factor = months > 0 ? 12 / months : 1;
+  const expensesExpected = expensesFor(revenueExpected, round2(current.deductibleExpenses * factor));
+
+  // ─── Vorjahr (für die vorläufige Basis ab Jahr 4 und für offene Beträge) ───
+  const prevYear = year - 1;
+  const prevSvsYear = svsYear - 1;
+  const hasPrevious = !!input.previous && !!reg && reg.getFullYear() <= prevYear;
+  const prevColumn = hasPrevious
+    ? column(
+        input.previous!.revenueNet,
+        expensesFor(input.previous!.revenueNet, input.previous!.deductibleExpenses),
+        input.arbeitsplatzpauschalePrevious ?? 0,
+        input.previous!.svsPaid,
+      )
+    : null;
+
+  // ─── Kleinstunternehmer-Ausnahme: nur GSVG und nur unter den Grenzen ───
   const exemptRequested = input.exempt && input.businessType === 'gewerbetreibend';
   const exemptionLost =
     exemptRequested &&
-    (projection.projected > SVS_2026.registrationThreshold || revenueProjected > SVS_2026.exemptionRevenueLimit);
-  const options = { businessType: input.businessType ?? undefined, exempt: exemptRequested && !exemptionLost };
+    (revenueExpected - expensesExpected - app > SVS_2026.registrationThreshold || revenueExpected > SVS_2026.exemptionRevenueLimit);
+  const options: SVSOptions = { businessType: input.businessType ?? undefined, exempt: exemptRequested && !exemptionLost };
 
-  const contributions = calculateSVSContributions(projection.projected, options);
-  const reserve = calculateReserveRecommendation(projection.projected, {
-    ...options,
-    ...(revenueProjected > 0 && { projectedRevenue: revenueProjected }),
-    otherIncome: input.otherIncome ?? 0,
+  // ─── Vorläufige SVS (Quartalsvorschreibungen) ───
+  const prescription = input.quarterlyPrescription !== null && input.quarterlyPrescription > 0 ? input.quarterlyPrescription : null;
+  const previousBasis = prevColumn ? round2(prevColumn.einkuenfte + prevColumn.svs) : undefined;
+  const provisionalBasisAnnual = prescription
+    ? basisFromQuarterlyPrescription(prescription)
+    : getVorlaeufigeBeitragsgrundlage(phase, previousBasis);
+  const provisionalReason: 'prescription' | 'minimum' | 'previous' = prescription
+    ? 'prescription'
+    : phase === 'year4plus' && previousBasis !== undefined
+      ? 'previous'
+      : 'minimum';
+  const provisionalBasis = round2((provisionalBasisAnnual * insured) / 12);
+  const dueDates = svsDueDates(year, reg);
+  const provisionalOnly = calculateSvsYear({ einkuenfte: 0, provisionalBasis, months: insured, svsYear, options });
+  const quarterlyAmount = prescription ?? (dueDates.length ? round2(provisionalOnly.provisional.total / dueDates.length) : 0);
+  const quartersDue = dueDates.filter((d) => d < todayStart).length;
+  const quartersOpen = dueDates.length - quartersDue;
+
+  // SVS, die im Jahr bezahlt wird: erfasste Zahlungen, mindestens aber die fälligen Quartale (falls nicht erfasst)
+  const dueSoFar = round2(quartersDue * quarterlyAmount);
+  const svsPaidYtd = round2(Math.max(current.svsPaid, dueSoFar));
+  const svsUnrecorded = round2(Math.max(0, dueSoFar - current.svsPaid));
+  const extraPaid = round2(Math.max(0, current.svsPaid - dueSoFar)); // Nachzahlungen für Vorjahre
+  const svsPaidFull = round2(svsPaidYtd + quartersOpen * quarterlyAmount);
+
+  // ─── 1 Jahresrechnung ───
+  const fullBase = column(revenueExpected, expensesExpected, app, svsPaidFull);
+  const incomeTaxFull = calculateAdditionalIncomeTax(fullBase.einkuenfte, otherIncome);
+  const averageTaxRate = fullBase.einkuenfte > 0 ? incomeTaxFull / fullBase.einkuenfte : 0;
+  const ytdBase = column(current.revenueNet, expensesFor(current.revenueNet, current.deductibleExpenses), round2((app * Math.min(months, 12)) / 12), svsPaidYtd);
+  const full: YearColumn = { ...fullBase, incomeTax: incomeTaxFull };
+  const ytd: YearColumn = { ...ytdBase, incomeTax: round2(Math.max(0, ytdBase.einkuenfte) * averageTaxRate) };
+
+  // ─── 2 SVS ───
+  const svs: SvsYearResult = calculateSvsYear({
+    einkuenfte: full.einkuenfte,
+    provisionalBasis,
+    extraPrescribed: extraPaid,
+    months: insured,
+    svsYear,
+    options,
   });
-  const reserveOpen = round2(Math.max(0, reserve.totalReserve - current.svsPaid));
 
-  // Jahresrechnung: bisher (YTD) und hochgerechnet (gleicher Faktor für Einnahmen und Ausgaben)
-  const factor = months > 0 ? 12 / months : 1;
-  const expensesYtd = round2(current.revenueNet - basisYtd);
-  const column = (revenue: number, expenses: number, basis: number, svs: number, incomeTax: number): BreakdownColumn => {
-    const profit = round2(basis - svs);
-    const grundfreibetrag = calculateGrundfreibetrag(profit);
-    return {
-      revenue: round2(revenue),
-      expenses: round2(expenses),
-      basis: round2(basis),
-      svs: round2(svs),
-      profit,
-      grundfreibetrag,
-      taxable: round2(profit - grundfreibetrag),
-      incomeTax,
-      remaining: round2(profit - incomeTax),
-    };
-  };
-  const projectedColumn = column(revenueProjected, expensesYtd * factor, projection.projected, contributions.total, reserve.incomeTaxAmount);
-  // Einkommensteuer bisher: anteilig mit dem Durchschnittssteuersatz des ganzen Jahres.
-  // (Der Stufentarif gilt fürs Jahr – auf den Gewinn bis heute angewendet, wäre die Steuer viel zu niedrig.)
-  const averageTaxRate = projectedColumn.profit > 0 ? reserve.incomeTaxAmount / projectedColumn.profit : 0;
-  const incomeTaxYtd = round2(Math.max(0, round2(basisYtd - current.svsPaid)) * averageTaxRate);
-  const breakdown = {
-    ytd: column(current.revenueNet, expensesYtd, basisYtd, current.svsPaid, incomeTaxYtd),
-    projected: projectedColumn,
+  // ─── 3 Einkommensteuer ───
+  const prepaymentQuarterly = input.estPrepaymentQuarterly && input.estPrepaymentQuarterly > 0 ? input.estPrepaymentQuarterly : 0;
+  const prepaymentDates = estPrepaymentDueDates(year);
+  const prepaymentTotal = round2(prepaymentQuarterly * prepaymentDates.length);
+  const prepaymentPaid = round2(prepaymentQuarterly * prepaymentDates.filter((d) => d < todayStart).length);
+  const incomeTax = {
+    total: incomeTaxFull,
+    prepaymentQuarterly,
+    prepaymentTotal,
+    prepaymentPaid,
+    open: round2(incomeTaxFull - prepaymentTotal),
   };
 
-  // Vorläufige Basis: aus der echten Vorschreibung, sonst aus Phase/Vorjahr geschätzt
-  const previousBasis = input.previous ? calculateBeitragsgrundlage(profitOf(input, input.previous, input.arbeitsplatzpauschalePrevious ?? 0), input.previous.svsPaid) : undefined;
-  const prescription = input.quarterlyPrescription;
-  const provisionalBasis =
-    prescription !== null && prescription > 0
-      ? basisFromQuarterlyPrescription(prescription)
-      : getVorlaeufigeBeitragsgrundlage(phase, previousBasis);
-  const quarterlyAmount =
-    prescription !== null && prescription > 0 ? prescription : calculateQuarterlyPrescription(phase, previousBasis, options);
+  // ─── Offen aus dem Vorjahr (bis der Steuerbescheid als erledigt markiert ist) ───
+  const previousOpen = hasPrevious && (input.assessedThroughYear ?? 0) < prevYear;
+  const previous = previousOpen
+    ? (() => {
+        const col = prevColumn!;
+        // Vorläufige Basis des Vorjahres kennt Klaro nur in der Gründungsphase sicher (Mindestbasis)
+        const prevMonths = insuredMonths(reg, prevYear);
+        const svsResult =
+          prevSvsYear <= 3
+            ? calculateSvsYear({
+                einkuenfte: col.einkuenfte,
+                provisionalBasis: SVS_2026.minBasisMonthly * prevMonths,
+                months: prevMonths,
+                svsYear: prevSvsYear,
+                options,
+              })
+            : null;
+        // Wer Vorauszahlungen zahlt, hat die Vorjahressteuer meist schon großteils vorausbezahlt
+        const tax = prepaymentQuarterly > 0 ? null : calculateAdditionalIncomeTax(col.einkuenfte, otherIncome);
+        return { year: prevYear, column: col, svs: svsResult, incomeTax: tax };
+      })()
+    : null;
 
-  // Keine Nachbemessung bei Ausnahme bzw. Neuen Selbständigen unter der Versicherungsgrenze
-  const notInsured = options.exempt || contributions.basisGrundlage === 0;
-  const warning = notInsured
-    ? { hasWarning: false, estimatedNachzahlung: 0, message: '', urgency: 'info' as const }
-    : getNachzahlungsWarning({ phase, projectedProfit: projection.projected, provisionalBasis });
+  // ─── 4 Rücklage ───
+  const items: ReserveItem[] = [];
+  if (quartersOpen > 0) {
+    const next = dueDates[quartersDue];
+    items.push({
+      id: 'svs-quarters',
+      payee: 'svs',
+      label: quartersOpen === 1 ? `${dueDates.length === 4 ? '4.' : 'Letztes'} Quartal ${year}` : `Restliche ${quartersOpen} Quartale ${year}`,
+      note: `nächste fällig am ${fmt(next)}`,
+      amount: round2(quartersOpen * quarterlyAmount),
+    });
+  }
+  if (previous?.svs && Math.abs(previous.svs.difference) >= 1) {
+    items.push({
+      id: 'svs-previous',
+      payee: 'svs',
+      label: previous.svs.difference > 0 ? `Nachzahlung ${prevYear}` : `Gutschrift ${prevYear}`,
+      note: `nach deinem Steuerbescheid ${prevYear}`,
+      amount: previous.svs.difference,
+    });
+  }
+  if (!svs.notInsured && Math.abs(svs.difference) >= 1) {
+    items.push({
+      id: 'svs-current',
+      payee: 'svs',
+      label: svs.difference > 0 ? `Nachzahlung ${year}` : `Gutschrift ${year}`,
+      note: `nach deinem Steuerbescheid ${year}`,
+      amount: svs.difference,
+    });
+  }
+  const prepaymentsOpen = round2(prepaymentTotal - prepaymentPaid);
+  if (prepaymentsOpen > 0) {
+    items.push({
+      id: 'est-prepayments',
+      payee: 'finanzamt',
+      label: `Vorauszahlungen ${year}`,
+      note: `noch ${Math.round(prepaymentsOpen / prepaymentQuarterly)} × ${prepaymentQuarterly.toLocaleString('de-AT')} €`,
+      amount: prepaymentsOpen,
+    });
+  }
+  if (previous?.incomeTax && previous.incomeTax >= 1) {
+    items.push({ id: 'est-previous', payee: 'finanzamt', label: `Einkommensteuer ${prevYear}`, note: `nach deinem Steuerbescheid ${prevYear}`, amount: previous.incomeTax });
+  }
+  items.push({
+    id: 'est-current',
+    payee: 'finanzamt',
+    label: `Einkommensteuer ${year}`,
+    note: prepaymentTotal > 0 ? 'Rest nach Vorauszahlungen' : `nach deinem Steuerbescheid ${year}`,
+    amount: incomeTax.open,
+  });
+  const sumOf = (payee: Payee) => round2(items.filter((i) => i.payee === payee).reduce((s, i) => s + i.amount, 0));
+  const reserve = { items, svs: sumOf('svs'), finanzamt: sumOf('finanzamt'), total: round2(sumOf('svs') + sumOf('finanzamt')) };
 
+  // Was nach SVS und Steuer bleibt – nur mit echten Ausgaben aussagekräftig (nicht bei Pauschalierung)
+  const remaining = pauschRate === null ? round2(full.revenue - full.expenses - svs.final.total - incomeTaxFull) : null;
+
+  // ─── 5 Zeitplan ───
+  const events: TimelineEvent[] = [];
+  const g = String(year);
+  dueDates.forEach((d, i) =>
+    events.push({
+      id: `svs-q${i}`,
+      payee: 'svs',
+      group: g,
+      date: d,
+      dateLabel: fmt(d),
+      title: `SVS-Vorschreibung ${i + 1}. Quartal`,
+      amount: quarterlyAmount,
+      status: d < todayStart ? 'paid' : 'open',
+      note: '',
+    }),
+  );
+  if (prepaymentQuarterly > 0) {
+    prepaymentDates.forEach((d, i) =>
+      events.push({
+        id: `est-q${i}`,
+        payee: 'finanzamt',
+        group: g,
+        date: d,
+        dateLabel: fmt(d),
+        title: `Einkommensteuer-Vorauszahlung ${i + 1}. Quartal`,
+        amount: prepaymentQuarterly,
+        status: d < todayStart ? 'paid' : 'open',
+        note: '',
+      }),
+    );
+  }
+  // innerhalb des Jahres nach Datum sortieren und den nächsten offenen Termin markieren
+  events.sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
+  const nextOpen = events.find((e) => e.status === 'open');
+  if (nextOpen) nextOpen.status = 'next';
+
+  if (previous) {
+    const gp = `Offen aus ${prevYear}`;
+    events.push({
+      id: 'prev-assessment',
+      payee: 'finanzamt',
+      group: gp,
+      date: null,
+      dateLabel: 'demnächst',
+      title: `Steuerbescheid ${prevYear}`,
+      amount: null,
+      status: 'info',
+      note: `Kommt nach deiner Steuererklärung ${prevYear}. Danach meldet das Finanzamt deine Einkünfte automatisch an die SVS.`,
+    });
+    if (previous.incomeTax && previous.incomeTax >= 1) {
+      events.push({ id: 'prev-est', payee: 'finanzamt', group: gp, date: null, dateLabel: '1 Monat danach', title: `Einkommensteuer ${prevYear}`, amount: previous.incomeTax, status: 'estimate', note: 'Fällig einen Monat nach dem Bescheid.' });
+    }
+    if (previous.svs && Math.abs(previous.svs.difference) >= 1) {
+      events.push({
+        id: 'prev-svs',
+        payee: 'svs',
+        group: gp,
+        date: null,
+        dateLabel: 'danach',
+        title: previous.svs.difference > 0 ? `SVS-Nachzahlung ${prevYear}` : `SVS-Gutschrift ${prevYear}`,
+        amount: previous.svs.difference,
+        status: 'estimate',
+        note: `Kommt mit der nächsten Quartalsvorschreibung nach dem Bescheid.${prevSvsYear <= 3 ? ' In den ersten drei Jahren kannst du sie auf Antrag in Raten zahlen.' : ''}`,
+      });
+    }
+  }
+
+  const gn = String(year + 1);
+  events.push({
+    id: 'tax-return',
+    payee: 'finanzamt',
+    group: gn,
+    date: new Date(year + 1, TAX_RETURN_DEADLINE.month - 1, TAX_RETURN_DEADLINE.day),
+    dateLabel: fmt(new Date(year + 1, TAX_RETURN_DEADLINE.month - 1, TAX_RETURN_DEADLINE.day)),
+    title: `Steuererklärung ${year} abgeben`,
+    amount: null,
+    status: 'info',
+    note: 'Frist über FinanzOnline. Mit Steuerberatung gilt meist eine längere Frist.',
+  });
+  events.push({
+    id: 'est-current',
+    payee: 'finanzamt',
+    group: gn,
+    date: null,
+    dateLabel: `ca. Sommer ${year + 1}`,
+    title: prepaymentTotal > 0 ? `Einkommensteuer ${year} (Rest)` : `Einkommensteuer ${year}`,
+    amount: incomeTax.open,
+    status: 'estimate',
+    note: 'Fällig einen Monat nach deinem Steuerbescheid.',
+  });
+  if (!svs.notInsured && Math.abs(svs.difference) >= 1) {
+    events.push({
+      id: 'svs-current',
+      payee: 'svs',
+      group: gn,
+      date: null,
+      dateLabel: 'danach',
+      title: svs.difference > 0 ? `SVS-Nachzahlung ${year}` : `SVS-Gutschrift ${year}`,
+      amount: svs.difference,
+      status: 'estimate',
+      note: `Die SVS rechnet ${year} mit deinen echten Einkünften nach und verrechnet die Differenz mit der nächsten Quartalsvorschreibung.`,
+    });
+  }
+  const nextSvsYear = svsYear + 1;
+  const outlook =
+    nextSvsYear <= 3
+      ? `${year + 1} ist dein ${nextSvsYear}. Jahr: Die SVS verrechnet vorläufig weiter den Mindestbeitrag.`
+      : nextSvsYear === 4
+        ? `${year + 1} ist dein 4. Jahr: Ab jetzt rechnet die SVS vorläufig mit deinen Einkünften von vor drei Jahren statt mit dem Mindestbeitrag. Die Quartale werden höher, Nachzahlungen dafür kleiner.`
+        : `Die SVS rechnet ${year + 1} vorläufig mit deinen Einkünften ${year - 2}.`;
+  const prepaymentOutlook =
+    prepaymentQuarterly === 0 && incomeTaxFull >= 1
+      ? ` Nach deinem Steuerbescheid ${year} verlangt das Finanzamt Einkommensteuer-Vorauszahlungen, ca. ${Math.round(incomeTaxFull / 4).toLocaleString('de-AT')} € pro Quartal.`
+      : prepaymentQuarterly > 0
+        ? ' Die Vorauszahlungen passt das Finanzamt nach jedem Bescheid an.'
+        : '';
+  events.push({ id: 'outlook', payee: null, group: gn, date: null, dateLabel: `${year + 1} laufend`, title: `Was sich ${year + 1} ändert`, amount: null, status: 'info', note: outlook + prepaymentOutlook });
+
+  // ─── Hinweise (Umsatzgrenze, Fälligkeit, Ausnahme). Phasen-Hinweise ersetzt der Zeitplan. ───
   const alerts: AppAlert[] = getSVSAlerts({
     annualRevenue: current.revenueGross,
     isKleinunternehmer: input.isKleinunternehmer,
@@ -157,36 +433,41 @@ export function buildSvsTracker(input: TrackerInput) {
     quarterlyAmount,
     exemptionLost,
     today,
-  });
+  }).filter((a) => !a.id.startsWith('phase-'));
+
+  const nextDue = dueDates.find((d) => d >= todayStart) ?? svsDueDates(year + 1, null)[0];
 
   return {
-    breakdown,
+    year,
     svsYear,
     phase,
-    profitYtd,
-    basisYtd,
-    projection,
-    revenueProjected,
-    contributions,
-    reserve,
-    reserveOpen,
-    provisionalBasis,
-    // SVS-Jahresbeitrag (inkl. UV) auf die vorläufige bzw. die erwartete Basis – für das Nachzahlungs-Radar
-    provisionalSvs: calculateSVSContributions(provisionalBasis, options).total,
-    expectedBasis: contributions.basisGrundlage,
-    expectedSvs: contributions.total,
-    quarterlyAmount,
-    prescriptionKnown: prescription !== null && prescription > 0,
-    nextDue: getNextSVSDueDate(today),
-    warning,
-    alerts,
-    notInsured,
-    exemptionLost,
-    thresholds: {
-      svs: SVS_2026.registrationThreshold,
-      incomeTax: SVS_2026.incomeTaxThreshold,
-      kleinunternehmer: SVS_2026.kleinunternehmerThreshold,
+    monthsElapsed: months,
+    insuredMonths: insured,
+    pauschRate,
+    revenue: { projected: revenueProjected, expected: revenueExpected, estimated: revenueEstimated },
+    ytd,
+    full,
+    averageTaxRate,
+    svs: {
+      ...svs,
+      exempt: !!options.exempt,
+      quarterlyAmount,
+      prescriptionKnown: prescription !== null,
+      provisionalReason,
+      quartersDue,
+      quartersOpen,
+      paidYtd: svsPaidYtd,
+      unrecorded: svsUnrecorded,
+      extraPaid,
+      nextDue,
     },
+    incomeTax,
+    previous,
+    reserve,
+    remaining,
+    timeline: events,
+    alerts,
+    exemptionLost,
   };
 }
 

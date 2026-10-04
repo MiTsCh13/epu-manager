@@ -191,11 +191,13 @@ export type Database = {
         Row: {
           account_holder: string | null
           address: string | null
+          assessed_through_year: number | null
           business_name: string | null
           business_type: string | null
           city: string | null
           country: string
           created_at: string
+          est_prepayment_quarterly: number | null
           full_name: string | null
           home_office: boolean | null
           iban: string | null
@@ -209,6 +211,8 @@ export type Database = {
           other_income_kind: string | null
           pausch_type: string | null
           profit_method: string
+          revenue_estimate: number | null
+          revenue_estimate_year: number | null
           stripe_customer_id: string | null
           subscription_cancel_at_period_end: boolean
           subscription_renews_at: string | null
@@ -223,11 +227,13 @@ export type Database = {
         Insert: {
           account_holder?: string | null
           address?: string | null
+          assessed_through_year?: number | null
           business_name?: string | null
           business_type?: string | null
           city?: string | null
           country?: string
           created_at?: string
+          est_prepayment_quarterly?: number | null
           full_name?: string | null
           home_office?: boolean | null
           iban?: string | null
@@ -241,6 +247,8 @@ export type Database = {
           other_income_kind?: string | null
           pausch_type?: string | null
           profit_method?: string
+          revenue_estimate?: number | null
+          revenue_estimate_year?: number | null
           stripe_customer_id?: string | null
           subscription_cancel_at_period_end?: boolean
           subscription_renews_at?: string | null
@@ -255,11 +263,13 @@ export type Database = {
         Update: {
           account_holder?: string | null
           address?: string | null
+          assessed_through_year?: number | null
           business_name?: string | null
           business_type?: string | null
           city?: string | null
           country?: string
           created_at?: string
+          est_prepayment_quarterly?: number | null
           full_name?: string | null
           home_office?: boolean | null
           iban?: string | null
@@ -273,6 +283,8 @@ export type Database = {
           other_income_kind?: string | null
           pausch_type?: string | null
           profit_method?: string
+          revenue_estimate?: number | null
+          revenue_estimate_year?: number | null
           stripe_customer_id?: string | null
           subscription_cancel_at_period_end?: boolean
           subscription_renews_at?: string | null

@@ -1,176 +1,271 @@
 import { useState, type ReactNode } from 'react';
-import { Calculator } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProfilePatch } from '@/hooks/useProfilePatch';
 import { formatEuro } from '@/lib/money';
-import { Term } from '@/components/ui/Tooltip';
-import type { BreakdownColumn } from '@/lib/svsTracker';
-import { IncomeSplitBar } from './IncomeSplitBar';
+import type { SvsTrackerModel, YearColumn } from '@/lib/svsTracker';
+import { InfoTip, Term } from '@/components/ui/Tooltip';
+import { AmountForm, StepCard } from './parts';
 
-type Row = {
+// Farben je Posten (auf Farbsehschwächen geprüft); Grundfreibetrag schraffiert, weil kein Geld abfließt
+const COLORS = { revenue: '#94a3b8', expenses: '#2a78d6', app: '#6aa3e8', svs: '#eb6834', einkuenfte: '#0d9488' } as const;
+const HATCH = 'repeating-linear-gradient(-45deg, transparent 0 4px, rgba(13,148,136,.45) 4px 6px)';
+
+interface Row {
+  key: keyof YearColumn;
   op: '' | '−' | '=';
   label: ReactNode;
-  key: keyof BreakdownColumn;
-  strong?: boolean;
-  hint?: string;
-};
+  sub: string;
+  info: ReactNode;
+  from: number;
+  width: number;
+  color?: string;
+  hatch?: boolean;
+  total?: boolean;
+}
 
-/** Jahresrechnung von den Einnahmen bis „was dir bleibt“ – bisher und hochgerechnet. */
-export function YearBreakdown({
-  ytd,
-  projected,
-  year,
-  pauschal,
-}: {
-  ytd: BreakdownColumn;
-  projected: BreakdownColumn;
-  year: number;
-  pauschal: boolean;
-}) {
-  const [view, setView] = useState<'ytd' | 'projected'>('projected');
+const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)} %`;
 
-  // Hauptrechnung: Was abgeht, bis zu dem, was bleibt
+/** 1 · Jahresrechnung: Umsatz − Ausgaben − SVS − Grundfreibetrag = Einkünfte, darauf die Einkommensteuer. */
+export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
+  const { profile } = useAuth();
+  const patch = useProfilePatch();
+  const [view, setView] = useState<'ytd' | 'full'>('ytd');
+  const [editRevenue, setEditRevenue] = useState(false);
+  const isYtd = view === 'ytd';
+  const c = isYtd ? model.ytd : model.full;
+  const base = c.revenue > 0 ? c.revenue : 1;
+  const ns = profile?.business_type === 'neue_selbstaendige';
+  const einkLabel = ns ? 'Einkünfte aus selbständiger Arbeit' : 'Einkünfte aus Gewerbebetrieb';
+  const otherIncome = profile?.other_income_kind && profile.other_income_kind !== 'none' ? Number(profile.other_income_amount ?? 0) : 0;
+  const year = model.year;
+
+  // Wasserfall: jeder Abzug beginnt dort, wo der vorige aufgehört hat
+  const afterExpenses = c.revenue - c.expenses;
+  const afterApp = afterExpenses - c.arbeitsplatzpauschale;
+  const afterSvs = afterApp - c.svs;
   const rows: Row[] = [
-    { op: '', label: 'Einnahmen (bezahlte Rechnungen, netto)', key: 'revenue' },
-    { op: '−', label: pauschal ? <Term k="pauschalierung">Pauschale Ausgaben</Term> : <Term k="absetzbar">Absetzbare Ausgaben</Term>, key: 'expenses' },
-    { op: '=', label: <Term k="berechnungsbasis">Berechnungsbasis für die SVS</Term>, key: 'basis', strong: true, hint: 'Gewinn vor SVS' },
-    { op: '−', label: <Term k="svs">SVS-Beiträge</Term>, key: 'svs', hint: 'bisher bezahlt bzw. ganzes Jahr' },
-    { op: '=', label: 'Jahresgewinn', key: 'profit', strong: true },
-  ];
-  // Nebenrechnung: nur zur Ermittlung der Steuer – wird nicht vom Geld abgezogen
-  const taxRows: Row[] = [
-    { op: '', label: <Term k="grundfreibetrag">davon steuerfrei: Grundfreibetrag</Term>, key: 'grundfreibetrag', hint: '15 %, max. 4.950 €' },
-    { op: '', label: 'zu versteuerndes Einkommen', key: 'taxable' },
+    {
+      key: 'revenue',
+      op: '',
+      label: 'Umsatz',
+      sub: profile?.is_kleinunternehmer ? 'bezahlte Rechnungen' : 'bezahlte Rechnungen, ohne USt',
+      info: isYtd ? `Summe deiner bezahlten Rechnungen seit 1.1.${year}.` : 'Dein erwarteter Umsatz für das ganze Jahr (siehe oben).',
+      from: 0,
+      width: c.revenue,
+      color: COLORS.revenue,
+    },
+    {
+      key: 'expenses',
+      op: '−',
+      label: model.pauschRate !== null ? `Ausgaben, pauschal ${Math.round(model.pauschRate * 100)} %` : 'Betriebsausgaben',
+      sub: model.pauschRate !== null ? 'statt einzelner Belege' : 'was du absetzen kannst',
+      info:
+        model.pauschRate !== null
+          ? `Bei der Pauschalierung gelten ${Math.round(model.pauschRate * 100)} % deines Umsatzes als Ausgaben. Einzelne Belege brauchst du dafür nicht.`
+          : isYtd
+            ? 'Deine erfassten absetzbaren Ausgaben bis heute (Geschäftsessen nur zur Hälfte).'
+            : 'Deine Ausgaben bis heute, aufs ganze Jahr hochgerechnet.',
+      from: afterExpenses,
+      width: c.expenses,
+      color: COLORS.expenses,
+    },
+    ...(c.arbeitsplatzpauschale > 0
+      ? [
+          {
+            key: 'arbeitsplatzpauschale' as const,
+            op: '−' as const,
+            label: <Term k="arbeitsplatzpauschale" />,
+            sub: isYtd ? 'anteilig bis heute' : 'fixer Betrag fürs Arbeiten zu Hause',
+            info: 'Ein fixer Betrag, den Klaro automatisch abzieht. Du brauchst dafür keine Belege.',
+            from: afterApp,
+            width: c.arbeitsplatzpauschale,
+            color: COLORS.app,
+          },
+        ]
+      : []),
+    {
+      key: 'svs',
+      op: '−',
+      label: 'SVS-Beiträge',
+      sub: isYtd ? 'bisher bezahlt' : `${year} bezahlt`,
+      info: (
+        <>
+          Steuerlich zählt, was du im Jahr tatsächlich an die SVS zahlst – auch Nachzahlungen für frühere Jahre. Eine
+          Nachzahlung für {year} setzt du in dem Jahr ab, in dem du sie zahlst.
+          {model.svs.extraPaid > 0 && <> Enthält {formatEuro(model.svs.extraPaid, true)} Nachzahlung für Vorjahre.</>}
+        </>
+      ),
+      from: afterSvs,
+      width: c.svs,
+      color: COLORS.svs,
+    },
+    {
+      key: 'grundfreibetrag',
+      op: '−',
+      label: <Term k="grundfreibetrag" />,
+      sub: `15 % vom Gewinn (${formatEuro(c.gewinn, true)}), steuerfrei`,
+      info: 'Kein Geld, das du zahlst: Dieser Teil deines Gewinns bleibt einfach steuerfrei. Er senkt auch die Berechnungsbasis der SVS.',
+      from: c.einkuenfte,
+      width: c.grundfreibetrag,
+      hatch: true,
+    },
+    {
+      key: 'einkuenfte',
+      op: '=',
+      label: <Term k="einkuenfte">{einkLabel}</Term>,
+      sub: isYtd ? 'bis heute' : `erwartet für ${year}`,
+      info: 'Diese Zahl steht später in deinem Steuerbescheid. Darauf berechnen Finanzamt und SVS ihre Beträge.',
+      from: 0,
+      width: Math.max(0, c.einkuenfte),
+      color: COLORS.einkuenfte,
+      total: true,
+    },
   ];
 
-  const cell = (v: number) => formatEuro(v, true);
-  const valueCells = (key: keyof BreakdownColumn, className: string) => (
-    <>
-      <td className={`py-2 text-right align-top tabular-nums ${className}`} data-testid={`ytd-${key}`}>
-        {cell(ytd[key])}
-      </td>
-      <td className={`py-2 pl-3 pr-5 text-right align-top tabular-nums sm:pr-0 ${className}`} data-testid={`projected-${key}`}>
-        {cell(projected[key])}
-      </td>
-    </>
-  );
-  const mainRow = (r: Row) => (
-    <tr key={r.key} className={r.op === '=' ? 'border-t border-slate-200' : ''}>
-      <th scope="row" className={`py-2 pl-5 text-left font-normal sm:pl-0 ${r.strong ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-        <div className="flex gap-1.5">
-          <span className="w-3 shrink-0 text-slate-400" aria-hidden="true">
-            {r.op}
-          </span>
-          <div>
-            {r.label}
-            {r.hint && <span className="block text-xs font-normal text-slate-500">{r.hint}</span>}
-          </div>
-        </div>
-      </th>
-      {valueCells(r.key, r.strong ? 'font-semibold text-slate-900' : 'text-slate-700')}
-    </tr>
-  );
+  const pct = (v: number) => `${Math.min(Math.max(v / base, 0), 1) * 100}%`;
 
   return (
-    <section aria-labelledby="breakdown-heading" className="rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
-      <h2 id="breakdown-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-        <Calculator className="h-5 w-5 text-primary" aria-hidden="true" />
-        Deine Jahresrechnung {year}
-      </h2>
-      <p className="mt-1 text-sm text-slate-600">Von den Einnahmen bis zu dem, was dir nach allen Abzügen bleibt.</p>
+    <StepCard step={1} eyebrow="Deine Jahresrechnung" title="Von deinem Umsatz zu deinen Einkünften">
+      <p className="-mt-2 text-sm text-slate-600">Auf deine Einkünfte rechnen Finanzamt und SVS. So kommen sie zustande:</p>
 
-      {/* Balken: wohin dein Umsatz geht */}
-      <div className="mt-5 rounded-xl bg-slate-50/60 p-4 ring-1 ring-slate-100">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900">Wohin deine Einnahmen gehen</h3>
-          <div role="radiogroup" aria-label="Zeitraum" className="inline-flex rounded-lg bg-slate-100 p-1">
-            {(
-              [
-                ['ytd', 'Bisher'],
-                ['projected', 'Hochgerechnet'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={view === value}
-                onClick={() => setView(value)}
-                className={`min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors ${
-                  view === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      <div role="radiogroup" aria-label="Zeitraum" className="inline-flex rounded-lg bg-slate-100 p-1">
+        {(
+          [
+            ['ytd', 'Bis heute'],
+            ['full', 'Ganzes Jahr (erwartet)'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={view === value}
+            onClick={() => setView(value)}
+            className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
+              view === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {isYtd ? (
+        <p className="text-sm text-slate-500">
+          Stand heute. SVS und Einkommensteuer gelten fürs ganze Jahr – wie es bis Jahresende aussieht, siehst du unter
+          „Ganzes Jahr“.
+        </p>
+      ) : editRevenue ? (
+        <AmountForm
+          label={`Erwarteter Umsatz ${year} (€)`}
+          hint="Leer lassen, um wieder die Hochrechnung zu verwenden."
+          initial={model.revenue.expected}
+          allowEmpty
+          onCancel={() => setEditRevenue(false)}
+          onSave={(value) =>
+            patch(
+              value === null ? { revenue_estimate: null, revenue_estimate_year: null } : { revenue_estimate: value, revenue_estimate_year: year },
+              value === null ? 'Klaro rechnet wieder hoch' : 'Erwarteter Umsatz gespeichert',
+            )
+          }
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 text-sm text-slate-600 ring-1 ring-slate-200">
+          <span>
+            Erwarteter Umsatz {year}: <strong className="tabular-nums text-slate-900">{formatEuro(model.revenue.expected, true)}</strong>
+          </span>
+          <span>{model.revenue.estimated ? 'von dir geschätzt' : `hochgerechnet aus ${formatEuro(model.ytd.revenue, true)} bis heute`}</span>
+          <InfoTip
+            content={`Klaro rechnet deinen bisherigen Umsatz auf 12 Monate hoch. Weißt du es besser – z. B. ein großer Auftrag im Dezember –, trag deinen eigenen Wert ein.`}
+          />
+          <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setEditRevenue(true)}>
+            anpassen
+          </button>
         </div>
-        <IncomeSplitBar column={view === 'ytd' ? ytd : projected} expensesLabel={pauschal ? 'Pauschale Ausgaben' : 'Absetzbare Ausgaben'} />
+      )}
+
+      <div className="space-y-0.5" data-testid="breakdown">
+        {rows.map((r) => (
+          <div
+            key={r.key}
+            className={`grid grid-cols-[1rem_minmax(0,1fr)_6.5rem] items-center gap-x-2 gap-y-1.5 rounded-lg px-1 py-2 sm:grid-cols-[1rem_minmax(0,15rem)_minmax(0,1fr)_7rem] ${
+              r.total ? 'mt-1 border-t-2 border-slate-900 pt-3' : ''
+            }`}
+          >
+            <span className="text-center font-semibold text-slate-400" aria-hidden="true">
+              {r.op}
+            </span>
+            <span className={`min-w-0 text-sm ${r.total ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+              <span className="inline-flex items-center">
+                {r.label}
+                {typeof r.label === 'string' && <InfoTip content={r.info} label={`Was zählt zu ${r.label}?`} />}
+              </span>
+              <span className="block text-xs font-normal text-slate-500">{r.sub}</span>
+            </span>
+            <span className="relative col-span-2 col-start-2 h-3 overflow-hidden rounded bg-slate-100 sm:col-span-1 sm:col-start-3" aria-hidden="true">
+              <span
+                className={`absolute inset-y-0 rounded-sm ${r.hatch ? 'ring-1 ring-inset ring-teal-600/60' : ''}`}
+                style={{ left: pct(r.from), width: pct(r.width), background: r.hatch ? HATCH : r.color }}
+              />
+            </span>
+            <span className="col-start-3 row-start-1 text-right tabular-nums sm:col-start-4" data-testid={`${view}-${r.key}`}>
+              <span className={`block ${r.total ? 'font-semibold text-slate-900' : 'text-slate-900'}`}>{formatEuro(c[r.key], true)}</span>
+              <span className="block text-xs text-slate-500">{percent(c[r.key], base)}</span>
+            </span>
+          </div>
+        ))}
       </div>
 
-      <div className="-mx-5 mt-6 overflow-x-auto sm:mx-0">
-        <table className="w-full min-w-[22rem] text-sm" data-testid="breakdown">
-          <thead>
-            <tr className="border-b border-slate-200 text-xs text-slate-500">
-              <th scope="col" className="py-2 pl-5 text-left font-medium sm:pl-0">
-                <span className="sr-only">Position</span>
-              </th>
-              <th scope="col" className="py-2 text-right font-medium">Bisher</th>
-              <th scope="col" className="py-2 pl-3 pr-5 text-right font-medium sm:pr-0">Hochgerechnet</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(mainRow)}
-
-            {/* Nebenrechnung Steuer: eingerückt, ohne Rechenzeichen */}
-            <tr>
-              <td colSpan={3} className="pb-0.5 pl-10 pt-2 text-xs font-medium text-slate-500 sm:pl-[1.125rem]">
-                So entsteht die Einkommensteuer:
-              </td>
-            </tr>
-            {taxRows.map((r) => (
-              <tr key={r.key}>
-                <th scope="row" className="py-1 pl-10 text-left text-xs font-normal text-slate-500 sm:pl-[1.125rem]">
-                  <div className="flex gap-1">
-                    <span aria-hidden="true">↳</span>
-                    <div>
-                      {r.label}
-                      {r.hint && <span className="block text-[11px] text-slate-400">{r.hint}</span>}
-                    </div>
-                  </div>
-                </th>
-                {valueCells(r.key, 'py-1 text-xs text-slate-500')}
-              </tr>
-            ))}
-
-            {mainRow({ op: '−', label: 'Einkommensteuer (ca.)', key: 'incomeTax', hint: 'Tarif 2026 · bisher anteilig' })}
-
-            <tr className="border-t-2 border-slate-900 bg-primary-50/60">
-              <th scope="row" className="py-3 pl-5 text-left sm:pl-0">
-                <div className="flex gap-1.5">
-                  <span className="w-3 shrink-0 text-slate-400" aria-hidden="true">
-                    =
-                  </span>
-                  <div>
-                    <span className="text-base font-bold text-slate-900">Dir bleibt netto</span>
-                    <span className="block text-xs font-normal text-slate-600">Endergebnis: Jahresgewinn minus Einkommensteuer</span>
-                  </div>
-                </div>
-              </th>
-              <td className="py-3 text-right align-top text-base font-bold tabular-nums text-slate-900" data-testid="ytd-remaining">
-                {cell(ytd.remaining)}
-              </td>
-              <td className="py-3 pl-3 pr-5 text-right align-top text-base font-bold tabular-nums text-primary-800 sm:pr-0" data-testid="projected-remaining">
-                {cell(projected.remaining)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="space-y-2 rounded-xl bg-slate-50 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <span className="text-slate-700">
+            Darauf zahlst du Einkommensteuer{isYtd && <span className="text-sm text-slate-500"> (anteilig bis heute)</span>}
+            <InfoTip
+              content={
+                isYtd
+                  ? `Die Einkommensteuer wird fürs ganze Jahr berechnet. Für „bis heute“ nimmt Klaro deinen erwarteten Durchschnittssteuersatz (${Math.round(model.averageTaxRate * 100)} %) mal deine Einkünfte bis heute.`
+                  : `Tarif ${year}: bis 13.539 € steuerfrei, darüber 20 %, 30 %, 40 % … für jeden weiteren Euro. Vereinfacht, ohne Absetzbeträge.`
+              }
+            />
+          </span>
+          <span className="text-xl font-bold tabular-nums text-slate-900" data-testid={`${view}-incomeTax`}>
+            ca. {formatEuro(c.incomeTax, true)}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          {c.incomeTax > 0
+            ? `Das sind im Schnitt ${Math.round(model.averageTaxRate * 100)} % deiner Einkünfte.`
+            : 'Unter 13.539 € Einkommen im Jahr fällt keine Einkommensteuer an.'}{' '}
+          {otherIncome > 0 ? (
+            <>
+              Mitgerechnet: dein {profile?.other_income_kind === 'pension' ? 'Pension' : 'Gehalt'} mit ca. {formatEuro(otherIncome, true)} im Jahr – es
+              nutzt den steuerfreien Teil schon, deshalb zahlst du auf jeden Euro aus der Selbständigkeit mehr.{' '}
+              <Link to="/einstellungen#steuer" className="font-medium text-primary hover:underline">
+                ändern
+              </Link>
+            </>
+          ) : (
+            <>
+              Hast du daneben ein Gehalt oder eine Pension?{' '}
+              <Link to="/einstellungen#steuer" className="font-medium text-primary hover:underline">
+                In den Einstellungen eintragen
+              </Link>
+              , sonst ist die Steuer zu niedrig geschätzt.
+            </>
+          )}
+        </p>
       </div>
-      <p className="mt-3 text-xs text-slate-500">
-        „Bisher“ = Stand heute. „Hochgerechnet“ = aufs ganze Jahr {year} hochgerechnet. Die Einkommensteuer gilt fürs
-        ganze Jahr (ohne andere Einkünfte); „bisher“ ist sie anteilig mit deinem Jahres-Steuersatz gerechnet. Der Grundfreibetrag ist kein Geld,
-        das du zahlst – er senkt nur den Betrag, auf den die Einkommensteuer berechnet wird. Deshalb wird er beim Ergebnis
-        nicht abgezogen.
-      </p>
-    </section>
+
+      {model.svs.unrecorded > 0 && (
+        <p className="text-xs text-slate-500">
+          Klaro geht davon aus, dass du die fälligen SVS-Quartale bezahlt hast, auch wenn {formatEuro(model.svs.unrecorded, true)} davon nicht
+          erfasst sind.{' '}
+          <Link to="/ausgaben" className="font-medium text-primary hover:underline">
+            SVS-Zahlungen erfassen
+          </Link>
+        </p>
+      )}
+    </StepCard>
   );
 }

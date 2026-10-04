@@ -37,6 +37,11 @@ export function useSvsTracker() {
       arbeitsplatzpauschale: app(year),
       arbeitsplatzpauschalePrevious: app(year - 1),
       otherIncome,
+      estPrepaymentQuarterly: profile.est_prepayment_quarterly === null ? null : Number(profile.est_prepayment_quarterly),
+      // Eigene Umsatz-Schätzung gilt nur für das Jahr, für das sie eingegeben wurde
+      revenueEstimate:
+        profile.revenue_estimate !== null && profile.revenue_estimate_year === year ? Number(profile.revenue_estimate) : null,
+      assessedThroughYear: profile.assessed_through_year,
       current,
       previous,
     });

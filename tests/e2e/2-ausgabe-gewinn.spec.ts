@@ -16,10 +16,13 @@ test('Ausgaben senken den Gewinn – Bewirtung nur zur Hälfte', async ({ page, 
   await seedPaidInvoices(client, [10_000]);
   await login(page, email);
 
-  // Ausgangslage: Gewinn = Einnahmen
+  // Ausgangslage: noch keine Ausgaben in der Jahresrechnung
   await page.goto('/gewinn');
-  const profit = page.getByTestId('ytd-profit');
-  await expect(profit).toHaveText(/^€\s10\.000$/);
+  // Je Zeile: erster Wert = Betrag, zweiter = Anteil am Umsatz
+  const expenses = page.getByTestId('ytd-expenses').locator('span').first();
+  const einkuenfte = page.getByTestId('ytd-einkuenfte').locator('span').first();
+  await expect(expenses).toHaveText(/^€\s0$/);
+  const before = parseEuro((await einkuenfte.textContent()) ?? '');
 
   // Software 1.000 € → voll absetzbar
   await page.goto('/ausgaben');
@@ -34,8 +37,9 @@ test('Ausgaben senken den Gewinn – Bewirtung nur zur Hälfte', async ({ page, 
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(dialog).toBeHidden();
 
-  // Gewinn: 10.000 − 1.000 − 100 = 8.900
+  // Jahresrechnung: 1.000 + 100 = 1.100 € absetzbar; die Einkünfte sinken um 1.100 € minus 15 % Grundfreibetrag = 935 €
   await page.goto('/gewinn');
-  await expect(profit).toHaveText(/^€\s8\.900$/);
-  expect(parseEuro((await profit.textContent()) ?? '')).toBe(8900);
+  await expect(expenses).toHaveText(/^€\s1\.100$/);
+  const after = parseEuro((await einkuenfte.textContent()) ?? '');
+  expect(before - after).toBe(935);
 });

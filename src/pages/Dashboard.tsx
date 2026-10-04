@@ -90,14 +90,12 @@ export default function Dashboard() {
             </Alert>
           )}
 
-          {/* Wichtige Hinweise (Phasenhinweis steckt bereits in der SVS-Karte) */}
-          {svs.model.alerts
-            .filter((a) => !a.id.startsWith('phase'))
-            .map((a) => (
-              <Alert key={a.id} type={a.urgency}>
-                {a.message}
-              </Alert>
-            ))}
+          {/* Wichtige Hinweise: Umsatzgrenze, SVS-Fälligkeit, Ausnahme */}
+          {svs.model.alerts.map((a) => (
+            <Alert key={a.id} type={a.urgency}>
+              {a.message}
+            </Alert>
+          ))}
 
           {/* Jede Kennzahl führt dorthin, wo genau diese Zahl wieder steht */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -122,17 +120,17 @@ export default function Dashboard() {
               testId="stat-open"
             />
             <StatCard
-              label="Geschätzter Jahresgewinn"
-              value={formatEuro(svs.model.breakdown.projected.profit, true)}
-              sub="hochgerechnet, nach SVS, vor Steuer"
+              label={`Erwartete Einkünfte ${svs.year}`}
+              value={formatEuro(svs.model.full.einkuenfte, true)}
+              sub="ganzes Jahr, vor Einkommensteuer"
               icon={TrendingUp}
               to="/gewinn"
               testId="stat-profit"
             />
             <StatCard
               label="Empfohlene Rücklage"
-              value={formatEuro(svs.model.reserveOpen, true)}
-              sub={`noch für SVS + Steuer ${svs.year}`}
+              value={formatEuro(svs.model.reserve.total, true)}
+              sub="noch offen für SVS + Finanzamt"
               icon={PiggyBank}
               to="/gewinn#ruecklage"
               highlight
@@ -140,7 +138,7 @@ export default function Dashboard() {
             />
           </div>
 
-          <SVSDashboardCard model={svs.model} year={svs.year} />
+          <SVSDashboardCard model={svs.model} />
 
           <section aria-label="Auswertung nach Zeitraum" className="space-y-4">
             <PeriodFilter preset={preset} range={range} custom={custom} onPreset={setPreset} onCustom={setCustom} />
