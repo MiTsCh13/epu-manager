@@ -1,5 +1,6 @@
 // Eingabe-Validierung (IBAN, UID, PLZ, Onboarding-Schritte) mit deutschen Fehlermeldungen.
-import type { BusinessType, IndustryType, InvoiceNumberFormat, PauschType, ProfitMethod } from '@/types';
+import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import { parseDecimal } from './money';
 
 const compact = (v: string) => v.replace(/\s+/g, '').toUpperCase();
 
@@ -57,6 +58,9 @@ export interface OnboardingData {
   profit_method: ProfitMethod | null;
   pausch_type: PauschType | null;
   industry_code: IndustryType | null;
+  home_office: boolean | null;
+  other_income_kind: OtherIncomeKind | null;
+  other_income_amount: string; // Eingabe, z. B. „18.000“
   address: string;
   zip_code: string;
   city: string;
@@ -97,6 +101,14 @@ export function validateOnboardingStep(step: 1 | 2 | 3, data: OnboardingData, to
         e.pausch_type = 'Die Kleinunternehmerpauschalierung gibt es nur für Kleinunternehmer.';
       } else if (data.pausch_type === 'ku' && !data.industry_code) {
         e.industry_code = 'Bitte wähle, ob du Dienstleistungen oder Waren verkaufst.';
+      }
+    }
+    if (data.home_office === null) e.home_office = 'Bitte wähle, ob du von zu Hause arbeitest.';
+    if (!data.other_income_kind) e.other_income_kind = 'Bitte wähle, ob du daneben andere Einkünfte hast.';
+    else if (data.other_income_kind !== 'none') {
+      const amount = parseDecimal(data.other_income_amount);
+      if (blank(data.other_income_amount) || Number.isNaN(amount) || amount <= 0) {
+        e.other_income_amount = 'Bitte gib einen ungefähren Betrag ein.';
       }
     }
   }

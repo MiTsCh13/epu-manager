@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateArbeitsplatzpauschale,
   calculateDeductibleAmount,
   calculateGrundfreibetrag,
   calculateKilometergeld,
   calculateProfit,
   getPauschRate,
   isPauschalierungAllowed,
+  otherIncomeAmount,
   sumDeductibleExpenses,
 } from '@/lib/profit';
 
@@ -51,15 +53,15 @@ describe('calculateProfit – EÜR', () => {
     ).toEqual({ grossProfit: 40000, netProfit: 35000, grundfreibetrag: 4950, taxableIncome: 30050 });
   });
 
-  it('ignoriert Homeoffice-Pauschale (ist bei EÜR bereits in den Ausgaben enthalten)', () => {
+  it('zieht die Arbeitsplatzpauschale auch bei EÜR ab', () => {
     const r = calculateProfit({
       profitMethod: 'euer',
       totalRevenue: 20000,
       totalExpenses: 2000,
       svsPayments: 1929.72,
-      homeofficePauschale: 300,
+      arbeitsplatzpauschale: 1200,
     });
-    expect(r.netProfit).toBe(16070.28);
+    expect(r.netProfit).toBe(14870.28);
     expect(r.pauschaleExpenses).toBeUndefined();
   });
 
@@ -79,7 +81,7 @@ describe('calculateProfit – Pauschalierung', () => {
       totalRevenue: 27500,
       totalExpenses: 999, // wird bei Pauschalierung ignoriert
       svsPayments: 2000,
-      homeofficePauschale: 300,
+      arbeitsplatzpauschale: 300,
     });
     expect(r).toEqual({
       pauschaleExpenses: 12375,
@@ -153,4 +155,45 @@ describe('sumDeductibleExpenses', () => {
     ).toBe(60.1);
   });
   it('leere Liste → 0', () => expect(sumDeductibleExpenses([])).toBe(0));
+});
+
+describe('calculateArbeitsplatzpauschale', () => {
+  const base = { homeOffice: true, otherIncomeKind: 'none' as const, otherIncomeAmount: null, year: 2026 };
+
+  it('nicht von zu Hause bzw. unbeantwortet: keine Pauschale', () => {
+    expect(calculateArbeitsplatzpauschale({ ...base, homeOffice: false }).amount).toBe(0);
+    expect(calculateArbeitsplatzpauschale({ ...base, homeOffice: null })).toEqual({ amount: 0, size: null, kz: null, months: 0 });
+  });
+
+  it('ohne andere Einkünfte: groß, 1.200 €, KZ 9217', () => {
+    expect(calculateArbeitsplatzpauschale(base)).toEqual({ amount: 1200, size: 'gross', kz: '9217', months: 12 });
+  });
+
+  it('Gehalt über 13.539 €: klein, 300 €, KZ 9215', () => {
+    const r = calculateArbeitsplatzpauschale({ ...base, otherIncomeKind: 'employment', otherIncomeAmount: 18000 });
+    expect(r).toEqual({ amount: 300, size: 'klein', kz: '9215', months: 12 });
+  });
+
+  it('Gehalt bis 13.539 € oder Pension: weiterhin groß', () => {
+    expect(calculateArbeitsplatzpauschale({ ...base, otherIncomeKind: 'employment', otherIncomeAmount: 13539 }).size).toBe('gross');
+    expect(calculateArbeitsplatzpauschale({ ...base, otherIncomeKind: 'pension', otherIncomeAmount: 30000 }).size).toBe('gross');
+  });
+
+  it('Anmeldejahr: 1/12 pro angefangenem Monat', () => {
+    // Anmeldung 15. März → März bis Dezember = 10 Monate
+    const r = calculateArbeitsplatzpauschale({ ...base, registrationDate: new Date(2026, 2, 15) });
+    expect(r).toMatchObject({ amount: 1000, months: 10 });
+    expect(calculateArbeitsplatzpauschale({ ...base, registrationDate: new Date(2025, 2, 15) }).amount).toBe(1200);
+    expect(calculateArbeitsplatzpauschale({ ...base, registrationDate: new Date(2027, 0, 1) }).amount).toBe(0);
+  });
+});
+
+describe('otherIncomeAmount', () => {
+  it('nur bei Gehalt oder Pension', () => {
+    expect(otherIncomeAmount('employment', 18000)).toBe(18000);
+    expect(otherIncomeAmount('pension', 12000)).toBe(12000);
+    expect(otherIncomeAmount('none', 18000)).toBe(0);
+    expect(otherIncomeAmount(null, 18000)).toBe(0);
+    expect(otherIncomeAmount('employment', null)).toBe(0);
+  });
 });

@@ -197,6 +197,7 @@ export type Database = {
           country: string
           created_at: string
           full_name: string | null
+          home_office: boolean | null
           iban: string | null
           id: string
           industry_code: string | null
@@ -204,6 +205,8 @@ export type Database = {
           invoice_number_format: string
           is_kleinunternehmer: boolean
           onboarding_completed: boolean
+          other_income_amount: number | null
+          other_income_kind: string | null
           pausch_type: string | null
           profit_method: string
           stripe_customer_id: string | null
@@ -226,6 +229,7 @@ export type Database = {
           country?: string
           created_at?: string
           full_name?: string | null
+          home_office?: boolean | null
           iban?: string | null
           id: string
           industry_code?: string | null
@@ -233,6 +237,8 @@ export type Database = {
           invoice_number_format?: string
           is_kleinunternehmer?: boolean
           onboarding_completed?: boolean
+          other_income_amount?: number | null
+          other_income_kind?: string | null
           pausch_type?: string | null
           profit_method?: string
           stripe_customer_id?: string | null
@@ -255,6 +261,7 @@ export type Database = {
           country?: string
           created_at?: string
           full_name?: string | null
+          home_office?: boolean | null
           iban?: string | null
           id?: string
           industry_code?: string | null
@@ -262,6 +269,8 @@ export type Database = {
           invoice_number_format?: string
           is_kleinunternehmer?: boolean
           onboarding_completed?: boolean
+          other_income_amount?: number | null
+          other_income_kind?: string | null
           pausch_type?: string | null
           profit_method?: string
           stripe_customer_id?: string | null
@@ -315,6 +324,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_user_data: { Args: { p_user: string }; Returns: undefined }
       has_active_access: { Args: { p_user: string }; Returns: boolean }
     }
     Enums: {

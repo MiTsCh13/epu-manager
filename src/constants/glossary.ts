@@ -67,6 +67,10 @@ export const GLOSSARY = {
     term: 'Ausnahme von der Pflichtversicherung',
     text: `Kleinstunternehmerregelung für Gewerbetreibende: Liegt dein Umsatz unter ${formatEuro(SVS_2026.exemptionRevenueLimit, true)} und dein Gewinn unter ${formatEuro(SVS_2026.registrationThreshold)} im Jahr, kannst du dich auf Antrag bei der SVS von Kranken- und Pensionsversicherung befreien lassen. Die Unfallversicherung zahlst du weiter. Überschreitest du eine Grenze, wirst du rückwirkend pflichtversichert.`,
   },
+  arbeitsplatzpauschale: {
+    term: 'Arbeitsplatzpauschale',
+    text: 'Ein fixer Betrag, den du absetzen kannst, wenn du von zu Hause arbeitest: 1.200 € im Jahr. Hast du daneben ein Gehalt über 13.539 € aus einem Job außer Haus, sind es 300 €. Du brauchst keine Belege, Klaro zieht ihn automatisch ab – auch bei Pauschalierung.',
+  },
   vorschreibung: {
     term: 'Vorschreibung',
     text: 'Die Rechnung der SVS, die du jedes Quartal bekommst (Ende Februar, Mai, August, November). Sie basiert zunächst auf einer Schätzung – daher die spätere Nachbemessung.',

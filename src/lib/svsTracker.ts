@@ -49,6 +49,11 @@ export interface TrackerInput {
   pauschType: PauschType | null;
   industryType: IndustryType | null;
   quarterlyPrescription: number | null;
+  /** Arbeitsplatzpauschale fürs ganze laufende Jahr bzw. das Vorjahr */
+  arbeitsplatzpauschale?: number;
+  arbeitsplatzpauschalePrevious?: number;
+  /** Zu versteuerndes Einkommen aus Gehalt/Pension (für die Einkommensteuer) */
+  otherIncome?: number;
   current: YearFigures;
   previous: YearFigures | null;
 }
@@ -60,7 +65,7 @@ export function monthsElapsedInYear(today: Date): number {
   return ((today.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 12;
 }
 
-function profitOf(input: TrackerInput, y: YearFigures): number {
+function profitOf(input: TrackerInput, y: YearFigures, arbeitsplatzpauschale: number): number {
   return calculateProfit({
     profitMethod: input.profitMethod,
     pauschType: input.pauschType ?? undefined,
@@ -68,6 +73,7 @@ function profitOf(input: TrackerInput, y: YearFigures): number {
     totalRevenue: y.revenueNet,
     totalExpenses: y.deductibleExpenses,
     svsPayments: y.svsPaid,
+    arbeitsplatzpauschale,
   }).netProfit;
 }
 
@@ -77,10 +83,11 @@ export function buildSvsTracker(input: TrackerInput) {
   const svsYear = reg ? getSVSYear(reg, today) : 1;
   const phase: SVSPhase = reg ? getSVSPhase(reg, today) : 'year1_2';
 
-  // Gewinn bis heute und SVS-Berechnungsbasis (Gewinn + bezahlte SVS-Beiträge)
-  const profitYtd = profitOf(input, current);
-  const basisYtd = calculateBeitragsgrundlage(profitYtd, current.svsPaid);
+  // Gewinn bis heute und SVS-Berechnungsbasis (Gewinn + bezahlte SVS-Beiträge).
+  // Die Arbeitsplatzpauschale gilt fürs Jahr – bis heute zählt der anteilige Teil.
   const months = monthsElapsedInYear(today);
+  const profitYtd = profitOf(input, current, round2(((input.arbeitsplatzpauschale ?? 0) * months) / 12));
+  const basisYtd = calculateBeitragsgrundlage(profitYtd, current.svsPaid);
   const projection = projectAnnualProfit({ currentProfit: basisYtd, monthsElapsed: months });
   const revenueProjected = projectAnnualProfit({ currentProfit: current.revenueNet, monthsElapsed: months }).projected;
 
@@ -95,6 +102,7 @@ export function buildSvsTracker(input: TrackerInput) {
   const reserve = calculateReserveRecommendation(projection.projected, {
     ...options,
     ...(revenueProjected > 0 && { projectedRevenue: revenueProjected }),
+    otherIncome: input.otherIncome ?? 0,
   });
   const reserveOpen = round2(Math.max(0, reserve.totalReserve - current.svsPaid));
 
@@ -127,7 +135,7 @@ export function buildSvsTracker(input: TrackerInput) {
   };
 
   // Vorläufige Basis: aus der echten Vorschreibung, sonst aus Phase/Vorjahr geschätzt
-  const previousBasis = input.previous ? calculateBeitragsgrundlage(profitOf(input, input.previous), input.previous.svsPaid) : undefined;
+  const previousBasis = input.previous ? calculateBeitragsgrundlage(profitOf(input, input.previous, input.arbeitsplatzpauschalePrevious ?? 0), input.previous.svsPaid) : undefined;
   const prescription = input.quarterlyPrescription;
   const provisionalBasis =
     prescription !== null && prescription > 0

@@ -156,6 +156,14 @@ describe('calculateReserveRecommendation', () => {
     expect(r.perInvoiceRate).toBe(0.34);
   });
 
+  it('andere Einkünfte: nur die zusätzliche Steuer durch die Selbständigkeit', () => {
+    // 24.745,71 € zu versteuern; Steuer(42.745,71) − Steuer(18.000) = 8.545,48 − 892,20
+    const r = calculateReserveRecommendation(40000, { otherIncome: 18000 });
+    expect(r.svsAmount).toBe(10887.4);
+    expect(r.incomeTaxAmount).toBeGreaterThan(calculateReserveRecommendation(40000).incomeTaxAmount);
+    expect(r.incomeTaxAmount).toBe(7653.28);
+  });
+
   it('bezieht den Prozentsatz auf die Einnahmen, wenn bekannt', () => {
     const r = calculateReserveRecommendation(40000, { projectedRevenue: 50000 });
     expect(r.perInvoiceRate).toBe(0.27);

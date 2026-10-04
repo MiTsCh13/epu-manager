@@ -2,6 +2,9 @@
 // Im UI werden `label` und `hint` angezeigt; gespeichert werden `kz` (e1a_kz) und `label` (category_label).
 // Kennzahlen laut BMF-Formular E 1a 2025.
 //
+// Die Arbeitsplatzpauschale ist keine Kategorie, sondern eine Einstellung (profiles.home_office) –
+// Klaro zieht sie automatisch ab.
+//
 // WICHTIG: SVS-Beiträge werden NICHT in dieser Liste geführt,
 // sondern in der separaten Tabelle svs_payments — sie sind bei
 // allen Gewinnermittlungsarten (auch Pauschalierung) absetzbar.
@@ -32,7 +35,6 @@ export const E1A_KZ_NAMES: Record<string, string> = {
   '9180': 'Miet- und Pachtaufwand, Leasing',
   '9190': 'Provisionen an Dritte, Lizenzgebühren',
   '9200': 'Werbe- und Repräsentationsaufwendungen',
-  '9215': 'Kleines Arbeitsplatzpauschale',
   '9216': 'Ergonomisch geeignetes Mobiliar',
   '9220': 'Zinsen und ähnliche Aufwendungen',
   '9225': 'Eigene Pflichtversicherungsbeiträge (SVS)',
@@ -75,12 +77,8 @@ export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
     hint: 'Miete für Büro, Atelier, Praxis oder Coworking-Platz, Leasingraten für Geräte oder Auto.',
   },
   {
-    id: 'homeoffice', kz: '9215', label: 'Homeoffice-Pauschale', icon: 'home', group: 'betrieb',
-    hint: 'Arbeitsplatzpauschale fürs Arbeiten zu Hause: 300 € im Jahr. 1.200 € gibt es, wenn du daneben kaum andere Einkünfte hast (höchstens 13.539 €). Einmal pro Jahr eintragen, ohne Beleg.',
-  },
-  {
     id: 'bueromoebel', kz: '9216', label: 'Büromöbel (ergonomisch)', icon: 'armchair', group: 'betrieb',
-    hint: 'Schreibtisch, Drehstuhl, Schreibtischlampe, höchstens 300 € im Jahr. Nur zusammen mit dem kleinen Arbeitsplatzpauschale.',
+    hint: 'Schreibtisch, Drehstuhl, Schreibtischlampe fürs Arbeiten zu Hause, höchstens 300 € im Jahr. Nur wenn du das kleine Arbeitsplatzpauschale (300 €) bekommst, sonst unter „Geräte & Ausrüstung“.',
   },
   {
     id: 'oeffi', kz: '9165', label: 'Öffi-Jahreskarte (50%)', icon: 'bus', group: 'betrieb', deductibleRate: 0.5,

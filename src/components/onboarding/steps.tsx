@@ -2,8 +2,10 @@ import { Term } from '@/components/ui/Tooltip';
 import { Alert } from '@/components/ui/Alert';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field } from '@/components/ui/Field';
+import { formatEuro, parseDecimal } from '@/lib/money';
+import { calculateArbeitsplatzpauschale } from '@/lib/profit';
 import { formatIban, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
-import type { BusinessType, IndustryType, InvoiceNumberFormat, PauschType, ProfitMethod } from '@/types';
+import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 
 interface StepProps {
   data: OnboardingData;
@@ -201,6 +203,81 @@ export function StepAccounting({ data, errors, update }: StepProps) {
             { value: 'trade', title: 'Waren / Produktion', description: '20 % pauschale Ausgaben' },
           ]}
         />
+      )}
+
+      <HomeOfficeAndOtherIncome data={data} errors={errors} update={update} />
+    </div>
+  );
+}
+
+/** Arbeitsplatzpauschale und andere Einkünfte – beides beeinflusst Gewinn bzw. Einkommensteuer. */
+function HomeOfficeAndOtherIncome({ data, errors, update }: StepProps) {
+  const year = new Date().getFullYear();
+  const registration = data.svs_registration_date ? new Date(data.svs_registration_date) : null;
+  const amount = parseDecimal(data.other_income_amount);
+  const app = calculateArbeitsplatzpauschale({
+    homeOffice: data.home_office,
+    otherIncomeKind: data.other_income_kind,
+    otherIncomeAmount: Number.isNaN(amount) ? 0 : amount,
+    year,
+    registrationDate: registration && !Number.isNaN(registration.getTime()) ? registration : null,
+  });
+
+  return (
+    <div className="space-y-6 border-t border-slate-100 pt-6">
+      <div className="space-y-3">
+        <ChoiceCards<boolean>
+          legend="Arbeitest du von zu Hause aus?"
+          name="home_office"
+          value={data.home_office}
+          error={errors.home_office}
+          columns={2}
+          onChange={(home_office) => update({ home_office })}
+          options={[
+            { value: true, title: 'Ja, von zu Hause', description: 'Ich habe kein Büro, Atelier und keine Praxis außer Haus.' },
+            { value: false, title: 'Nein', description: 'Ich habe einen eigenen Arbeitsraum außer Haus, z. B. ein gemietetes Büro.' },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <ChoiceCards<OtherIncomeKind>
+          legend="Hast du daneben ein Gehalt oder eine Pension?"
+          name="other_income_kind"
+          value={data.other_income_kind}
+          error={errors.other_income_kind}
+          columns={3}
+          onChange={(other_income_kind) => update({ other_income_kind })}
+          options={[
+            { value: 'none', title: 'Nein', description: 'Nur meine Selbständigkeit' },
+            { value: 'employment', title: 'Ja, ein Gehalt', description: 'Ich bin auch angestellt' },
+            { value: 'pension', title: 'Ja, eine Pension', description: 'Ich bin in Pension' },
+          ]}
+        />
+        <p className="text-xs text-slate-500">
+          Dein Gehalt bzw. deine Pension ist über die Lohnsteuer schon versteuert. Es erhöht aber den Steuersatz auf
+          deinen Gewinn – ohne diese Angabe schätzt Klaro deine Einkommensteuer zu niedrig.
+        </p>
+        {data.other_income_kind && data.other_income_kind !== 'none' && (
+          <Field
+            label="Zu versteuerndes Einkommen daraus pro Jahr (ungefähr, in €)"
+            inputMode="decimal"
+            placeholder="z. B. 18.000"
+            hint="Steht auf deinem Lohnzettel (L16) bei Kennzahl 245. Grob geschätzt: Monatsbrutto × 12 × 0,8 – das 13. und 14. Gehalt zählen nicht mit."
+            value={data.other_income_amount}
+            error={errors.other_income_amount}
+            onChange={(e) => update({ other_income_amount: e.target.value })}
+          />
+        )}
+      </div>
+
+      {data.home_office && data.other_income_kind && (
+        <Alert type="info">
+          Klaro zieht automatisch eine <Term k="arbeitsplatzpauschale" /> von{' '}
+          <strong>{formatEuro(app.size === 'klein' ? 300 : 1200, true)} pro Jahr</strong> ab, auch bei Pauschalierung.
+          {app.months > 0 && app.months < 12 && <> Im ersten Jahr anteilig: {formatEuro(app.amount, true)} für {year}.</>}
+          {app.size === 'klein' && <> Dazu kannst du ergonomische Büromöbel bis 300 € im Jahr als Ausgabe erfassen.</>}
+        </Alert>
       )}
     </div>
   );

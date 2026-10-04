@@ -23,6 +23,15 @@ export function calculateIncomeTax(taxableIncome: number): number {
   return round2(tax);
 }
 
+/**
+ * Einkommensteuer, die durch die Selbständigkeit dazukommt: Steuer auf alles minus Steuer auf die anderen
+ * Einkünfte allein (Gehalt/Pension sind über die Lohnsteuer schon versteuert). Vereinfacht, ohne Absetzbeträge.
+ */
+export function calculateAdditionalIncomeTax(taxableIncome: number, otherIncome: number): number {
+  const other = Math.max(otherIncome, 0);
+  return round2(Math.max(0, calculateIncomeTax(taxableIncome + other) - calculateIncomeTax(other)));
+}
+
 // ─── Umsatzsteuer ───────────────────────────────────────────
 
 export function isValidVatRate(rate: number): rate is VatRate {

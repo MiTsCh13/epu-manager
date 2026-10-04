@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -19,6 +19,12 @@ const SECTIONS = [
 export default function Settings() {
   const { refreshProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { hash } = useLocation();
+
+  // Sprungmarken (z. B. #steuer von der Ausgaben-Seite) anspringen
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [hash]);
 
   // Rückkehr von Stripe Checkout: Webhook aktualisiert den Status serverseitig – kurz nachladen
   useEffect(() => {

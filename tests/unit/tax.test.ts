@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateAdditionalIncomeTax,
   calculateIncomeTax,
   calculateInvoiceTotals,
   calculateLineItemTotal,
@@ -23,6 +24,19 @@ describe('calculateIncomeTax (Tarif 2026)', () => {
     [1200000, 593720.82],
   ])('%f € → %f €', (income, tax) => {
     expect(calculateIncomeTax(income)).toBe(tax);
+  });
+});
+
+describe('calculateAdditionalIncomeTax', () => {
+  it('ohne andere Einkünfte = normale Einkommensteuer', () => {
+    expect(calculateAdditionalIncomeTax(30000, 0)).toBe(calculateIncomeTax(30000));
+  });
+  it('mit Gehalt: Steuer auf alles minus Steuer aufs Gehalt', () => {
+    // Steuer(26.000) − Steuer(18.000) = 2.893,00 − 892,20
+    expect(calculateAdditionalIncomeTax(8000, 18000)).toBe(2000.8);
+  });
+  it('Verlust senkt nicht unter 0', () => {
+    expect(calculateAdditionalIncomeTax(-5000, 18000)).toBe(0);
   });
 });
 

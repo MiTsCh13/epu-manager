@@ -1,8 +1,8 @@
 // Einstellungen: Profil ↔ Formular, Speicher-Patch je Abschnitt und Hinweise bei folgenreichen Änderungen.
 import { SVS_2026 } from '@/constants/svs2026';
 import { PHASE_INFO } from '@/constants/svsPhases';
-import type { BusinessType, IndustryType, InvoiceNumberFormat, PauschType, Profile, ProfileUpdate, ProfitMethod } from '@/types';
-import { formatEuro } from './money';
+import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, Profile, ProfileUpdate, ProfitMethod } from '@/types';
+import { formatDecimalInput, formatEuro, parseDecimal, round2 } from './money';
 import { getPauschRate } from './profit';
 import { getSVSPhase, getSVSYear } from './svs';
 import { formatIban, normalizeUid, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from './validation';
@@ -25,6 +25,9 @@ export function profileToSettingsData(p: Profile): SettingsData {
     profit_method: p.profit_method as ProfitMethod,
     pausch_type: (p.pausch_type as PauschType | null) ?? null,
     industry_code: (p.industry_code as IndustryType | null) ?? null,
+    home_office: p.home_office ?? null,
+    other_income_kind: (p.other_income_kind as OtherIncomeKind | null) ?? null,
+    other_income_amount: p.other_income_amount == null ? '' : formatDecimalInput(Number(p.other_income_amount)),
     address: p.address ?? '',
     zip_code: p.zip_code ?? '',
     city: p.city ?? '',
@@ -49,6 +52,12 @@ export function toProfilePatch(d: OnboardingData) {
     profit_method: d.profit_method ?? 'pauschal',
     pausch_type: pauschal ? d.pausch_type : null,
     industry_code: pauschal && d.pausch_type === 'ku' ? d.industry_code : null,
+    home_office: d.home_office,
+    other_income_kind: d.other_income_kind,
+    other_income_amount:
+      d.other_income_kind && d.other_income_kind !== 'none' && !Number.isNaN(parseDecimal(d.other_income_amount))
+        ? round2(parseDecimal(d.other_income_amount))
+        : null,
     address: d.address.trim(),
     zip_code: d.zip_code.trim(),
     city: d.city.trim(),
@@ -63,7 +72,7 @@ type PatchKey = keyof ReturnType<typeof toProfilePatch>;
 
 const SECTION_FIELDS: Record<SettingsSection, readonly PatchKey[]> = {
   identity: ['full_name', 'business_name', 'business_type', 'svs_registration_date'],
-  accounting: ['is_kleinunternehmer', 'profit_method', 'pausch_type', 'industry_code'],
+  accounting: ['is_kleinunternehmer', 'profit_method', 'pausch_type', 'industry_code', 'home_office', 'other_income_kind', 'other_income_amount'],
   invoicing: ['address', 'zip_code', 'city', 'iban', 'account_holder', 'uid_number', 'invoice_number_format'],
 };
 

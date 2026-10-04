@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatIban, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
 import { toProfilePatch } from '@/lib/profileSettings';
+import { formatEuro, parseDecimal } from '@/lib/money';
+import { calculateArbeitsplatzpauschale, otherIncomeAmount } from '@/lib/profit';
 import { KlaroLogo } from '@/components/auth/AuthLayout';
 import { StepIndicator } from '@/components/onboarding/StepIndicator';
 import { StepAccounting, StepIdentity, StepInvoicing } from '@/components/onboarding/steps';
@@ -31,6 +33,9 @@ function initialData(profile: Profile): OnboardingData {
     profit_method: null,
     pausch_type: null,
     industry_code: null,
+    home_office: null,
+    other_income_kind: null,
+    other_income_amount: '',
     address: profile.address ?? '',
     zip_code: profile.zip_code ?? '',
     city: profile.city ?? '',
@@ -163,6 +168,14 @@ const PAUSCH_LABELS = { ku: 'Kleinunternehmerpauschalierung', basis_15: 'Basispa
 
 function Welcome({ data }: { data: OnboardingData }) {
   const year = new Date().getFullYear();
+  const otherIncome = otherIncomeAmount(data.other_income_kind, parseDecimal(data.other_income_amount) || 0);
+  const app = calculateArbeitsplatzpauschale({
+    homeOffice: data.home_office,
+    otherIncomeKind: data.other_income_kind,
+    otherIncomeAmount: otherIncome,
+    year,
+    registrationDate: new Date(data.svs_registration_date),
+  });
   const rows: [string, string][] = [
     ['Name', [data.full_name, data.business_name].filter(Boolean).join(' · ')],
     ['Tätigkeit', data.business_type === 'gewerbetreibend' ? 'Gewerbetreibend (GSVG)' : 'Neue Selbständige'],
@@ -174,6 +187,16 @@ function Welcome({ data }: { data: OnboardingData }) {
         ? 'Einnahmen-Ausgaben-Rechnung'
         : (data.pausch_type ? PAUSCH_LABELS[data.pausch_type] : 'Pauschalierung') +
           (data.pausch_type === 'ku' ? (data.industry_code === 'trade' ? ' (Handel, 20 %)' : ' (Dienstleistung, 45 %)') : ''),
+    ],
+    [
+      'Arbeitsplatzpauschale',
+      app.amount > 0 ? `${formatEuro(app.amount, true)} für ${year}` : 'keine (Arbeitsraum außer Haus)',
+    ],
+    [
+      'Andere Einkünfte',
+      data.other_income_kind === 'employment' || data.other_income_kind === 'pension'
+        ? `${data.other_income_kind === 'employment' ? 'Gehalt' : 'Pension'}, ca. ${formatEuro(otherIncome, true)} pro Jahr`
+        : 'keine',
     ],
     ['Konto', `${data.account_holder} · ${formatIban(data.iban)}`],
     ['Rechnungsnummern', data.invoice_number_format === 'KL-YYYY-NNN' ? `KL-${year}-001` : `${year}-001`],

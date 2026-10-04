@@ -9,7 +9,7 @@ import { SVS_2026 } from '@/constants/svs2026';
 import type { AlertUrgency, AppAlert, BusinessType } from '@/types';
 import { formatEuro, round2 } from './money';
 import { calculateGrundfreibetrag } from './profit';
-import { calculateIncomeTax } from './tax';
+import { calculateAdditionalIncomeTax } from './tax';
 
 export type SVSPhase = 'year1_2' | 'year3' | 'year4plus';
 
@@ -116,12 +116,12 @@ export function projectAnnualProfit(params: {
 /**
  * Wie viel für SVS + Einkommensteuer des Jahres zurückgelegt werden sollte.
  * `projectedProfit` = hochgerechneter Jahresgewinn vor SVS.
- * Die Einkommensteuer ist vereinfacht: Gewinn − SVS − Grundfreibetrag, Tarif 2026,
- * ohne andere Einkünfte und Absetzbeträge.
+ * Die Einkommensteuer ist vereinfacht: Gewinn − SVS − Grundfreibetrag, Tarif 2026, ohne Absetzbeträge.
+ * Andere Einkünfte (Gehalt/Pension) erhöhen den Steuersatz: gerechnet wird nur die zusätzliche Steuer.
  */
 export function calculateReserveRecommendation(
   projectedProfit: number,
-  options: SVSOptions & { projectedRevenue?: number } = {},
+  options: SVSOptions & { projectedRevenue?: number; otherIncome?: number } = {},
 ): {
   svsAmount: number; // Zurücklegen für SVS
   incomeTaxAmount: number; // Zurücklegen für Einkommensteuer (vereinfacht)
@@ -131,7 +131,7 @@ export function calculateReserveRecommendation(
   const svsAmount = calculateSVSContributions(projectedProfit, options).total;
   const profitAfterSvs = projectedProfit - svsAmount;
   const taxable = profitAfterSvs - calculateGrundfreibetrag(profitAfterSvs);
-  const incomeTaxAmount = calculateIncomeTax(taxable);
+  const incomeTaxAmount = calculateAdditionalIncomeTax(taxable, options.otherIncome ?? 0);
   const totalReserve = round2(svsAmount + incomeTaxAmount);
 
   // Bezug: Einnahmen (falls bekannt), sonst Gewinn – beides auf ganze Prozent aufgerundet

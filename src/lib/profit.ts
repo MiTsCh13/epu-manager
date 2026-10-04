@@ -1,5 +1,6 @@
 // Gewinnermittlung: Einnahmen-Ausgaben-Rechnung (EÜR) und Pauschalierung
 import {
+  ARBEITSPLATZPAUSCHALE,
   BEWIRTUNG_DEDUCTIBLE_RATE,
   GRUNDFREIBETRAG_MAX,
   GRUNDFREIBETRAG_RATE,
@@ -7,7 +8,7 @@ import {
   PAUSCH_RATES,
   PAUSCH_REVENUE_LIMITS,
 } from '@/constants/tax2026';
-import type { IndustryType, PauschType, ProfitMethod } from '@/types';
+import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 import { round2 } from './money';
 
 export { GRUNDFREIBETRAG_MAX, GRUNDFREIBETRAG_RATE, PAUSCH_RATES };
@@ -30,12 +31,12 @@ export function calculateProfit(params: {
   pauschType?: PauschType;
   industryType?: IndustryType; // Für KU-Pauschalierung
   totalRevenue: number; // Summe aller Einnahmen (netto)
-  totalExpenses: number; // Summe absetzbarer Ausgaben (bei EÜR, inkl. Homeoffice-Pauschale)
+  totalExpenses: number; // Summe absetzbarer Ausgaben (bei EÜR)
   svsPayments: number; // SVS-Beiträge (immer absetzbar)
-  homeofficePauschale?: number; // Arbeitsplatzpauschale (300 € oder 1.200 €), nur bei Pauschalierung separat
+  arbeitsplatzpauschale?: number; // 300 € bzw. 1.200 € – bei allen Gewinnermittlungsarten zusätzlich absetzbar
 }): {
   grossProfit: number; // Einnahmen − Ausgaben (vor SVS)
-  netProfit: number; // Gewinn nach SVS (und ggf. Homeoffice-Pauschale)
+  netProfit: number; // Gewinn nach SVS und Arbeitsplatzpauschale
   taxableIncome: number; // Steuerpflichtiges Einkommen (nach Grundfreibetrag)
   grundfreibetrag: number; // Angewendeter Grundfreibetrag
   pauschaleExpenses?: number; // Bei Pauschalierung: berechnete pauschale Ausgaben
@@ -43,18 +44,16 @@ export function calculateProfit(params: {
   const { totalRevenue, svsPayments } = params;
 
   let grossProfit: number;
-  let netProfit: number;
   let pauschaleExpenses: number | undefined;
 
   if (params.profitMethod === 'pauschal') {
     const rate = getPauschRate(params.pauschType ?? 'ku', params.industryType);
     pauschaleExpenses = round2(totalRevenue * rate);
     grossProfit = round2(totalRevenue - pauschaleExpenses);
-    netProfit = round2(grossProfit - svsPayments - (params.homeofficePauschale ?? 0));
   } else {
     grossProfit = round2(totalRevenue - params.totalExpenses);
-    netProfit = round2(grossProfit - svsPayments);
   }
+  const netProfit = round2(grossProfit - svsPayments - (params.arbeitsplatzpauschale ?? 0));
 
   const grundfreibetrag = calculateGrundfreibetrag(netProfit);
   const taxableIncome = round2(netProfit - grundfreibetrag);
@@ -66,6 +65,41 @@ export function calculateProfit(params: {
     grundfreibetrag,
     ...(pauschaleExpenses !== undefined && { pauschaleExpenses }),
   };
+}
+
+// ─── Arbeitsplatzpauschale ──────────────────────────────────
+
+export interface ArbeitsplatzpauschaleResult {
+  amount: number; // für das Jahr (bei Betriebsbeginn anteilig)
+  size: 'gross' | 'klein' | null;
+  kz: '9217' | '9215' | null; // E1a-Kennzahl
+  months: number; // angerechnete Monate
+}
+
+/**
+ * Arbeitsplatzpauschale für ein Kalenderjahr. Nur wer von zu Hause arbeitet (kein anderer Raum außer Haus).
+ * Groß (1.200 €), außer es gibt ein Gehalt über dem Grenzwert – dann klein (300 €). Pensionen zählen nicht.
+ * Im Jahr der Anmeldung: 1/12 pro angefangenem Monat.
+ */
+export function calculateArbeitsplatzpauschale(params: {
+  homeOffice: boolean | null;
+  otherIncomeKind: OtherIncomeKind | null;
+  otherIncomeAmount: number | null;
+  year: number;
+  registrationDate?: Date | null;
+}): ArbeitsplatzpauschaleResult {
+  if (!params.homeOffice) return { amount: 0, size: null, kz: null, months: 0 };
+  const reg = params.registrationDate;
+  if (reg && reg.getFullYear() > params.year) return { amount: 0, size: null, kz: null, months: 0 };
+  const months = reg && reg.getFullYear() === params.year ? 12 - reg.getMonth() : 12;
+  const klein = params.otherIncomeKind === 'employment' && (params.otherIncomeAmount ?? 0) > ARBEITSPLATZPAUSCHALE.otherIncomeLimit;
+  const annual = klein ? ARBEITSPLATZPAUSCHALE.klein : ARBEITSPLATZPAUSCHALE.gross;
+  return { amount: round2((annual * months) / 12), size: klein ? 'klein' : 'gross', kz: klein ? '9215' : '9217', months };
+}
+
+/** Zu versteuerndes Jahreseinkommen aus Gehalt bzw. Pension (0, wenn keine oder unbeantwortet). */
+export function otherIncomeAmount(kind: OtherIncomeKind | null, amount: number | null): number {
+  return kind && kind !== 'none' ? Math.max(amount ?? 0, 0) : 0;
 }
 
 // ─── Ausgaben-Sonderregeln ──────────────────────────────────

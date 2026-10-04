@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { ArrowRight, Plus, ReceiptEuro } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
-import { calculateProfit, getPauschRate, sumDeductibleExpenses } from '@/lib/profit';
+import { calculateArbeitsplatzpauschale, calculateProfit, getPauschRate, otherIncomeAmount, sumDeductibleExpenses } from '@/lib/profit';
 import { formatEuro } from '@/lib/money';
 import { deleteReceipt } from '@/lib/receipts';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
-import type { Expense, IndustryType, PauschType, ProfitMethod } from '@/types';
+import type { Expense, IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 
 export default function Expenses() {
   const { profile } = useAuth();
@@ -48,6 +48,14 @@ export default function Expenses() {
     data.expenses.map((e) => ({ amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount), is_bewirtung: e.is_bewirtung })),
   );
   const svsPaid = data.svsPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
+  const app = calculateArbeitsplatzpauschale({
+    homeOffice: profile?.home_office ?? null,
+    otherIncomeKind: otherKind,
+    otherIncomeAmount: otherIncomeAmount(otherKind, profile?.other_income_amount == null ? null : Number(profile.other_income_amount)),
+    year,
+    registrationDate: profile?.svs_registration_date ? new Date(profile.svs_registration_date) : null,
+  });
 
   const openNew = () => {
     setEditing(null);
@@ -121,6 +129,22 @@ export default function Expenses() {
                 <p className="text-2xl font-bold tabular-nums text-slate-900">{formatEuro(svsPaid)}</p>
               </div>
             </div>
+            {app.amount > 0 && (
+              <p className="text-sm text-slate-600 sm:max-w-xs" data-testid="arbeitsplatzpauschale">
+                Dazu zieht Klaro automatisch die <Term k="arbeitsplatzpauschale" /> ab:{' '}
+                <span className="font-semibold tabular-nums text-slate-900">{formatEuro(app.amount)}</span>
+                {app.months < 12 && ` (${app.months} Monate)`}
+              </p>
+            )}
+            {profile?.home_office === null && (
+              <p className="text-sm text-slate-600 sm:max-w-xs">
+                Arbeitest du von zu Hause?{' '}
+                <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">
+                  In den Einstellungen angeben
+                </Link>{' '}
+                – dann zieht Klaro die <Term k="arbeitsplatzpauschale" /> automatisch ab.
+              </p>
+            )}
             <Link to="/gewinn" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
               Gewinn & Hochrechnung ansehen
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

@@ -36,6 +36,27 @@ describe('buildSvsTracker', () => {
     expect(m.basisYtd).toBe(13999.15);
   });
 
+  it('Arbeitsplatzpauschale: bis heute anteilig, senkt Gewinn und Berechnungsbasis', () => {
+    const t = buildSvsTracker({ ...base, arbeitsplatzpauschale: 1200 });
+    const share = Math.round(((1200 * monthsElapsedInYear(base.today)) / 12) * 100) / 100;
+    expect(t.profitYtd).toBe(Math.round((12551.83 - share) * 100) / 100);
+    expect(t.basisYtd).toBeLessThan(m.basisYtd);
+  });
+
+  it('Vorjahr: Arbeitsplatzpauschale des Vorjahres fließt in die vorläufige Basis ein', () => {
+    const previous = { revenueNet: 40000, revenueGross: 40000, deductibleExpenses: 0, svsPaid: 2000 };
+    const year4 = { ...base, registrationDate: new Date(2021, 0, 1), previous };
+    expect(buildSvsTracker({ ...year4, arbeitsplatzpauschalePrevious: 1200 }).provisionalBasis).toBe(
+      buildSvsTracker(year4).provisionalBasis - 1200,
+    );
+  });
+
+  it('andere Einkünfte erhöhen die geschätzte Einkommensteuer, nicht die SVS', () => {
+    const t = buildSvsTracker({ ...base, otherIncome: 18000 });
+    expect(t.reserve.incomeTaxAmount).toBeGreaterThan(m.reserve.incomeTaxAmount);
+    expect(t.reserve.svsAmount).toBe(m.reserve.svsAmount);
+  });
+
   it('Jahresrechnung bisher: Einnahmen → … → was bleibt (ESt anteilig mit dem Jahres-Steuersatz)', () => {
     const p = m.breakdown.projected;
     const ytdTax = Math.round(12551.83 * ((p.incomeTax ?? 0) / p.profit) * 100) / 100;

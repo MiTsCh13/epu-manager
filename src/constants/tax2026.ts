@@ -34,6 +34,15 @@ export const PAUSCH_REVENUE_LIMITS = {
 export const GRUNDFREIBETRAG_RATE = 0.15;
 export const GRUNDFREIBETRAG_MAX = 4950;
 
+// Arbeitsplatzpauschale (§ 4 Abs. 4 Z 8 EStG) – auch zusätzlich zur Basis- und Kleinunternehmerpauschalierung absetzbar.
+// Groß: keine anderen aktiven Einkünfte mit Arbeitsplatz außer Haus über dem Grenzwert, sonst klein.
+// Bei Betriebsbeginn: 1/12 pro angefangenem Monat.
+export const ARBEITSPLATZPAUSCHALE = {
+  gross: 1200, // E1a KZ 9217
+  klein: 300, // E1a KZ 9215
+  otherIncomeLimit: 13539, // Wert 2026 (= Grenze der ersten Tarifstufe)
+} as const;
+
 // Sonderregeln Ausgaben
 export const BEWIRTUNG_DEDUCTIBLE_RATE = 0.5; // Bewirtung nur zu 50 % absetzbar
 export const KILOMETERGELD_PER_KM = 0.5; // Amtliches Kilometergeld PKW

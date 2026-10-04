@@ -20,6 +20,7 @@ export type ProfitMethod = 'pauschal' | 'euer';
 export type PauschType = 'ku' | 'basis_15' | 'basis_6';
 export type IndustryType = 'service' | 'trade';
 export type BusinessType = 'gewerbetreibend' | 'neue_selbstaendige';
+export type OtherIncomeKind = 'none' | 'employment' | 'pension';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue';
 export type SubscriptionStatus = 'trial' | 'active' | 'expired';
 export type InvoiceNumberFormat = 'YYYY-NNN' | 'KL-YYYY-NNN';

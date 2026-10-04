@@ -74,6 +74,9 @@ describe('validateOnboardingStep', () => {
     profit_method: 'euer',
     pausch_type: null,
     industry_code: null,
+    home_office: true,
+    other_income_kind: 'none',
+    other_income_amount: '',
     address: 'Mariahilfer Straße 1',
     zip_code: '1060',
     city: 'Wien',
@@ -107,6 +110,18 @@ describe('validateOnboardingStep', () => {
   it('Schritt 2: Kleinunternehmer und Gewinnermittlung erforderlich', () => {
     const e = validateOnboardingStep(2, { ...complete, is_kleinunternehmer: null, profit_method: null }, today);
     expect(Object.keys(e).sort()).toEqual(['is_kleinunternehmer', 'profit_method']);
+  });
+
+  it('Schritt 2: Homeoffice und andere Einkünfte müssen beantwortet sein', () => {
+    const e = validateOnboardingStep(2, { ...complete, home_office: null, other_income_kind: null }, today);
+    expect(Object.keys(e).sort()).toEqual(['home_office', 'other_income_kind']);
+  });
+
+  it('Schritt 2: Gehalt braucht einen Betrag', () => {
+    const withSalary = { ...complete, other_income_kind: 'employment' as const };
+    expect(validateOnboardingStep(2, { ...withSalary, other_income_amount: '' }, today).other_income_amount).toBeDefined();
+    expect(validateOnboardingStep(2, { ...withSalary, other_income_amount: 'abc' }, today).other_income_amount).toBeDefined();
+    expect(validateOnboardingStep(2, { ...withSalary, other_income_amount: '18.000' }, today)).toEqual({});
   });
 
   it('Schritt 2: Pauschalierung braucht Art', () => {

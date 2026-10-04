@@ -31,6 +31,9 @@ const profile = {
   uid_number: null,
   invoice_number_format: 'YYYY-NNN',
   invoice_footer_text: null,
+  home_office: true,
+  other_income_kind: 'employment',
+  other_income_amount: 18000,
 } as unknown as Profile;
 
 const saved = profileToSettingsData(profile);
@@ -54,6 +57,13 @@ describe('toProfilePatch', () => {
     expect(p.business_name).toBeNull();
   });
 
+  it('andere Einkünfte: Betrag nur bei Gehalt/Pension', () => {
+    expect(saved.other_income_amount).toBe('18000');
+    expect(toProfilePatch(saved)).toMatchObject({ home_office: true, other_income_kind: 'employment', other_income_amount: 18000 });
+    expect(toProfilePatch(with_({ other_income_amount: '18.500,50' })).other_income_amount).toBe(18500.5);
+    expect(toProfilePatch(with_({ other_income_kind: 'none' })).other_income_amount).toBeNull();
+  });
+
   it('EÜR: keine Pauschalierungsart, kein Wirtschaftszweig', () => {
     const p = toProfilePatch(with_({ profit_method: 'euer' }));
     expect(p.pausch_type).toBeNull();
@@ -68,7 +78,7 @@ describe('toProfilePatch', () => {
 describe('sectionPatch', () => {
   it('enthält nur die Felder des Abschnitts', () => {
     expect(Object.keys(sectionPatch('accounting', saved)).sort()).toEqual(
-      ['industry_code', 'is_kleinunternehmer', 'pausch_type', 'profit_method'].sort(),
+      ['home_office', 'industry_code', 'is_kleinunternehmer', 'other_income_amount', 'other_income_kind', 'pausch_type', 'profit_method'].sort(),
     );
     expect(sectionPatch('invoicing', saved)).toHaveProperty('invoice_footer_text', null);
     expect(sectionPatch('invoicing', saved)).not.toHaveProperty('full_name');
