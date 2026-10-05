@@ -1,22 +1,44 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { INCOME_TAX_BRACKETS_2026 } from '@/constants/tax2026';
 import { useProfilePatch } from '@/hooks/useProfilePatch';
 import { formatEuro } from '@/lib/money';
 import type { SvsTrackerModel } from '@/lib/svsTracker';
-import { Term } from '@/components/ui/Tooltip';
+import { InfoTip, Term } from '@/components/ui/Tooltip';
 import { AmountForm, Money, StepCard, SumLine } from './parts';
 
 /** 3 · Einkommensteuer: Steuer fürs Jahr − Vorauszahlungen = noch offen. Getrennt von der SVS. */
 export function IncomeTaxSection({ model }: { model: SvsTrackerModel }) {
+  const { profile } = useAuth();
   const patch = useProfilePatch();
   const [editing, setEditing] = useState(false);
   const { incomeTax: t, year, previous } = model;
   const hasPrepayments = t.prepaymentQuarterly > 0;
+  const taxFree = formatEuro(INCOME_TAX_BRACKETS_2026[0].upTo, true);
+  const otherKind = profile?.other_income_kind;
+  const otherIncome = otherKind && otherKind !== 'none' ? Number(profile?.other_income_amount ?? 0) : 0;
 
   return (
     <StepCard step={3} eyebrow="Einkommensteuer" title={`Was das Finanzamt für ${year} verlangt`}>
       <div className="max-w-xl">
-        <SumLine label={`Einkommensteuer ${year}`} sub="aus Schritt 1, ganzes Jahr" amount={formatEuro(t.total, true)} />
+        <SumLine
+          label={
+            <span className="inline-flex items-center">
+              Einkommensteuer {year}
+              <InfoTip
+                content={`Tarif ${year}: bis ${taxFree} steuerfrei, darüber 20 %, 30 %, 40 % … für jeden weiteren Euro. Vereinfacht, ohne Absetzbeträge.`}
+              />
+            </span>
+          }
+          sub={
+            t.total > 0
+              ? `auf deine Einkünfte aus Schritt 1, ganzes Jahr · im Schnitt ${Math.round(model.averageTaxRate * 100)} %`
+              : `unter ${taxFree} Einkommen im Jahr fällt keine an`
+          }
+          amount={formatEuro(t.total, true)}
+        />
         {hasPrepayments && (
           <SumLine
             op="−"
@@ -34,6 +56,26 @@ export function IncomeTaxSection({ model }: { model: SvsTrackerModel }) {
           testId="income-tax-open"
         />
       </div>
+
+      <p className="text-sm text-slate-600">
+        {otherIncome > 0 ? (
+          <>
+            Mitgerechnet: dein {otherKind === 'pension' ? 'Pension' : 'Gehalt'} mit ca. {formatEuro(otherIncome, true)} im Jahr – es nutzt
+            den steuerfreien Teil schon, deshalb zahlst du auf jeden Euro aus der Selbständigkeit mehr.{' '}
+            <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">
+              Ändern
+            </Link>
+          </>
+        ) : (
+          <>
+            Hast du daneben ein Gehalt oder eine Pension?{' '}
+            <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">
+              In den Einstellungen eintragen
+            </Link>
+            , sonst ist die Steuer zu niedrig geschätzt.
+          </>
+        )}
+      </p>
 
       {editing ? (
         <AmountForm

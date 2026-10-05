@@ -26,7 +26,7 @@ interface Row {
 
 const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)} %`;
 
-/** 1 · Jahresrechnung: Umsatz − Ausgaben − Abschreibung − SVS − Grundfreibetrag = Einkünfte, darauf die Einkommensteuer. */
+/** 1 · Jahresrechnung: Umsatz − Ausgaben − Abschreibung − SVS − Grundfreibetrag = Einkünfte. Die Steuer darauf steht in Schritt 3. */
 export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
   const { profile } = useAuth();
   const patch = useProfilePatch();
@@ -37,7 +37,6 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
   const base = c.revenue > 0 ? c.revenue : 1;
   const ns = profile?.business_type === 'neue_selbstaendige';
   const einkLabel = ns ? 'Einkünfte aus selbständiger Arbeit' : 'Einkünfte aus Gewerbebetrieb';
-  const otherIncome = profile?.other_income_kind && profile.other_income_kind !== 'none' ? Number(profile.other_income_amount ?? 0) : 0;
   const year = model.year;
 
   // Wasserfall: jeder Abzug beginnt dort, wo der vorige aufgehört hat
@@ -230,46 +229,6 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
             </span>
           </div>
         ))}
-      </div>
-
-      <div className="space-y-2 rounded-xl bg-slate-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <span className="text-slate-700">
-            Darauf zahlst du Einkommensteuer{isYtd && <span className="text-sm text-slate-500"> (anteilig bis heute)</span>}
-            <InfoTip
-              content={
-                isYtd
-                  ? `Die Einkommensteuer wird fürs ganze Jahr berechnet. Für „bis heute“ nimmt Klaro deinen erwarteten Durchschnittssteuersatz (${Math.round(model.averageTaxRate * 100)} %) mal deine Einkünfte bis heute.`
-                  : `Tarif ${year}: bis 13.539 € steuerfrei, darüber 20 %, 30 %, 40 % … für jeden weiteren Euro. Vereinfacht, ohne Absetzbeträge.`
-              }
-            />
-          </span>
-          <span className="text-xl font-bold tabular-nums text-slate-900" data-testid={`${view}-incomeTax`}>
-            ca. {formatEuro(c.incomeTax, true)}
-          </span>
-        </div>
-        <p className="text-xs text-slate-500">
-          {c.incomeTax > 0
-            ? `Das sind im Schnitt ${Math.round(model.averageTaxRate * 100)} % deiner Einkünfte.`
-            : 'Unter 13.539 € Einkommen im Jahr fällt keine Einkommensteuer an.'}{' '}
-          {otherIncome > 0 ? (
-            <>
-              Mitgerechnet: dein {profile?.other_income_kind === 'pension' ? 'Pension' : 'Gehalt'} mit ca. {formatEuro(otherIncome, true)} im Jahr – es
-              nutzt den steuerfreien Teil schon, deshalb zahlst du auf jeden Euro aus der Selbständigkeit mehr.{' '}
-              <Link to="/einstellungen#steuer" className="font-medium text-primary hover:underline">
-                ändern
-              </Link>
-            </>
-          ) : (
-            <>
-              Hast du daneben ein Gehalt oder eine Pension?{' '}
-              <Link to="/einstellungen#steuer" className="font-medium text-primary hover:underline">
-                In den Einstellungen eintragen
-              </Link>
-              , sonst ist die Steuer zu niedrig geschätzt.
-            </>
-          )}
-        </p>
       </div>
 
       {model.svs.unrecorded > 0 && (
