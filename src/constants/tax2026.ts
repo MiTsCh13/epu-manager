@@ -62,6 +62,8 @@ export const TAGESGELD = {
   minHours: 3, // erst bei MEHR als 3 Stunden
   perStartedHour: 2.5, // 1/12 je angefangener Stunde
 } as const;
+// Eingabe pro Reisetag in ganzen (angefangenen) Stunden: ab 4 (= mehr als 3) bis 12 (= volles Tagesgeld)
+export const TAGESGELD_INPUT_HOURS = { min: TAGESGELD.minHours + 1, max: TAGESGELD.perDay / TAGESGELD.perStartedHour } as const;
 export const NAECHTIGUNG_PAUSCHAL = 17; // pro Nacht inkl. Frühstück, ohne Beleg (sonst Hotelrechnung)
 
 // Abschreibung (AfA) – nur bei Einnahmen-Ausgaben-Rechnung; bei Pauschalierung ist sie im Pauschalsatz enthalten.

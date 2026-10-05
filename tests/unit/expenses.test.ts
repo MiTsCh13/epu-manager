@@ -159,14 +159,21 @@ describe('Anlagen: Ausgabe oder auf mehrere Jahre verteilen', () => {
 
 describe('Diäten und Nächtigung', () => {
   it('Tagesgeld aus der Reisedauer, ohne USt', () => {
-    const t = { ...base, categoryId: 'tagesgeld', amount: '', hours: '9,5' };
+    const t = { ...base, categoryId: 'tagesgeld', amount: '', hours: '10' };
     expect(validateExpenseForm(t, today, false)).toEqual({});
-    expect(computeExpenseValues(t, false)).toMatchObject({ e1a_kz: '9160', category_label: 'Tagesgeld (Diäten)', amount: 25, amount_net: null, deductible_amount: 25, trip_hours: 9.5 });
-    expect(validateExpenseForm({ ...t, hours: '3' }, today, true).hours).toBe('Tagesgeld gibt es erst ab mehr als 3 Stunden.');
-    expect(validateExpenseForm({ ...t, hours: '' }, today, true).hours).toBeDefined();
-    // Gerechnet und gespeichert wird mit 0,1 Stunden – 3,001 h sind 3,0 h, also kein Tagesgeld
-    expect(validateExpenseForm({ ...t, hours: '3,001' }, today, true).hours).toBe('Tagesgeld gibt es erst ab mehr als 3 Stunden.');
-    expect(computeExpenseValues({ ...t, hours: '3,14' }, true)).toMatchObject({ trip_hours: 3.1, amount: 10 });
+    expect(computeExpenseValues(t, false)).toMatchObject({ e1a_kz: '9160', category_label: 'Tagesgeld (Diäten)', amount: 25, amount_net: null, deductible_amount: 25, trip_hours: 10 });
+    expect(computeExpenseValues({ ...t, hours: '4' }, true)).toMatchObject({ amount: 10 });
+    expect(computeExpenseValues({ ...t, hours: '12' }, true)).toMatchObject({ amount: 30 });
+  });
+
+  it('Tagesgeld: nur ganze Stunden von 4 bis 12 (angefangene Stunden aufrunden)', () => {
+    const t = { ...base, categoryId: 'tagesgeld', amount: '' };
+    expect(validateExpenseForm({ ...t, hours: '3' }, today, true).hours).toMatch(/ab 4 angefangenen Stunden/);
+    expect(validateExpenseForm({ ...t, hours: '13' }, today, true).hours).toMatch(/Höchstens 12 Stunden/);
+    expect(validateExpenseForm({ ...t, hours: '9,5' }, today, true).hours).toMatch(/ganze Stunden/);
+    expect(validateExpenseForm({ ...t, hours: '9.5' }, today, true).hours).toMatch(/ganze Stunden/);
+    expect(validateExpenseForm({ ...t, hours: '' }, today, true).hours).toMatch(/ganze Stunden/);
+    expect(validateExpenseForm({ ...t, hours: '4' }, today, true)).toEqual({});
   });
 
   it('Nächtigung pauschal pro Nacht', () => {

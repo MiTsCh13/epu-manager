@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Paperclip, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { countsUnder, findCategoryByLabel, type CategoryContext } from '@/constants/expenseCategories';
-import { KILOMETERGELD_PER_KM, NAECHTIGUNG_PAUSCHAL, TAGESGELD, VAT_RATES } from '@/constants/tax2026';
+import { KILOMETERGELD_PER_KM, NAECHTIGUNG_PAUSCHAL, TAGESGELD, TAGESGELD_INPUT_HOURS, VAT_RATES } from '@/constants/tax2026';
 import { depreciationSchedule, GWG_LIMIT, USEFUL_LIFE_PRESETS } from '@/lib/assets';
 import {
   computeAssetValues,
@@ -75,7 +75,7 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
     // Bei Pauschalen (Kilometergeld, Tagesgeld, Nächtigung) rechnet Klaro den Betrag
     amount: e.km_driven || e.trip_hours || e.nights ? '' : formatDecimalInput(Number(e.amount)),
     km: e.km_driven ? formatDecimalInput(Number(e.km_driven)) : '',
-    hours: e.trip_hours ? formatDecimalInput(Number(e.trip_hours)) : '',
+    hours: e.trip_hours ? String(Math.ceil(Number(e.trip_hours))) : '',
     nights: e.nights ? String(e.nights) : '',
     reimbursed: e.reimbursed,
     vatRate: vatRateOf(Number(e.amount), e.amount_net === null ? null : Number(e.amount_net)),
@@ -284,10 +284,14 @@ export function ExpenseFormModal({
 
         {category?.calc === 'tagesgeld' && (
           <Field
-            label="Wie lange warst du unterwegs? (Stunden)"
-            inputMode="decimal"
-            placeholder="z. B. 9,5"
-            hint={`Von der Abfahrt bis zur Rückkehr. Ab mehr als ${TAGESGELD.minHours} Stunden ${formatEuro(TAGESGELD.perStartedHour)} pro angefangener Stunde, höchstens ${formatEuro(TAGESGELD.perDay)} pro Tag.`}
+            label="Wie viele Stunden warst du an diesem Tag unterwegs?"
+            type="number"
+            inputMode="numeric"
+            min={TAGESGELD_INPUT_HOURS.min}
+            max={TAGESGELD_INPUT_HOURS.max}
+            step={1}
+            placeholder="z. B. 9"
+            hint={`Nur ganze Stunden von ${TAGESGELD_INPUT_HOURS.min} bis ${TAGESGELD_INPUT_HOURS.max}, angefangene Stunden aufrunden (z. B. 8 Std. 20 Min. → 9). ${formatEuro(TAGESGELD.perStartedHour)} pro Stunde, ab ${TAGESGELD_INPUT_HOURS.max} Stunden das volle Tagesgeld von ${formatEuro(TAGESGELD.perDay)}. Mehrtägige Reise: einen Eintrag pro Tag.`}
             value={form.hours}
             error={errors.hours}
             onChange={(e) => set({ hours: e.target.value })}

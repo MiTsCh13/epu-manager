@@ -1,6 +1,7 @@
 // Ausgaben erfassen: Beträge berechnen (Kilometergeld, Diäten, Netto, Bewirtung 50 %) und Eingaben prüfen.
 // Über 1.000 € wird aus einem Gerät eine Anlage, die über mehrere Jahre abgeschrieben wird.
 import { countsUnder, findCategoryById, findCategoryByLabel, type ExpenseCategory } from '@/constants/expenseCategories';
+import { TAGESGELD_INPUT_HOURS } from '@/constants/tax2026';
 import type { PauschType, VatRate } from '@/types';
 import { exceedsGwgLimit, validateUsefulLife } from './assets';
 import { calculateDeductibleAmount, calculateKilometergeld, calculateNaechtigung, calculateTagesgeld } from './profit';
@@ -13,7 +14,7 @@ export interface ExpenseFormInput {
   categoryId: string;
   amount: string; // Brutto, Rohtext
   km: string; // nur bei Fahrtkosten
-  hours: string; // Reisedauer in Stunden (nur Tagesgeld)
+  hours: string; // angefangene Stunden an einem Reisetag, ganze Zahl 4–12 (nur Tagesgeld)
   nights: string; // Anzahl Nächte (nur Nächtigung pauschal)
   reimbursed: boolean; // an Kund:innen weiterverrechnet (nur Fahrten & Reisen)
   vatRate: VatRate; // nur USt-Pflichtige (Vorsteuer)
@@ -49,9 +50,6 @@ export interface AssetValues {
 
 export const findCategory = findCategoryById;
 
-/** Reisedauer auf 0,1 Stunden gerundet – so wird sie auch gespeichert (trip_hours NUMERIC(6,1)). */
-const tripHours = (raw: string) => Math.round(parseDecimal(raw) * 10) / 10;
-
 const hasKmInput = (cat: ExpenseCategory | undefined, km: string) => !!cat?.hasKm && km.trim() !== '';
 
 /** Brutto und Netto aus der Eingabe. Netto nur bei USt-Pflichtigen mit Steuersatz > 0. */
@@ -84,9 +82,11 @@ export function validateExpenseForm(input: ExpenseFormInput, today: string, isKl
   const cat = findCategory(input.categoryId);
   if (!cat) e.categoryId = 'Bitte wähle eine Kategorie.';
   if (cat?.calc === 'tagesgeld') {
-    const hours = tripHours(input.hours);
-    if (Number.isNaN(hours) || hours <= 0 || hours > 24 * 366) e.hours = 'Bitte gib die Reisedauer in Stunden ein.';
-    else if (calculateTagesgeld(hours) === 0) e.hours = 'Tagesgeld gibt es erst ab mehr als 3 Stunden.';
+    const { min, max } = TAGESGELD_INPUT_HOURS;
+    const hours = Number(input.hours.trim());
+    if (!input.hours.trim() || !Number.isInteger(hours)) e.hours = 'Bitte gib ganze Stunden ein – angefangene Stunden aufrunden.';
+    else if (hours < min) e.hours = `Tagesgeld gibt es erst ab mehr als ${min - 1} Stunden, also ab ${min} angefangenen Stunden.`;
+    else if (hours > max) e.hours = `Höchstens ${max} Stunden pro Tag – bei mehrtägigen Reisen einen Eintrag pro Tag.`;
   } else if (cat?.calc === 'naechtigung') {
     const nights = Number(input.nights.trim());
     if (!input.nights.trim() || !Number.isInteger(nights) || nights < 1 || nights > 366) e.nights = 'Bitte gib die Anzahl der Nächte ein.';
@@ -132,7 +132,7 @@ export function computeExpenseValues(input: ExpenseFormInput, isKleinunternehmer
     ...extra,
   });
   if (cat.calc === 'tagesgeld') {
-    const hours = tripHours(input.hours);
+    const hours = Number(input.hours.trim());
     return flat(calculateTagesgeld(hours), { trip_hours: hours });
   }
   if (cat.calc === 'naechtigung') {
