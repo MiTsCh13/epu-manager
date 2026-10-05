@@ -24,6 +24,7 @@ export interface YearFigures {
   revenueNet: number; // bezahlte Rechnungen netto
   revenueGross: number; // bezahlte Rechnungen brutto (für die Kleinunternehmergrenze)
   deductibleExpenses: number;
+  depreciation: number; // Abschreibung der Anlagen im ganzen Jahr (KZ 9130)
   svsPaid: number; // erfasste SVS-Zahlungen im Jahr
 }
 
@@ -52,10 +53,11 @@ export interface TrackerInput {
   previous: YearFigures | null;
 }
 
-/** Eine Spalte der Jahresrechnung: Umsatz − Ausgaben − Arbeitsplatzpauschale − SVS − Grundfreibetrag = Einkünfte. */
+/** Eine Spalte der Jahresrechnung: Umsatz − Ausgaben − Abschreibung − Arbeitsplatzpauschale − SVS − Grundfreibetrag = Einkünfte. */
 export interface YearColumn {
   revenue: number;
   expenses: number; // absetzbar bzw. pauschal
+  depreciation: number; // Abschreibung der Anlagen (nur Einnahmen-Ausgaben-Rechnung)
   arbeitsplatzpauschale: number;
   svs: number; // im Jahr bezahlt (steuerlich zählt die Zahlung)
   gewinn: number;
@@ -117,12 +119,19 @@ export function estPrepaymentDueDates(year: number): Date[] {
   return EST_PREPAYMENT_DUE_MONTHS.map((m) => new Date(year, m - 1, EST_PREPAYMENT_DUE_DAY));
 }
 
-function column(revenue: number, expenses: number, arbeitsplatzpauschale: number, svs: number): Omit<YearColumn, 'incomeTax'> {
-  const gewinn = round2(revenue - expenses - arbeitsplatzpauschale - svs);
+function column(
+  revenue: number,
+  expenses: number,
+  depreciation: number,
+  arbeitsplatzpauschale: number,
+  svs: number,
+): Omit<YearColumn, 'incomeTax'> {
+  const gewinn = round2(revenue - expenses - depreciation - arbeitsplatzpauschale - svs);
   const grundfreibetrag = calculateGrundfreibetrag(gewinn);
   return {
     revenue: round2(revenue),
     expenses: round2(expenses),
+    depreciation: round2(depreciation),
     arbeitsplatzpauschale: round2(arbeitsplatzpauschale),
     svs: round2(svs),
     gewinn,
@@ -144,6 +153,9 @@ export function buildSvsTracker(input: TrackerInput) {
   const app = input.arbeitsplatzpauschale ?? 0;
   const pauschRate = input.profitMethod === 'pauschal' ? getPauschRate(input.pauschType ?? 'ku', input.industryType ?? undefined) : null;
   const expensesFor = (revenue: number, deductible: number) => (pauschRate !== null ? round2(revenue * pauschRate) : deductible);
+  // Abschreibung steht fürs ganze Jahr fest (keine Hochrechnung); bei Pauschalierung im Pauschalsatz enthalten
+  const depreciationFor = (figures: YearFigures) => (pauschRate !== null ? 0 : figures.depreciation);
+  const depreciationFull = depreciationFor(current);
 
   // ─── Umsatz bis Jahresende ───
   const revenueProjected = projectAnnualProfit({ currentProfit: current.revenueNet, monthsElapsed: months }).projected;
@@ -160,6 +172,7 @@ export function buildSvsTracker(input: TrackerInput) {
     ? column(
         input.previous!.revenueNet,
         expensesFor(input.previous!.revenueNet, input.previous!.deductibleExpenses),
+        depreciationFor(input.previous!),
         input.arbeitsplatzpauschalePrevious ?? 0,
         input.previous!.svsPaid,
       )
@@ -169,7 +182,7 @@ export function buildSvsTracker(input: TrackerInput) {
   const exemptRequested = input.exempt && input.businessType === 'gewerbetreibend';
   const exemptionLost =
     exemptRequested &&
-    (revenueExpected - expensesExpected - app > SVS_2026.registrationThreshold || revenueExpected > SVS_2026.exemptionRevenueLimit);
+    (revenueExpected - expensesExpected - depreciationFull - app > SVS_2026.registrationThreshold || revenueExpected > SVS_2026.exemptionRevenueLimit);
   const options: SVSOptions = { businessType: input.businessType ?? undefined, exempt: exemptRequested && !exemptionLost };
 
   // ─── Vorläufige SVS (Quartalsvorschreibungen) ───
@@ -198,10 +211,18 @@ export function buildSvsTracker(input: TrackerInput) {
   const svsPaidFull = round2(svsPaidYtd + quartersOpen * quarterlyAmount);
 
   // ─── 1 Jahresrechnung ───
-  const fullBase = column(revenueExpected, expensesExpected, app, svsPaidFull);
+  const fullBase = column(revenueExpected, expensesExpected, depreciationFull, app, svsPaidFull);
   const incomeTaxFull = calculateAdditionalIncomeTax(fullBase.einkuenfte, otherIncome);
   const averageTaxRate = fullBase.einkuenfte > 0 ? incomeTaxFull / fullBase.einkuenfte : 0;
-  const ytdBase = column(current.revenueNet, expensesFor(current.revenueNet, current.deductibleExpenses), round2((app * Math.min(months, 12)) / 12), svsPaidYtd);
+  // Bis heute: Abschreibung und Arbeitsplatzpauschale anteilig nach Monaten
+  const ytdShare = Math.min(months, 12) / 12;
+  const ytdBase = column(
+    current.revenueNet,
+    expensesFor(current.revenueNet, current.deductibleExpenses),
+    round2(depreciationFull * ytdShare),
+    round2(app * ytdShare),
+    svsPaidYtd,
+  );
   const full: YearColumn = { ...fullBase, incomeTax: incomeTaxFull };
   const ytd: YearColumn = { ...ytdBase, incomeTax: round2(Math.max(0, ytdBase.einkuenfte) * averageTaxRate) };
 
@@ -254,7 +275,7 @@ export function buildSvsTracker(input: TrackerInput) {
   // ─── 4 Rücklage ───
   const items: ReserveItem[] = [];
   if (quartersOpen > 0) {
-    const next = dueDates[quartersDue];
+    const next = dueDates[quartersDue]!; // quartersOpen > 0
     items.push({
       id: 'svs-quarters',
       payee: 'svs',
@@ -435,7 +456,8 @@ export function buildSvsTracker(input: TrackerInput) {
     today,
   }).filter((a) => !a.id.startsWith('phase-'));
 
-  const nextDue = dueDates.find((d) => d >= todayStart) ?? svsDueDates(year + 1, null)[0];
+  // Im Folgejahr gibt es immer vier Fälligkeiten (ohne Anmeldedatum wird nichts gefiltert)
+  const nextDue = dueDates.find((d) => d >= todayStart) ?? svsDueDates(year + 1, null)[0]!;
 
   return {
     year,

@@ -1,6 +1,8 @@
 // Ausgaben erfassen: Beträge berechnen (Kilometergeld, Netto, Bewirtung 50 %) und Eingaben prüfen.
+// Über 1.000 € wird aus einem Gerät eine Anlage, die über mehrere Jahre abgeschrieben wird.
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from '@/constants/expenseCategories';
 import type { VatRate } from '@/types';
+import { exceedsGwgLimit, validateUsefulLife } from './assets';
 import { calculateDeductibleAmount, calculateKilometergeld } from './profit';
 import { parseDecimal, round2 } from './money';
 
@@ -14,9 +16,11 @@ export interface ExpenseFormInput {
   vatRate: VatRate; // nur USt-Pflichtige (Vorsteuer)
   date: string;
   description: string;
+  spread: boolean | null; // Antwort auf „Auf mehrere Jahre verteilen?“ (nur wenn Klaro fragt)
+  usefulLife: string; // Nutzungsdauer in Jahren, Rohtext (nur bei Anlagen)
 }
 
-export type ExpenseFormErrors = Partial<Record<'categoryId' | 'amount' | 'km' | 'date', string>>;
+export type ExpenseFormErrors = Partial<Record<'categoryId' | 'amount' | 'km' | 'date' | 'spread' | 'usefulLife', string>>;
 
 export interface ExpenseValues {
   e1a_kz: string;
@@ -28,13 +32,45 @@ export interface ExpenseValues {
   km_driven: number | null;
 }
 
+export interface AssetValues {
+  category_label: string;
+  amount: number; // Brutto
+  amount_net: number | null; // Netto (nur USt-Pflichtige)
+  useful_life_years: number;
+}
+
 export function findCategory(id: string): ExpenseCategory | undefined {
   return EXPENSE_CATEGORIES.find((c) => c.id === id);
 }
 
 const hasKmInput = (cat: ExpenseCategory | undefined, km: string) => !!cat?.hasKm && km.trim() !== '';
 
-export function validateExpenseForm(input: ExpenseFormInput, today: string): ExpenseFormErrors {
+/** Brutto und Netto aus der Eingabe. Netto nur bei USt-Pflichtigen mit Steuersatz > 0. */
+function amounts(input: ExpenseFormInput, isKleinunternehmer: boolean): { amount: number; amountNet: number | null } {
+  const amount = round2(parseDecimal(input.amount));
+  const amountNet = isKleinunternehmer || input.vatRate === 0 ? null : round2(amount / (1 + input.vatRate / 100));
+  return { amount, amountNet };
+}
+
+/**
+ * Wird die Eingabe eine Ausgabe oder eine Anlage?
+ * - 'expense': sofort absetzbar (bis 1.000 €, oder keine Kategorie für Anlagen)
+ * - 'asset': über die Nutzungsdauer verteilen (Geräte über 1.000 €, oder Nutzer hat „Ja“ gewählt)
+ * - 'ask': Klaro muss fragen, ob der Kauf mehrere Jahre genutzt wird
+ * Die 1.000-€-Grenze gilt netto, bei Kleinunternehmern brutto.
+ */
+export function entryKind(input: ExpenseFormInput, isKleinunternehmer: boolean): 'expense' | 'asset' | 'ask' {
+  const cat = findCategory(input.categoryId);
+  if (!cat?.asset || hasKmInput(cat, input.km)) return 'expense';
+  const raw = parseDecimal(input.amount);
+  if (Number.isNaN(raw) || raw <= 0) return 'expense';
+  const { amount, amountNet } = amounts(input, isKleinunternehmer);
+  if (!exceedsGwgLimit(amountNet ?? amount)) return 'expense';
+  if (cat.asset === 'always') return 'asset';
+  return input.spread === null ? 'ask' : input.spread ? 'asset' : 'expense';
+}
+
+export function validateExpenseForm(input: ExpenseFormInput, today: string, isKleinunternehmer: boolean): ExpenseFormErrors {
   const e: ExpenseFormErrors = {};
   const cat = findCategory(input.categoryId);
   if (!cat) e.categoryId = 'Bitte wähle eine Kategorie.';
@@ -48,6 +84,14 @@ export function validateExpenseForm(input: ExpenseFormInput, today: string): Exp
   }
   if (!input.date) e.date = 'Bitte gib ein Datum ein.';
   else if (input.date > today) e.date = 'Das Datum liegt in der Zukunft.';
+  if (!e.categoryId && !e.amount) {
+    const kind = entryKind(input, isKleinunternehmer);
+    if (kind === 'ask') e.spread = 'Bitte wähle, ob du das mehrere Jahre nutzt.';
+    if (kind === 'asset') {
+      const lifeError = validateUsefulLife(input.usefulLife);
+      if (lifeError) e.usefulLife = lifeError;
+    }
+  }
   return e;
 }
 
@@ -71,9 +115,8 @@ export function computeExpenseValues(input: ExpenseFormInput, isKleinunternehmer
     };
   }
 
-  const amount = round2(parseDecimal(input.amount));
   // USt-Pflichtige: absetzbar ist der Nettobetrag (Vorsteuer holt man sich vom Finanzamt zurück)
-  const amountNet = isKleinunternehmer || input.vatRate === 0 ? null : round2(amount / (1 + input.vatRate / 100));
+  const { amount, amountNet } = amounts(input, isKleinunternehmer);
   return {
     e1a_kz: cat.kz,
     category_label: cat.label,
@@ -87,6 +130,13 @@ export function computeExpenseValues(input: ExpenseFormInput, isKleinunternehmer
     is_bewirtung: isBewirtung,
     km_driven: null,
   };
+}
+
+/** Werte für eine Anlage. Voraussetzung: validateExpenseForm ohne Fehler und entryKind = 'asset'. */
+export function computeAssetValues(input: ExpenseFormInput, isKleinunternehmer: boolean): AssetValues {
+  const cat = findCategory(input.categoryId)!;
+  const { amount, amountNet } = amounts(input, isKleinunternehmer);
+  return { category_label: cat.label, amount, amount_net: amountNet, useful_life_years: Number(input.usefulLife.trim()) };
 }
 
 export function validateReceiptFile(file: { size: number; type: string }): string | null {

@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      assets: {
+        Row: {
+          amount: number
+          amount_net: number | null
+          category_label: string
+          cost: number | null
+          created_at: string
+          description: string
+          id: string
+          purchase_date: string
+          receipt_url: string | null
+          useful_life_years: number
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          amount_net?: number | null
+          category_label: string
+          cost?: number | null
+          created_at?: string
+          description?: string
+          id?: string
+          purchase_date: string
+          receipt_url?: string | null
+          useful_life_years: number
+          user_id?: string
+        }
+        Update: {
+          amount?: number
+          amount_net?: number | null
+          category_label?: string
+          cost?: number | null
+          created_at?: string
+          description?: string
+          id?: string
+          purchase_date?: string
+          receipt_url?: string | null
+          useful_life_years?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           address: string | null

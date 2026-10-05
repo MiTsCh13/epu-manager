@@ -53,6 +53,13 @@ export const TAX_RETURN_DEADLINE = { month: 6, day: 30 } as const;
 export const BEWIRTUNG_DEDUCTIBLE_RATE = 0.5; // Bewirtung nur zu 50 % absetzbar
 export const KILOMETERGELD_PER_KM = 0.5; // Amtliches Kilometergeld PKW
 
+// Abschreibung (AfA) – nur bei Einnahmen-Ausgaben-Rechnung; bei Pauschalierung ist sie im Pauschalsatz enthalten.
+// Quelle: usp.gv.at „Geringwertige Wirtschaftsgüter“ und „Abschreibung“; E1a KZ 9130 (AfA inkl. GWG)
+// Geringwertige Wirtschaftsgüter (§ 13 EStG): bis 1.000 € sofort absetzbar – netto bei Vorsteuerabzug, brutto bei Kleinunternehmern.
+export const GWG_LIMIT = 1000;
+// Halbjahresregel (§ 7 Abs. 2 EStG): höchstens 6 Monate im ersten Jahr genutzt (Inbetriebnahme ab 1. Juli) → halbe Jahres-AfA
+export const AFA_HALF_YEAR_FROM_MONTH = 7;
+
 // Umsatzsteuer
 export const VAT_RATES = [0, 10, 13, 20] as const;
 export const KLEINBETRAGSRECHNUNG_LIMIT = 400; // § 11 Abs. 6 UStG (brutto)

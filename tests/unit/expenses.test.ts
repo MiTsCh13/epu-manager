@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeAssetValues,
   computeExpenseValues,
+  entryKind,
   findCategory,
   sumByCategory,
   validateExpenseForm,
@@ -9,28 +11,28 @@ import {
 } from '@/lib/expenses';
 
 const today = '2026-10-03';
-const base: ExpenseFormInput = { categoryId: 'software', amount: '120', km: '', vatRate: 20, date: '2026-10-01', description: '' };
+const base: ExpenseFormInput = { categoryId: 'software', amount: '120', km: '', vatRate: 20, date: '2026-10-01', description: '', spread: null, usefulLife: '' };
 
 describe('validateExpenseForm', () => {
-  it('gültig', () => expect(validateExpenseForm(base, today)).toEqual({}));
+  it('gültig', () => expect(validateExpenseForm(base, today, true)).toEqual({}));
   it('Pflichtfelder', () => {
-    expect(validateExpenseForm({ ...base, categoryId: '', amount: '', date: '' }, today)).toEqual({
+    expect(validateExpenseForm({ ...base, categoryId: '', amount: '', date: '' }, today, true)).toEqual({
       categoryId: 'Bitte wähle eine Kategorie.',
       amount: 'Bitte gib einen Betrag größer 0 ein.',
       date: 'Bitte gib ein Datum ein.',
     });
   });
   it('Betrag ungültig / zu hoch, Datum in der Zukunft', () => {
-    expect(validateExpenseForm({ ...base, amount: '-5' }, today).amount).toBeDefined();
-    expect(validateExpenseForm({ ...base, amount: '100000000' }, today).amount).toBe('Dieser Betrag ist zu hoch.');
-    expect(validateExpenseForm({ ...base, date: '2026-10-04' }, today).date).toBe('Das Datum liegt in der Zukunft.');
+    expect(validateExpenseForm({ ...base, amount: '-5' }, today, true).amount).toBeDefined();
+    expect(validateExpenseForm({ ...base, amount: '100000000' }, today, true).amount).toBe('Dieser Betrag ist zu hoch.');
+    expect(validateExpenseForm({ ...base, date: '2026-10-04' }, today, true).date).toBe('Das Datum liegt in der Zukunft.');
   });
   it('Fahrtkosten mit km: km statt Betrag geprüft', () => {
-    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: '180' }, today)).toEqual({});
-    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: '0' }, today).km).toBeDefined();
-    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: 'abc' }, today).km).toBeDefined();
+    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: '180' }, today, true)).toEqual({});
+    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: '0' }, today, true).km).toBeDefined();
+    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '', km: 'abc' }, today, true).km).toBeDefined();
     // ohne km (z. B. Zugticket) → Betrag Pflicht
-    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '' }, today).amount).toBeDefined();
+    expect(validateExpenseForm({ ...base, categoryId: 'reisen', amount: '' }, today, true).amount).toBeDefined();
   });
 });
 
@@ -106,5 +108,42 @@ describe('Hilfsfunktionen', () => {
       { label: 'Büromaterial', total: 86.4 },
       { label: 'Bewirtung (50%)', total: 71.55 },
     ]);
+  });
+});
+
+describe('Anlagen: Ausgabe oder auf mehrere Jahre verteilen', () => {
+  const laptop = { ...base, categoryId: 'geraete', amount: '1500', vatRate: 20 as const };
+
+  it('Geräte bis 1.000 € (netto bzw. bei Kleinunternehmern brutto) sofort absetzen', () => {
+    expect(entryKind({ ...laptop, amount: '1000' }, true)).toBe('expense');
+    // USt-pflichtig: 1.200 € brutto = 1.000 € netto → noch sofort
+    expect(entryKind({ ...laptop, amount: '1200' }, false)).toBe('expense');
+    // Kleinunternehmer: 1.200 € brutto → verteilen
+    expect(entryKind({ ...laptop, amount: '1200' }, true)).toBe('asset');
+  });
+
+  it('Geräte über 1.000 € immer verteilen, andere Kategorien fragen nach', () => {
+    expect(entryKind(laptop, true)).toBe('asset');
+    const software = { ...base, amount: '1500' };
+    expect(entryKind(software, true)).toBe('ask');
+    expect(entryKind({ ...software, spread: true }, true)).toBe('asset');
+    expect(entryKind({ ...software, spread: false }, true)).toBe('expense');
+    expect(entryKind({ ...base, categoryId: 'miete', amount: '1500' }, true)).toBe('expense');
+  });
+
+  it('Validierung: Frage beantworten, Nutzungsdauer angeben', () => {
+    expect(validateExpenseForm({ ...base, amount: '1500' }, today, true).spread).toBeDefined();
+    expect(validateExpenseForm(laptop, today, true).usefulLife).toBeDefined();
+    expect(validateExpenseForm({ ...laptop, usefulLife: '3' }, today, true)).toEqual({});
+  });
+
+  it('Werte für die Anlage: netto bei USt-Pflichtigen', () => {
+    expect(computeAssetValues({ ...laptop, amount: '1800', usefulLife: '3' }, false)).toEqual({
+      category_label: 'Geräte & Ausrüstung',
+      amount: 1800,
+      amount_net: 1500,
+      useful_life_years: 3,
+    });
+    expect(computeAssetValues({ ...laptop, usefulLife: '5' }, true)).toMatchObject({ amount_net: null, useful_life_years: 5 });
   });
 });

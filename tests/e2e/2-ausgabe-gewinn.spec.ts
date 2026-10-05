@@ -43,3 +43,35 @@ test('Ausgaben senken den Gewinn – Bewirtung nur zur Hälfte', async ({ page, 
   const after = parseEuro((await einkuenfte.textContent()) ?? '');
   expect(before - after).toBe(935);
 });
+
+test('Gerät über 1.000 € wird zur Anlage und auf mehrere Jahre verteilt', async ({ page, cleanup }) => {
+  const { email, client } = await createUser('anlage', cleanup);
+  await completeProfile(client, { profit_method: 'euer', pausch_type: null, industry_code: null });
+  await seedPaidInvoices(client, [10_000]);
+  await login(page, email);
+  const year = new Date().getFullYear();
+
+  // Laptop 1.500 € im März (Kleinunternehmer: brutto zählt) → 3 Jahre à 500 €
+  await page.goto('/ausgaben');
+  const dialog = await addExpense(page, 'Geräte & Ausrüstung', '1500');
+  await dialog.getByLabel('Datum').fill(`${year}-03-10`);
+  await dialog.getByLabel('Beschreibung').fill('Laptop');
+  await dialog.getByRole('button', { name: 'Speichern' }).click();
+  await expect(dialog.getByText('Bitte gib die Nutzungsdauer in ganzen Jahren ein.')).toBeVisible();
+  await dialog.getByLabel('Wie lange nutzt du es?').selectOption('3');
+  await expect(dialog.getByTestId('depreciation-preview')).toContainText('500,00');
+  await dialog.getByRole('button', { name: 'Speichern' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Keine sofort absetzbare Ausgabe, sondern eine Anlage
+  await expect(page.getByTestId('expenses-total')).toHaveText(/0,00/);
+  await expect(page.getByTestId('depreciation-total')).toHaveText(/500,00/);
+  await page.getByRole('tab', { name: /Anlagen/ }).click();
+  await expect(page.getByTestId('asset-row')).toContainText('Laptop');
+  await expect(page.getByTestId('asset-row')).toContainText(new RegExp(`Restwert Ende ${year}: €\\s1\\.000,00`));
+
+  // Jahresrechnung (ganzes Jahr): 500 € Abschreibung
+  await page.goto('/gewinn');
+  await page.getByRole('radio', { name: 'Ganzes Jahr (erwartet)' }).click();
+  await expect(page.getByTestId('full-depreciation').locator('span').first()).toHaveText(/^€\s500$/);
+});

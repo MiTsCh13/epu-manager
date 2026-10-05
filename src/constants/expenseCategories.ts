@@ -2,6 +2,8 @@
 // Im UI werden `label` und `hint` angezeigt; gespeichert werden `kz` (e1a_kz) und `label` (category_label).
 // Kennzahlen laut BMF-Formular E 1a 2025.
 //
+// Anlagen (über 1.000 €, mehrere Jahre genutzt) liegen in der Tabelle assets; Klaro verteilt sie über die Nutzungsdauer.
+//
 // Die Arbeitsplatzpauschale ist keine Kategorie, sondern eine Einstellung (profiles.home_office) –
 // Klaro zieht sie automatisch ab.
 //
@@ -23,6 +25,8 @@ export interface ExpenseCategory {
   isBewirtung?: boolean; // nur 50 % absetzbar (DB-Trigger erzwingt das zusätzlich)
   deductibleRate?: number; // abweichender absetzbarer Anteil (z. B. Öffi-Jahreskarte 50 %)
   onlyFor?: BusinessType; // nur für diese Tätigkeitsart anbieten
+  // Über 1.000 € auf mehrere Jahre verteilen (Anlage, KZ 9130): 'always' = Geräte, 'ask' = Klaro fragt nach
+  asset?: 'always' | 'ask';
 }
 
 /** Bezeichnung der Kennzahl im E1a (FinanzOnline), gekürzt. */
@@ -44,7 +48,7 @@ export const E1A_KZ_NAMES: Record<string, string> = {
 export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
   // Häufig genutzt — oben anzeigen
   {
-    id: 'software', kz: '9230', label: 'Software & Abos', icon: 'laptop', group: 'häufig',
+    id: 'software', kz: '9230', label: 'Software & Abos', icon: 'laptop', group: 'häufig', asset: 'ask',
     hint: 'Programme, Apps, Cloud-Speicher, Website-Hosting und Domains, Online-Abos für die Arbeit.',
   },
   {
@@ -64,8 +68,8 @@ export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
     hint: 'Geschäftsessen mit Kund:innen, wenn es um einen Auftrag geht. Davon ist nur die Hälfte absetzbar, Klaro rechnet das automatisch. Notiere auf dem Beleg, mit wem und wofür.',
   },
   {
-    id: 'geraete', kz: '9130', label: 'Geräte & Ausrüstung (AfA)', icon: 'camera', group: 'häufig',
-    hint: 'Laptop, Handy, Kamera, Drucker, Werkzeug. Bis 1.000 € setzt du den Kaufpreis sofort ganz ab, teurere Geräte werden auf mehrere Jahre verteilt.',
+    id: 'geraete', kz: '9130', label: 'Geräte & Ausrüstung', icon: 'camera', group: 'häufig', asset: 'always',
+    hint: 'Laptop, Handy, Kamera, Drucker, Werkzeug, Möbel. Bis 1.000 € setzt du den Kaufpreis sofort ganz ab, teurere Geräte verteilt Klaro auf mehrere Jahre.',
   },
   {
     id: 'telefon', kz: '9230', label: 'Telefon & Internet', icon: 'phone', group: 'häufig',
@@ -120,7 +124,7 @@ export const EXPENSE_CATEGORIES: readonly ExpenseCategory[] = [
   },
   // Sonstiges
   {
-    id: 'sonstiges', kz: '9230', label: 'Sonstige Ausgaben', icon: 'dots', group: 'sonstiges',
+    id: 'sonstiges', kz: '9230', label: 'Sonstige Ausgaben', icon: 'dots', group: 'sonstiges', asset: 'ask',
     hint: 'Alles Berufliche, das in keine andere Kategorie passt. Schreib eine kurze Beschreibung dazu.',
   },
 ];

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
+import type { Asset, AssetInsert, Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
 
 type Result = { error: string | null };
 
-/** Ausgaben, SVS-Zahlungen und Einnahmen (bezahlte Rechnungen, netto) eines Kalenderjahres. */
+/** Ausgaben, SVS-Zahlungen und Einnahmen (bezahlte Rechnungen, netto) eines Kalenderjahres, dazu alle Anlagen bis zu diesem Jahr. */
 export function useExpensesData(year: number) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [svsPayments, setSvsPayments] = useState<SvsPayment[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [revenue, setRevenue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,19 +18,22 @@ export function useExpensesData(year: number) {
     setError(null);
     const from = `${year}-01-01`;
     const to = `${year}-12-31`;
-    const [exp, svs, inv] = await Promise.all([
+    const [exp, svs, inv, ast] = await Promise.all([
       supabase.from('expenses').select('*').gte('expense_date', from).lte('expense_date', to)
         .order('expense_date', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('svs_payments').select('*').eq('year', year).order('payment_date', { ascending: false }),
       // Zuflussprinzip: Einnahme zählt im Jahr der Zahlung; netto (ohne USt)
       supabase.from('invoices').select('subtotal').eq('status', 'paid')
         .gte('paid_at', `${from}T00:00:00`).lt('paid_at', `${year + 1}-01-01T00:00:00`),
+      supabase.from('assets').select('*').lte('purchase_date', to)
+        .order('purchase_date', { ascending: false }).order('created_at', { ascending: false }),
     ]);
-    if (exp.error || svs.error || inv.error) {
+    if (exp.error || svs.error || inv.error || ast.error) {
       setError('Deine Ausgaben konnten nicht geladen werden.');
     } else {
       setExpenses(exp.data);
       setSvsPayments(svs.data);
+      setAssets(ast.data);
       setRevenue(inv.data.reduce((s, i) => s + Number(i.subtotal), 0));
     }
     setLoading(false);
@@ -59,6 +63,26 @@ export function useExpensesData(year: number) {
     return { error: null };
   }, []);
 
+  const saveAsset = useCallback(
+    async (values: AssetInsert, id?: string): Promise<Result> => {
+      const query = id
+        ? supabase.from('assets').update(values).eq('id', id).select().single()
+        : supabase.from('assets').insert(values).select().single();
+      const { error: err } = await query;
+      if (err) return { error: 'Die Anlage konnte nicht gespeichert werden.' };
+      await load();
+      return { error: null };
+    },
+    [load],
+  );
+
+  const deleteAsset = useCallback(async (id: string): Promise<Result> => {
+    const { error: err } = await supabase.from('assets').delete().eq('id', id);
+    if (err) return { error: 'Die Anlage konnte nicht gelöscht werden.' };
+    setAssets((list) => list.filter((a) => a.id !== id));
+    return { error: null };
+  }, []);
+
   const addSvsPayment = useCallback(
     async (values: SvsPaymentInsert): Promise<Result> => {
       const { error: err } = await supabase.from('svs_payments').insert(values);
@@ -76,5 +100,19 @@ export function useExpensesData(year: number) {
     return { error: null };
   }, []);
 
-  return { expenses, svsPayments, revenue, loading, error, reload: load, saveExpense, deleteExpense, addSvsPayment, deleteSvsPayment };
+  return {
+    expenses,
+    svsPayments,
+    assets,
+    revenue,
+    loading,
+    error,
+    reload: load,
+    saveExpense,
+    deleteExpense,
+    saveAsset,
+    deleteAsset,
+    addSvsPayment,
+    deleteSvsPayment,
+  };
 }

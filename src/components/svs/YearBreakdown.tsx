@@ -8,7 +8,7 @@ import { InfoTip, Term } from '@/components/ui/Tooltip';
 import { AmountForm, StepCard } from './parts';
 
 // Farben je Posten (auf Farbsehschwächen geprüft); Grundfreibetrag schraffiert, weil kein Geld abfließt
-const COLORS = { revenue: '#94a3b8', expenses: '#2a78d6', app: '#6aa3e8', svs: '#eb6834', einkuenfte: '#0d9488' } as const;
+const COLORS = { revenue: '#94a3b8', expenses: '#2a78d6', depreciation: '#1e5aa8', app: '#6aa3e8', svs: '#eb6834', einkuenfte: '#0d9488' } as const;
 const HATCH = 'repeating-linear-gradient(-45deg, transparent 0 4px, rgba(13,148,136,.45) 4px 6px)';
 
 interface Row {
@@ -26,7 +26,7 @@ interface Row {
 
 const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)} %`;
 
-/** 1 · Jahresrechnung: Umsatz − Ausgaben − SVS − Grundfreibetrag = Einkünfte, darauf die Einkommensteuer. */
+/** 1 · Jahresrechnung: Umsatz − Ausgaben − Abschreibung − SVS − Grundfreibetrag = Einkünfte, darauf die Einkommensteuer. */
 export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
   const { profile } = useAuth();
   const patch = useProfilePatch();
@@ -42,7 +42,8 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
 
   // Wasserfall: jeder Abzug beginnt dort, wo der vorige aufgehört hat
   const afterExpenses = c.revenue - c.expenses;
-  const afterApp = afterExpenses - c.arbeitsplatzpauschale;
+  const afterDepreciation = afterExpenses - c.depreciation;
+  const afterApp = afterDepreciation - c.arbeitsplatzpauschale;
   const afterSvs = afterApp - c.svs;
   const rows: Row[] = [
     {
@@ -70,6 +71,20 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
       width: c.expenses,
       color: COLORS.expenses,
     },
+    ...(c.depreciation > 0
+      ? [
+          {
+            key: 'depreciation' as const,
+            op: '−' as const,
+            label: <Term k="abschreibung" />,
+            sub: isYtd ? 'deiner Anlagen, anteilig bis heute' : `deiner Anlagen, Anteil ${year}`,
+            info: 'Geräte über 1.000 € verteilt Klaro auf mehrere Jahre. Hier steht der Teil für dieses Jahr.',
+            from: afterDepreciation,
+            width: c.depreciation,
+            color: COLORS.depreciation,
+          },
+        ]
+      : []),
     ...(c.arbeitsplatzpauschale > 0
       ? [
           {

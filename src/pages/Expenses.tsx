@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Plus, ReceiptEuro } from 'lucide-react';
+import { ArrowRight, Laptop, Plus, ReceiptEuro } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { calculateArbeitsplatzpauschale, calculateProfit, getPauschRate, otherIncomeAmount, sumDeductibleExpenses } from '@/lib/profit';
+import { sumDepreciation } from '@/lib/assets';
 import { formatEuro } from '@/lib/money';
 import { deleteReceipt } from '@/lib/receipts';
 import { PageWrapper } from '@/components/layout/PageWrapper';
-import { ExpenseFormModal } from '@/components/expenses/ExpenseForm';
+import { AssetList } from '@/components/expenses/AssetList';
+import { ExpenseFormModal, type ExpenseEntry } from '@/components/expenses/ExpenseForm';
 import { ExpenseList } from '@/components/expenses/ExpenseList';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
@@ -17,7 +19,9 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
-import type { Expense, IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+
+type Tab = 'ausgaben' | 'anlagen';
 
 export default function Expenses() {
   const { profile } = useAuth();
@@ -25,8 +29,9 @@ export default function Expenses() {
   const [year, setYear] = useState(currentYear);
   const data = useExpensesData(year);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Expense | null>(null);
-  const [deleting, setDeleting] = useState<Expense | null>(null);
+  const [editing, setEditing] = useState<ExpenseEntry>(null);
+  const [deleting, setDeleting] = useState<ExpenseEntry>(null);
+  const [tab, setTab] = useState<Tab>('ausgaben');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -48,6 +53,10 @@ export default function Expenses() {
     data.expenses.map((e) => ({ amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount), is_bewirtung: e.is_bewirtung })),
   );
   const svsPaid = data.svsPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const depreciation = sumDepreciation(
+    data.assets.map((a) => ({ cost: Number(a.cost ?? a.amount_net ?? a.amount), purchase_date: a.purchase_date, useful_life_years: a.useful_life_years })),
+    year,
+  );
   const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
   const app = calculateArbeitsplatzpauschale({
     homeOffice: profile?.home_office ?? null,
@@ -62,15 +71,17 @@ export default function Expenses() {
     setFormOpen(true);
   };
 
+  const deletingRecord = deleting?.kind === 'asset' ? deleting.asset : (deleting?.expense ?? null);
+
   async function handleDelete() {
-    if (!deleting) return;
+    if (!deleting || !deletingRecord) return;
     setDeleteBusy(true);
-    const r = await data.deleteExpense(deleting.id);
+    const r = deleting.kind === 'asset' ? await data.deleteAsset(deletingRecord.id) : await data.deleteExpense(deletingRecord.id);
     setDeleteBusy(false);
     if (r.error) toast.error(r.error);
     else {
-      if (deleting.receipt_url) await deleteReceipt(deleting.receipt_url);
-      toast.success('Ausgabe gelöscht');
+      if (deletingRecord.receipt_url) await deleteReceipt(deletingRecord.receipt_url);
+      toast.success(deleting.kind === 'asset' ? 'Anlage gelöscht' : 'Ausgabe gelöscht');
     }
     setDeleting(null);
   }
@@ -117,13 +128,21 @@ export default function Expenses() {
       ) : (
         <div className="space-y-8">
           <section aria-label={`Summe Ausgaben ${year}`} className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="grid grid-cols-2 gap-6">
+            <div className={`grid gap-6 ${!pauschal && depreciation > 0 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
               <div>
                 <p className="text-sm text-slate-600">{pauschal ? `Pauschale Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}</p>
                 <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="expenses-total">
                   {formatEuro(pauschal ? calculateProfit({ profitMethod, pauschType: pauschType ?? undefined, industryType: industryType ?? undefined, totalRevenue: data.revenue, totalExpenses: 0, svsPayments: 0 }).pauschaleExpenses ?? 0 : deductible)}
                 </p>
               </div>
+              {!pauschal && depreciation > 0 && (
+                <div>
+                  <p className="text-sm text-slate-600"><Term k="abschreibung">Abschreibung</Term> {year}</p>
+                  <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="depreciation-total">
+                    {formatEuro(depreciation)}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-slate-600"><Term k="svs">SVS-Beiträge</Term> {year}</p>
                 <p className="text-2xl font-bold tabular-nums text-slate-900">{formatEuro(svsPaid)}</p>
@@ -154,37 +173,87 @@ export default function Expenses() {
           {pauschal ? (
             <PauschalCard year={year} revenue={data.revenue} pauschType={pauschType} industryType={industryType} />
           ) : (
-            <section className="space-y-3" aria-labelledby="expenses-heading">
-              <div className="flex items-end justify-between gap-2">
-                <div>
-                  <h2 id="expenses-heading" className="text-lg font-semibold text-slate-900">
-                    Ausgaben {year}
-                  </h2>
-                  <p className="text-sm text-slate-600">
-                    <Term k="absetzbar">Absetzbar</Term>: {formatEuro(deductible)}
-                  </p>
-                </div>
+            <section className="space-y-3" aria-label={`Ausgaben und Anlagen ${year}`}>
+              <div role="tablist" aria-label="Ansicht" className="inline-flex rounded-lg bg-slate-100 p-1">
+                {(
+                  [
+                    ['ausgaben', `Ausgaben (${data.expenses.length})`],
+                    ['anlagen', `Anlagen (${data.assets.length})`],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    id={`tab-${value}`}
+                    aria-selected={tab === value}
+                    aria-controls={`panel-${value}`}
+                    onClick={() => setTab(value)}
+                    className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
+                      tab === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-              {data.expenses.length === 0 ? (
-                <EmptyState
-                  icon={ReceiptEuro}
-                  title={`Noch keine Ausgaben ${year === currentYear ? 'dieses Jahr' : `in ${year}`}`}
-                  description="Erfasse deine erste Ausgabe – am besten gleich nach dem Kauf, mit Foto vom Beleg."
-                  action={
-                    <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
-                      Ausgabe erfassen
-                    </Button>
-                  }
-                />
+
+              {tab === 'ausgaben' ? (
+                <div role="tabpanel" id="panel-ausgaben" aria-labelledby="tab-ausgaben" className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    <Term k="absetzbar">Absetzbar</Term> {year}: {formatEuro(deductible)}
+                  </p>
+                  {data.expenses.length === 0 ? (
+                    <EmptyState
+                      icon={ReceiptEuro}
+                      title={`Noch keine Ausgaben ${year === currentYear ? 'dieses Jahr' : `in ${year}`}`}
+                      description="Erfasse deine erste Ausgabe – am besten gleich nach dem Kauf, mit Foto vom Beleg."
+                      action={
+                        <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                          Ausgabe erfassen
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <ExpenseList
+                      expenses={data.expenses}
+                      onEdit={(expense) => {
+                        setEditing({ kind: 'expense', expense });
+                        setFormOpen(true);
+                      }}
+                      onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
+                    />
+                  )}
+                </div>
               ) : (
-                <ExpenseList
-                  expenses={data.expenses}
-                  onEdit={(e) => {
-                    setEditing(e);
-                    setFormOpen(true);
-                  }}
-                  onDelete={setDeleting}
-                />
+                <div role="tabpanel" id="panel-anlagen" aria-labelledby="tab-anlagen" className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Geräte über 1.000 € setzt du nicht auf einmal ab: Klaro verteilt den Kaufpreis auf die Jahre, in denen du
+                    sie nutzt. Absetzbar {year}: <span className="font-semibold tabular-nums text-slate-900">{formatEuro(depreciation)}</span>
+                  </p>
+                  {data.assets.length === 0 ? (
+                    <EmptyState
+                      icon={Laptop}
+                      title="Noch keine Anlagen"
+                      description="Kaufst du ein Gerät über 1.000 €, erfasst du es ganz normal als Ausgabe. Klaro erkennt es und legt es hier an."
+                      action={
+                        <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                          Ausgabe erfassen
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <AssetList
+                      assets={data.assets}
+                      year={year}
+                      onEdit={(asset) => {
+                        setEditing({ kind: 'asset', asset });
+                        setFormOpen(true);
+                      }}
+                      onDelete={(asset) => setDeleting({ kind: 'asset', asset })}
+                    />
+                  )}
+                </div>
               )}
             </section>
           )}
@@ -193,13 +262,22 @@ export default function Expenses() {
         </div>
       )}
 
-      <ExpenseFormModal key={editing?.id ?? 'new'} open={formOpen} expense={editing} onClose={() => setFormOpen(false)} onSave={data.saveExpense} />
+      <ExpenseFormModal
+        key={editing ? `${editing.kind}-${editing.kind === 'asset' ? editing.asset.id : editing.expense.id}` : 'new'}
+        open={formOpen}
+        entry={editing}
+        onClose={() => setFormOpen(false)}
+        onSaveExpense={data.saveExpense}
+        onSaveAsset={data.saveAsset}
+        onDeleteExpense={data.deleteExpense}
+        onDeleteAsset={data.deleteAsset}
+      />
 
       <Modal
         open={!!deleting}
         onClose={() => !deleteBusy && setDeleting(null)}
         size="sm"
-        title="Ausgabe löschen?"
+        title={deleting?.kind === 'asset' ? 'Anlage löschen?' : 'Ausgabe löschen?'}
         footer={
           <>
             <Button variant="secondary" onClick={() => setDeleting(null)} disabled={deleteBusy}>
@@ -212,8 +290,8 @@ export default function Expenses() {
         }
       >
         <p className="text-sm text-slate-700">
-          „{deleting?.description}“ über {deleting && formatEuro(Number(deleting.amount))} wird gelöscht
-          {deleting?.receipt_url ? ' – inklusive Beleg' : ''}.
+          „{deletingRecord?.description}“ über {deletingRecord && formatEuro(Number(deletingRecord.amount))} wird gelöscht
+          {deletingRecord?.receipt_url ? ' – inklusive Beleg' : ''}.
         </p>
       </Modal>
     </PageWrapper>

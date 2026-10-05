@@ -4,8 +4,11 @@ import { Paperclip, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { findCategoryByLabel } from '@/constants/expenseCategories';
 import { KILOMETERGELD_PER_KM, VAT_RATES } from '@/constants/tax2026';
+import { depreciationSchedule, GWG_LIMIT, USEFUL_LIFE_PRESETS } from '@/lib/assets';
 import {
+  computeAssetValues,
   computeExpenseValues,
+  entryKind,
   findCategory,
   validateExpenseForm,
   validateReceiptFile,
@@ -17,43 +20,83 @@ import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
+import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { CategoryGrid } from './CategoryGrid';
-import type { BusinessType, Expense, ExpenseInsert, VatRate } from '@/types';
+import type { Asset, AssetInsert, BusinessType, Expense, ExpenseInsert, VatRate } from '@/types';
 
-function toForm(expense: Expense | null, isKU: boolean): ExpenseFormInput {
-  if (!expense) {
-    return { categoryId: '', amount: '', km: '', vatRate: isKU ? 0 : 20, date: toISODate(new Date()), description: '' };
+/** Was gerade bearbeitet wird: eine Ausgabe, eine Anlage oder nichts (neu erfassen). */
+export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asset'; asset: Asset } | null;
+
+type Result = Promise<{ error: string | null }>;
+
+function vatRateOf(amount: number, net: number | null): VatRate {
+  const rate = net ? Math.round((amount / net - 1) * 100) : 0;
+  return ((VAT_RATES as readonly number[]).includes(rate) ? rate : 20) as VatRate;
+}
+
+function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
+  if (!entry) {
+    return { categoryId: '', amount: '', km: '', vatRate: isKU ? 0 : 20, date: toISODate(new Date()), description: '', spread: null, usefulLife: '' };
   }
-  const net = expense.amount_net === null ? null : Number(expense.amount_net);
-  const rate = net ? Math.round((Number(expense.amount) / net - 1) * 100) : 0;
+  if (entry.kind === 'asset') {
+    const a = entry.asset;
+    return {
+      categoryId: findCategoryByLabel(a.category_label)?.id ?? 'geraete',
+      amount: formatDecimalInput(Number(a.amount)),
+      km: '',
+      vatRate: vatRateOf(Number(a.amount), a.amount_net === null ? null : Number(a.amount_net)),
+      date: a.purchase_date,
+      description: a.description,
+      spread: true,
+      usefulLife: String(a.useful_life_years),
+    };
+  }
+  const e = entry.expense;
   return {
-    categoryId: findCategoryByLabel(expense.category_label)?.id ?? 'sonstiges',
-    amount: expense.km_driven ? '' : formatDecimalInput(Number(expense.amount)),
-    km: expense.km_driven ? formatDecimalInput(Number(expense.km_driven)) : '',
-    vatRate: ((VAT_RATES as readonly number[]).includes(rate) ? rate : 20) as VatRate,
-    date: expense.expense_date,
-    description: expense.description,
+    categoryId: findCategoryByLabel(e.category_label)?.id ?? 'sonstiges',
+    amount: e.km_driven ? '' : formatDecimalInput(Number(e.amount)),
+    km: e.km_driven ? formatDecimalInput(Number(e.km_driven)) : '',
+    vatRate: vatRateOf(Number(e.amount), e.amount_net === null ? null : Number(e.amount_net)),
+    date: e.expense_date,
+    description: e.description,
+    // Eine Ausgabe über 1.000 € wurde bewusst sofort abgesetzt
+    spread: false,
+    usefulLife: '',
   };
 }
 
-/** Ausgabe erfassen bzw. bearbeiten (inkl. Beleg-Upload). */
+const CUSTOM_LIFE = 'andere';
+
+/**
+ * Ausgabe erfassen bzw. bearbeiten (inkl. Beleg-Upload). Über 1.000 € wird daraus eine Anlage, die Klaro über die
+ * Nutzungsdauer abschreibt. Wechselt ein Eintrag die Art (z. B. Betrag geändert), wird er in die andere Tabelle verschoben.
+ */
 export function ExpenseFormModal({
   open,
-  expense,
+  entry,
   onClose,
-  onSave,
+  onSaveExpense,
+  onSaveAsset,
+  onDeleteExpense,
+  onDeleteAsset,
 }: {
   open: boolean;
-  expense: Expense | null;
+  entry: ExpenseEntry;
   onClose: () => void;
-  onSave: (values: ExpenseInsert, id?: string) => Promise<{ error: string | null }>;
+  onSaveExpense: (values: ExpenseInsert, id?: string) => Result;
+  onSaveAsset: (values: AssetInsert, id?: string) => Result;
+  onDeleteExpense: (id: string) => Result;
+  onDeleteAsset: (id: string) => Result;
 }) {
   const { user, profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
-  // Direkt mit den Werten initialisieren (Aufrufer setzt key je Ausgabe) – kein leeres Aufblitzen
-  const [form, setForm] = useState<ExpenseFormInput>(() => toForm(expense, isKU));
+  const record = entry?.kind === 'asset' ? entry.asset : (entry?.expense ?? null);
+  const existingReceipt = record?.receipt_url ?? null;
+  // Direkt mit den Werten initialisieren (Aufrufer setzt key je Eintrag) – kein leeres Aufblitzen
+  const [form, setForm] = useState<ExpenseFormInput>(() => toForm(entry, isKU));
+  const [customLife, setCustomLife] = useState(() => !!form.usefulLife && !USEFUL_LIFE_PRESETS.some((p) => String(p.years) === form.usefulLife));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -62,12 +105,14 @@ export function ExpenseFormModal({
 
   useEffect(() => {
     if (!open) return;
-    setForm(toForm(expense, isKU));
+    const initial = toForm(entry, isKU);
+    setForm(initial);
+    setCustomLife(!!initial.usefulLife && !USEFUL_LIFE_PRESETS.some((p) => String(p.years) === initial.usefulLife));
     setErrors({});
     setFile(null);
     setFileError(null);
     setRemoveReceipt(false);
-  }, [open, expense, isKU]);
+  }, [open, entry, isKU]);
 
   const set = (patch: Partial<ExpenseFormInput>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -81,19 +126,28 @@ export function ExpenseFormModal({
   const today = toISODate(new Date());
   const category = findCategory(form.categoryId);
   const usesKm = !!category?.hasKm && form.km.trim() !== '';
-  const preview = useMemo(
-    () => (Object.keys(validateExpenseForm(form, today)).length === 0 ? computeExpenseValues(form, isKU) : null),
-    [form, today, isKU],
-  );
+  const kind = entryKind(form, isKU);
+  // Die Frage bleibt sichtbar, solange der Betrag über der Grenze liegt – so kann man die Antwort ändern
+  const askSpread = category?.asset === 'ask' && entryKind({ ...form, spread: null }, isKU) === 'ask';
+  const valid = Object.keys(validateExpenseForm(form, today, isKU)).length === 0;
+  const preview = useMemo(() => (valid && kind === 'expense' ? computeExpenseValues(form, isKU) : null), [valid, kind, form, isKU]);
+  const plan = useMemo(() => {
+    if (!valid || kind !== 'asset') return null;
+    const a = computeAssetValues(form, isKU);
+    return depreciationSchedule({ cost: a.amount_net ?? a.amount, purchaseDate: form.date, usefulLifeYears: a.useful_life_years });
+  }, [valid, kind, form, isKU]);
+  const [firstYear, secondYear] = plan ?? [];
+  const lastYear = plan?.at(-1);
+  const lifeSelectValue = customLife ? CUSTOM_LIFE : form.usefulLife;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const errs = validateExpenseForm(form, today);
+    const errs = validateExpenseForm(form, today, isKU);
     setErrors(errs);
     if (Object.keys(errs).length > 0 || fileError || !user) return;
 
     setSaving(true);
-    let receiptPath = removeReceipt ? null : (expense?.receipt_url ?? null);
+    let receiptPath = removeReceipt ? null : existingReceipt;
     if (file) {
       const upload = await uploadReceipt(file, user.id);
       if ('error' in upload) {
@@ -104,20 +158,43 @@ export function ExpenseFormModal({
       receiptPath = upload.path;
     }
 
-    const values = computeExpenseValues(form, isKU);
-    const result = await onSave(
-      { ...values, expense_date: form.date, description: form.description.trim() || values.category_label, receipt_url: receiptPath },
-      expense?.id,
-    );
-    setSaving(false);
+    const asAsset = entryKind(form, isKU) === 'asset';
+    const sameKind = entry?.kind === (asAsset ? 'asset' : 'expense');
+    let result: { error: string | null };
+    if (asAsset) {
+      const values = computeAssetValues(form, isKU);
+      result = await onSaveAsset(
+        { ...values, purchase_date: form.date, description: form.description.trim() || values.category_label, receipt_url: receiptPath },
+        sameKind ? record?.id : undefined,
+      );
+    } else {
+      const values = computeExpenseValues(form, isKU);
+      result = await onSaveExpense(
+        { ...values, expense_date: form.date, description: form.description.trim() || values.category_label, receipt_url: receiptPath },
+        sameKind ? record?.id : undefined,
+      );
+    }
     if (result.error) {
+      setSaving(false);
       toast.error(result.error);
       if (file && receiptPath) await deleteReceipt(receiptPath);
       return;
     }
+    // Art gewechselt: alten Eintrag entfernen (der Beleg gehört jetzt zum neuen)
+    if (entry && !sameKind) {
+      const removed = entry.kind === 'asset' ? await onDeleteAsset(entry.asset.id) : await onDeleteExpense(entry.expense.id);
+      if (removed.error) toast.error(removed.error);
+    }
+    setSaving(false);
     // Ersetzten/entfernten alten Beleg löschen
-    if (expense?.receipt_url && expense.receipt_url !== receiptPath) await deleteReceipt(expense.receipt_url);
-    toast.success(expense ? 'Ausgabe gespeichert' : 'Ausgabe erfasst');
+    if (existingReceipt && existingReceipt !== receiptPath) await deleteReceipt(existingReceipt);
+    toast.success(
+      asAsset
+        ? `${entry ? 'Gespeichert' : 'Erfasst'} – Klaro verteilt den Kaufpreis auf ${form.usefulLife.trim()} Jahre`
+        : entry
+          ? 'Ausgabe gespeichert'
+          : 'Ausgabe erfasst',
+    );
     onClose();
   }
 
@@ -126,7 +203,7 @@ export function ExpenseFormModal({
     <Modal
       open={open}
       onClose={saving ? () => undefined : onClose}
-      title={expense ? 'Ausgabe bearbeiten' : 'Ausgabe erfassen'}
+      title={entry?.kind === 'asset' ? 'Anlage bearbeiten' : entry ? 'Ausgabe bearbeiten' : 'Ausgabe erfassen'}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
@@ -188,6 +265,85 @@ export function ExpenseFormModal({
           </Alert>
         )}
 
+        {category?.asset === 'always' && kind === 'asset' && (
+          <Alert type="info">
+            Über {formatEuro(GWG_LIMIT)} ({isKU ? 'brutto' : 'netto'}) setzt du ein Gerät nicht auf einmal ab. Klaro verteilt den
+            Kaufpreis auf die Jahre, in denen du es nutzt. Das nennt man Abschreibung.
+          </Alert>
+        )}
+
+        {askSpread && (
+          <ChoiceCards<boolean>
+            legend="Auf mehrere Jahre verteilen?"
+            name="spread"
+            value={form.spread}
+            error={errors.spread}
+            onChange={(spread) => set({ spread })}
+            options={[
+              {
+                value: true,
+                title: 'Ja, ich nutze es mehrere Jahre',
+                description: `Zum Beispiel eine gekaufte Lizenz oder Einrichtung. Über ${formatEuro(GWG_LIMIT)} verteilt Klaro den Kaufpreis dann auf die Nutzungsdauer.`,
+              },
+              {
+                value: false,
+                title: 'Nein, sofort absetzen',
+                description: 'Zum Beispiel ein Jahresabo, eine Dienstleistung oder Material, das schnell verbraucht ist.',
+              },
+            ]}
+          />
+        )}
+
+        {kind === 'asset' && (
+          <div className="space-y-3">
+            <Select
+              label="Wie lange nutzt du es?"
+              hint="Die übliche Nutzungsdauer. Klaro verteilt den Kaufpreis gleichmäßig auf diese Jahre."
+              value={lifeSelectValue}
+              error={customLife ? undefined : errors.usefulLife}
+              options={[
+                { value: '', label: 'Bitte wählen …' },
+                ...USEFUL_LIFE_PRESETS.map((p) => ({ value: String(p.years), label: `${p.label}: ${p.years} Jahre` })),
+                { value: CUSTOM_LIFE, label: 'Andere Nutzungsdauer' },
+              ]}
+              onChange={(e) => {
+                const custom = e.target.value === CUSTOM_LIFE;
+                setCustomLife(custom);
+                set({ usefulLife: custom ? '' : e.target.value });
+              }}
+            />
+            {customLife && (
+              <Field
+                label="Nutzungsdauer in Jahren"
+                inputMode="numeric"
+                placeholder="z. B. 4"
+                value={form.usefulLife}
+                error={errors.usefulLife}
+                onChange={(e) => set({ usefulLife: e.target.value })}
+              />
+            )}
+          </div>
+        )}
+
+        {firstYear && (
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="depreciation-preview">
+            <p>
+              Absetzbar {firstYear.year}: <strong className="tabular-nums">{formatEuro(firstYear.amount)}</strong>
+              {secondYear && lastYear && (
+                <>
+                  {' '}
+                  · danach {formatEuro(secondYear.amount)} pro Jahr bis {lastYear.year}
+                </>
+              )}
+            </p>
+            {firstYear.half && (
+              <p className="mt-1 text-xs text-slate-500">
+                Im ersten Jahr nur die Hälfte, weil du es erst ab Juli nutzt. Die andere Hälfte kommt im letzten Jahr.
+              </p>
+            )}
+          </div>
+        )}
+
         {preview && (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="deductible-preview">
             Absetzbar: <strong className="tabular-nums">{formatEuro(preview.deductible_amount)}</strong>
@@ -207,13 +363,13 @@ export function ExpenseFormModal({
           <span className="mb-1 block text-sm font-medium text-slate-700">
             Beleg <span className="font-normal text-slate-400">(optional)</span>
           </span>
-          {expense?.receipt_url && !removeReceipt && !file ? (
+          {existingReceipt && !removeReceipt && !file ? (
             <div className="flex items-center gap-2 text-sm">
               <button
                 type="button"
                 className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
                 onClick={async () => {
-                  const url = await getReceiptUrl(expense.receipt_url!);
+                  const url = await getReceiptUrl(existingReceipt);
                   if (url) window.open(url, '_blank', 'noopener');
                   else toast.error('Beleg konnte nicht geöffnet werden.');
                 }}

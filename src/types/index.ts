@@ -8,12 +8,14 @@ export type Client = Tables['clients']['Row'];
 export type Invoice = Tables['invoices']['Row'];
 export type Expense = Tables['expenses']['Row'];
 export type SvsPayment = Tables['svs_payments']['Row'];
+export type Asset = Tables['assets']['Row'];
 
 export type ProfileUpdate = Tables['profiles']['Update'];
 export type ClientInsert = Tables['clients']['Insert'];
 export type InvoiceInsert = Tables['invoices']['Insert'];
 export type ExpenseInsert = Tables['expenses']['Insert'];
 export type SvsPaymentInsert = Tables['svs_payments']['Insert'];
+export type AssetInsert = Tables['assets']['Insert'];
 
 // Domänen-Enums (entsprechen den CHECK-Constraints in der DB)
 export type ProfitMethod = 'pauschal' | 'euer';

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { round2 } from '@/lib/money';
 import { buildSvsTracker, insuredMonths, monthsElapsedInYear, svsDueDates, type TrackerInput } from '@/lib/svsTracker';
 
 // „Lena“ aus dem Mockup: Grafikdesignerin, Gewerbe seit März 2025 (2. Jahr), Kleinunternehmerin, EÜR,
@@ -14,8 +15,8 @@ const base: TrackerInput = {
   industryType: null,
   quarterlyPrescription: null,
   revenueEstimate: 42000,
-  current: { revenueNet: 31800, revenueGross: 31800, deductibleExpenses: 4900, svsPaid: 1447.29 },
-  previous: { revenueNet: 19800, revenueGross: 19800, deductibleExpenses: 3400, svsPaid: 1608.1 },
+  current: { revenueNet: 31800, revenueGross: 31800, deductibleExpenses: 4900, depreciation: 0, svsPaid: 1447.29 },
+  previous: { revenueNet: 19800, revenueGross: 19800, deductibleExpenses: 3400, depreciation: 0, svsPaid: 1608.1 },
 };
 
 describe('Hilfsfunktionen', () => {
@@ -51,6 +52,7 @@ describe('buildSvsTracker – Lena', () => {
     expect(m.full).toEqual({
       revenue: 42000,
       expenses: 6481.05,
+      depreciation: 0,
       arbeitsplatzpauschale: 0,
       svs: 1929.72, // 4 Quartale à 482,43 €
       gewinn: 33589.23,
@@ -175,6 +177,21 @@ describe('buildSvsTracker – Varianten', () => {
     expect(m.ytd.arbeitsplatzpauschale).toBeCloseTo((1200 * monthsElapsedInYear(base.today)) / 12, 1);
   });
 
+  it('Abschreibung: fürs ganze Jahr fest (nicht hochgerechnet), bis heute anteilig, bei Pauschalierung enthalten', () => {
+    const withAsset = { ...base, current: { ...base.current, depreciation: 500 } };
+    const m = buildSvsTracker(withAsset);
+    expect(m.full.depreciation).toBe(500);
+    // Gewinn 33.589,23 − 500 = 33.089,23 € → Grundfreibetrag bleibt 4.950 €
+    expect(m.full.einkuenfte).toBe(28139.23);
+    expect(m.ytd.depreciation).toBeCloseTo((500 * monthsElapsedInYear(base.today)) / 12, 1);
+    // Vorjahr: Abschreibung senkt die offenen Vorjahresbeträge
+    const prev = buildSvsTracker({ ...base, previous: { ...base.previous!, depreciation: 1000 } });
+    expect(prev.previous!.column.depreciation).toBe(1000);
+    expect(prev.previous!.column.gewinn).toBe(round2(buildSvsTracker(base).previous!.column.gewinn - 1000));
+    const pausch = buildSvsTracker({ ...withAsset, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service' });
+    expect(pausch.full.depreciation).toBe(0);
+  });
+
   it('Pauschalierung: Ausgaben = Satz × Umsatz, kein „was bleibt“', () => {
     const m = buildSvsTracker({ ...base, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service' });
     expect(m.full.expenses).toBe(18900);
@@ -187,7 +204,7 @@ describe('buildSvsTracker – Varianten', () => {
       ...base,
       businessType: 'neue_selbstaendige',
       revenueEstimate: 4000,
-      current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 },
+      current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, depreciation: 0, svsPaid: 0 },
       previous: null,
     });
     expect(m.svs.notInsured).toBe(true);
@@ -195,7 +212,7 @@ describe('buildSvsTracker – Varianten', () => {
   });
 
   it('Kleinstunternehmer-Ausnahme: nur UV; fällt weg, wenn die Grenze überschritten wird', () => {
-    const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, svsPaid: 0 };
+    const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, depreciation: 0, svsPaid: 0 };
     const exempt = buildSvsTracker({ ...base, exempt: true, revenueEstimate: 4000, current: small });
     expect(exempt.svs.exempt).toBe(true);
     expect(exempt.svs.final.total).toBe(155.4);
