@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -13,6 +14,7 @@ const SECTIONS = [
   { id: 'profil', label: 'Über dich & SVS' },
   { id: 'steuer', label: 'Steuer' },
   { id: 'rechnungen', label: 'Adresse & Rechnungen' },
+  { id: 'import', label: 'Daten übernehmen' },
   { id: 'konto', label: 'Konto' },
 ];
 
@@ -70,6 +72,20 @@ export default function Settings() {
         <IdentitySection />
         <AccountingSection />
         <InvoicingSection />
+        <section id="import" aria-labelledby="import-heading" className="scroll-mt-20 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
+          <h2 id="import-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Upload className="h-5 w-5 text-primary" aria-hidden="true" />
+            Daten übernehmen
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Hast du deine Einnahmen und Ausgaben bisher in Excel geführt? Übernimm sie in Klaro, damit Gewinn, SVS und
+            Steuer fürs ganze Jahr stimmen.
+          </p>
+          <Link to="/importieren" className="mt-3 inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
+            Aus Excel übernehmen
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </section>
         <AccountSection />
       </div>
     </PageWrapper>

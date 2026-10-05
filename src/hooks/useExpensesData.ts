@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Asset, AssetInsert, Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
 
 type Result = { error: string | null };
 
-/** Ausgaben, SVS-Zahlungen und Einnahmen (bezahlte Rechnungen, netto) eines Kalenderjahres, dazu alle Anlagen bis zu diesem Jahr. */
+/** Ausgaben, SVS-Zahlungen und Einnahmen (bezahlte Rechnungen und weitere Einnahmen, netto) eines Kalenderjahres, dazu alle Anlagen bis zu diesem Jahr. */
 export function useExpensesData(year: number) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [svsPayments, setSvsPayments] = useState<SvsPayment[]>([]);
@@ -18,23 +19,26 @@ export function useExpensesData(year: number) {
     setError(null);
     const from = `${year}-01-01`;
     const to = `${year}-12-31`;
-    const [exp, svs, inv, ast] = await Promise.all([
-      supabase.from('expenses').select('*').gte('expense_date', from).lte('expense_date', to)
-        .order('expense_date', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('svs_payments').select('*').eq('year', year).order('payment_date', { ascending: false }),
+    const [exp, svs, inv, inc, ast] = await Promise.all([
+      fetchAll((a, b) => supabase.from('expenses').select('*').gte('expense_date', from).lte('expense_date', to)
+        .order('expense_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
+      fetchAll((a, b) => supabase.from('svs_payments').select('*').eq('year', year).order('payment_date', { ascending: false }).order('id').range(a, b)),
       // Zuflussprinzip: Einnahme zählt im Jahr der Zahlung; netto (ohne USt)
-      supabase.from('invoices').select('subtotal').eq('status', 'paid')
-        .gte('paid_at', `${from}T00:00:00`).lt('paid_at', `${year + 1}-01-01T00:00:00`),
-      supabase.from('assets').select('*').lte('purchase_date', to)
-        .order('purchase_date', { ascending: false }).order('created_at', { ascending: false }),
+      fetchAll((a, b) => supabase.from('invoices').select('subtotal').eq('status', 'paid')
+        .gte('paid_at', `${from}T00:00:00`).lt('paid_at', `${year + 1}-01-01T00:00:00`).order('id').range(a, b)),
+      fetchAll((a, b) => supabase.from('incomes').select('amount, amount_net').gte('income_date', from).lte('income_date', to).order('id').range(a, b)),
+      fetchAll((a, b) => supabase.from('assets').select('*').lte('purchase_date', to)
+        .order('purchase_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
     ]);
-    if (exp.error || svs.error || inv.error || ast.error) {
+    if (exp.error || svs.error || inv.error || inc.error || ast.error) {
       setError('Deine Ausgaben konnten nicht geladen werden.');
     } else {
       setExpenses(exp.data);
       setSvsPayments(svs.data);
       setAssets(ast.data);
-      setRevenue(inv.data.reduce((s, i) => s + Number(i.subtotal), 0));
+      setRevenue(
+        inv.data.reduce((s, i) => s + Number(i.subtotal), 0) + inc.data.reduce((s, i) => s + Number(i.amount_net ?? i.amount), 0),
+      );
     }
     setLoading(false);
   }, [year]);

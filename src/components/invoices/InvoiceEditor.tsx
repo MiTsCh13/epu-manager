@@ -124,14 +124,15 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   useEffect(() => {
     if (invoice || yearNumbers?.year === year) return;
     let cancelled = false;
-    void supabase
-      .from('invoices')
-      .select('invoice_number')
-      .gte('invoice_date', `${year}-01-01`)
-      .lte('invoice_date', `${year}-12-31`)
-      .then(({ data }) => {
-        if (!cancelled) setYearNumbers({ year, numbers: (data ?? []).map((d) => d.invoice_number) });
-      });
+    // Auch Rechnungsnummern aus importierten Einnahmen zählen – sonst ginge die Nummerierung von vorne los
+    void Promise.all([
+      supabase.from('invoices').select('invoice_number').gte('invoice_date', `${year}-01-01`).lte('invoice_date', `${year}-12-31`),
+      supabase.from('incomes').select('reference').not('reference', 'is', null),
+    ]).then(([inv, inc]) => {
+      if (cancelled) return;
+      const numbers = [...(inv.data ?? []).map((d) => d.invoice_number), ...(inc.data ?? []).map((d) => d.reference ?? '')];
+      setYearNumbers({ year, numbers });
+    });
     return () => {
       cancelled = true;
     };

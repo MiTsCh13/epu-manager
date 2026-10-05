@@ -103,14 +103,13 @@ export function InvoicingSection() {
   useEffect(() => {
     if (!formatChanged || yearNumbers) return;
     let cancelled = false;
-    void supabase
-      .from('invoices')
-      .select('invoice_number')
-      .gte('invoice_date', `${year}-01-01`)
-      .lte('invoice_date', `${year}-12-31`)
-      .then(({ data: rows }) => {
-        if (!cancelled) setYearNumbers((rows ?? []).map((r) => r.invoice_number));
-      });
+    // Wie im Rechnungseditor: Nummern aus übernommenen Einnahmen zählen mit
+    void Promise.all([
+      supabase.from('invoices').select('invoice_number').gte('invoice_date', `${year}-01-01`).lte('invoice_date', `${year}-12-31`),
+      supabase.from('incomes').select('reference').not('reference', 'is', null),
+    ]).then(([inv, inc]) => {
+      if (!cancelled) setYearNumbers([...(inv.data ?? []).map((r) => r.invoice_number), ...(inc.data ?? []).map((r) => r.reference ?? '')]);
+    });
     return () => {
       cancelled = true;
     };

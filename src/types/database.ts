@@ -23,6 +23,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          import_id: string | null
           purchase_date: string
           receipt_url: string | null
           useful_life_years: number
@@ -36,6 +37,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          import_id?: string | null
           purchase_date: string
           receipt_url?: string | null
           useful_life_years: number
@@ -49,6 +51,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          import_id?: string | null
           purchase_date?: string
           receipt_url?: string | null
           useful_life_years?: number
@@ -112,6 +115,7 @@ export type Database = {
           e1a_kz: string
           expense_date: string
           id: string
+          import_id: string | null
           is_bewirtung: boolean
           km_driven: number | null
           nights: number | null
@@ -130,6 +134,7 @@ export type Database = {
           e1a_kz: string
           expense_date: string
           id?: string
+          import_id?: string | null
           is_bewirtung?: boolean
           km_driven?: number | null
           nights?: number | null
@@ -148,12 +153,73 @@ export type Database = {
           e1a_kz?: string
           expense_date?: string
           id?: string
+          import_id?: string | null
           is_bewirtung?: boolean
           km_driven?: number | null
           nights?: number | null
           receipt_url?: string | null
           reimbursed?: boolean
           trip_hours?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      imports: {
+        Row: {
+          created_at: string
+          id: string
+          source_name: string
+          summary: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source_name?: string
+          summary?: Json
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source_name?: string
+          summary?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      incomes: {
+        Row: {
+          amount: number
+          amount_net: number | null
+          created_at: string
+          description: string
+          id: string
+          import_id: string | null
+          income_date: string
+          reference: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          amount_net?: number | null
+          created_at?: string
+          description?: string
+          id?: string
+          import_id?: string | null
+          income_date: string
+          reference?: string | null
+          user_id?: string
+        }
+        Update: {
+          amount?: number
+          amount_net?: number | null
+          created_at?: string
+          description?: string
+          id?: string
+          import_id?: string | null
+          income_date?: string
+          reference?: string | null
           user_id?: string
         }
         Relationships: []
@@ -354,6 +420,7 @@ export type Database = {
           amount: number
           created_at: string
           id: string
+          import_id: string | null
           notes: string | null
           payment_date: string
           quarter: string | null
@@ -364,6 +431,7 @@ export type Database = {
           amount: number
           created_at?: string
           id?: string
+          import_id?: string | null
           notes?: string | null
           payment_date: string
           quarter?: string | null
@@ -374,6 +442,7 @@ export type Database = {
           amount?: number
           created_at?: string
           id?: string
+          import_id?: string | null
           notes?: string | null
           payment_date?: string
           quarter?: string | null

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AlertCircle, Banknote, FileClock, FileText, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIncomes } from '@/hooks/useIncomes';
 import { useInvoices, type InvoiceListItem } from '@/hooks/useInvoices';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { FILTER_LABELS, getDisplayStatus, matchesFilter, type InvoiceFilter } from '@/lib/invoices';
@@ -10,6 +11,7 @@ import { formatEuro } from '@/lib/money';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { InvoiceList } from '@/components/invoices/InvoiceList';
 import { MarkPaidModal } from '@/components/invoices/MarkPaidModal';
+import { OtherIncomes } from '@/components/invoices/OtherIncomes';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +30,11 @@ const newInvoiceLink = (
 );
 
 export default function Invoices() {
-  const { invoices, loading, error, reload, markPaid } = useInvoices();
+  const { invoices, loading: invoicesLoading, error: invoicesError, reload: reloadInvoices, markPaid } = useInvoices();
+  const other = useIncomes();
+  const loading = invoicesLoading || other.loading;
+  const error = invoicesError ?? other.error;
+  const reload = () => Promise.all([reloadInvoices(), other.reload()]);
   const { profile } = useAuth();
   const year = new Date().getFullYear();
   // Filter steht in der Adresse (?filter=open) – Links vom Dashboard kommen vorgefiltert an
@@ -46,10 +52,13 @@ export default function Invoices() {
   const openSum = withStatus.filter((x) => matchesFilter(x.status, 'open')).reduce((s, x) => s + Number(x.inv.total), 0);
   const visible = withStatus.filter((x) => matchesFilter(x.status, filter)).map((x) => x.inv);
   const overdueSum = withStatus.filter((x) => x.status === 'overdue').reduce((s, x) => s + Number(x.inv.total), 0);
-  // Einnahmen = bezahlte Rechnungen nach Zahlungsdatum (wie im Dashboard und in der Jahresrechnung)
+  // Einnahmen = bezahlte Rechnungen nach Zahlungsdatum + weitere Einnahmen (wie im Dashboard und in der Jahresrechnung)
   const paidThisYear = invoices.filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getFullYear() === year);
-  const earnedNet = paidThisYear.reduce((s, i) => s + Number(i.subtotal), 0);
-  const earnedGross = paidThisYear.reduce((s, i) => s + Number(i.total), 0);
+  const otherThisYear = other.incomes.filter((i) => Number(i.income_date.slice(0, 4)) === year);
+  const earnedNet =
+    paidThisYear.reduce((s, i) => s + Number(i.subtotal), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount_net ?? i.amount), 0);
+  const earnedGross = paidThisYear.reduce((s, i) => s + Number(i.total), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount), 0);
+  const earnedSub = otherThisYear.length > 0 ? 'Rechnungen und weitere Einnahmen' : 'bezahlte Rechnungen';
 
   return (
     <PageWrapper
@@ -67,19 +76,33 @@ export default function Invoices() {
           </Button>
         </div>
       ) : invoices.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="Noch keine Rechnungen"
-          description="Schreib deine erste Rechnung – Klaro achtet auf alle Pflichtangaben und rechnet automatisch mit."
-          action={newInvoiceLink}
-        />
+        <div className="space-y-8">
+          {otherThisYear.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              <StatCard
+                label={`Eingenommen ${year}`}
+                value={formatEuro(earnedNet, true)}
+                sub={profile?.is_kleinunternehmer ? earnedSub : `netto · brutto ${formatEuro(earnedGross, true)}`}
+                icon={Banknote}
+                testId="invoices-earned"
+              />
+            </div>
+          )}
+          <EmptyState
+            icon={FileText}
+            title="Noch keine Rechnungen"
+            description="Schreib deine erste Rechnung – Klaro achtet auf alle Pflichtangaben und rechnet automatisch mit."
+            action={newInvoiceLink}
+          />
+          <OtherIncomes incomes={other.incomes} isKU={!!profile?.is_kleinunternehmer} onDelete={other.deleteIncome} />
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <StatCard
               label={`Eingenommen ${year}`}
               value={formatEuro(earnedNet, true)}
-              sub={profile?.is_kleinunternehmer ? 'bezahlte Rechnungen' : `netto · brutto ${formatEuro(earnedGross, true)}`}
+              sub={profile?.is_kleinunternehmer ? earnedSub : `netto · brutto ${formatEuro(earnedGross, true)}`}
               icon={Banknote}
               testId="invoices-earned"
             />
@@ -123,6 +146,9 @@ export default function Invoices() {
           ) : (
             <InvoiceList invoices={visible} onMarkPaid={setPaying} />
           )}
+          <div className="pt-4">
+            <OtherIncomes incomes={other.incomes} isKU={!!profile?.is_kleinunternehmer} onDelete={other.deleteIncome} />
+          </div>
         </div>
       )}
 

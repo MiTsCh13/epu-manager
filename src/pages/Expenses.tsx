@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Laptop, Plus, ReceiptEuro } from 'lucide-react';
+import { ArrowRight, Laptop, Plus, ReceiptEuro, Upload } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
@@ -124,6 +124,13 @@ export default function Expenses() {
       actions={
         <>
           {yearSelect}
+          <Link
+            to="/importieren"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            Aus Excel übernehmen
+          </Link>
           <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
             Ausgabe erfassen
           </Button>
