@@ -186,7 +186,7 @@ function Welcome({ data }: { data: OnboardingData }) {
       data.profit_method === 'euer'
         ? 'Einnahmen-Ausgaben-Rechnung'
         : (data.pausch_type ? PAUSCH_LABELS[data.pausch_type] : 'Pauschalierung') +
-          (data.pausch_type === 'ku' ? (data.industry_code === 'trade' ? ' (Handel, 20 %)' : ' (Dienstleistung, 45 %)') : ''),
+          (data.pausch_type === 'ku' ? (data.industry_code === 'trade' ? ' (anderer Betrieb, 45 %)' : ' (Dienstleistungsbetrieb, 20 %)') : ''),
     ],
     [
       'Arbeitsplatzpauschale',

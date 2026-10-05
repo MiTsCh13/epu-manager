@@ -16,9 +16,10 @@ export const INCOME_TAX_BRACKETS_2026 = [
 // Pauschalsätze 2026
 export const PAUSCH_RATES = {
   ku: {
-    // Kleinunternehmerpauschalierung (bis 55.000 € Umsatz)
-    service: 0.45, // Dienstleistung: 45 % der Einnahmen als Ausgaben
-    trade: 0.2, // Handel/Produktion: 20 % der Einnahmen als Ausgaben
+    // Kleinunternehmerpauschalierung (bis 55.000 € Umsatz), § 17 Abs. 3a EStG
+    // Quelle: usp.gv.at „Kleinunternehmerpauschalierung“, Dienstleistungsbetriebe-Verordnung BGBl. II 615/2020
+    service: 0.2, // Dienstleistungsbetrieb laut Verordnung (z. B. IT, Fotografie, Design, Werbung, Beratung, Unterricht): 20 %
+    trade: 0.45, // alle anderen Betriebe (z. B. Handel, Handwerk, Produktion): 45 %
   },
   basis_15: 0.15, // Basispauschalierung allgemein (bis 420.000 € Umsatz)
   basis_6: 0.06, // Basispauschalierung für Beratung, Wissenschaft, etc.
@@ -52,6 +53,16 @@ export const TAX_RETURN_DEADLINE = { month: 6, day: 30 } as const;
 // Sonderregeln Ausgaben
 export const BEWIRTUNG_DEDUCTIBLE_RATE = 0.5; // Bewirtung nur zu 50 % absetzbar
 export const KILOMETERGELD_PER_KM = 0.5; // Amtliches Kilometergeld PKW
+
+// Diäten und Nächtigung bei Geschäftsreisen (§ 4 Abs. 5 iVm § 26 Z 4 EStG, Werte ab 2025) – nur Einnahmen-Ausgaben-Rechnung.
+// Quelle: usp.gv.at „Reisekosten“. Reise: mindestens 25 km vom Betriebsort; kein Tagesgeld, wenn man länger als
+// 5 Tage durchgehend oder öfter als 15-mal im Jahr am selben Ort ist.
+export const TAGESGELD = {
+  perDay: 30, // volles Tagesgeld je 24 Stunden
+  minHours: 3, // erst bei MEHR als 3 Stunden
+  perStartedHour: 2.5, // 1/12 je angefangener Stunde
+} as const;
+export const NAECHTIGUNG_PAUSCHAL = 17; // pro Nacht inkl. Frühstück, ohne Beleg (sonst Hotelrechnung)
 
 // Abschreibung (AfA) – nur bei Einnahmen-Ausgaben-Rechnung; bei Pauschalierung ist sie im Pauschalsatz enthalten.
 // Quelle: usp.gv.at „Geringwertige Wirtschaftsgüter“ und „Abschreibung“; E1a KZ 9130 (AfA inkl. GWG)

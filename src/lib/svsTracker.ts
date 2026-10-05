@@ -5,7 +5,8 @@ import { SVS_2026 } from '@/constants/svs2026';
 import { EST_PREPAYMENT_DUE_DAY, EST_PREPAYMENT_DUE_MONTHS, TAX_RETURN_DEADLINE } from '@/constants/tax2026';
 import type { AppAlert, BusinessType, IndustryType, PauschType, ProfitMethod } from '@/types';
 import { round2 } from './money';
-import { calculateGrundfreibetrag, getPauschRate } from './profit';
+import { pauschalExtrasFor } from './expenses';
+import { calculateGrundfreibetrag, calculatePauschaleExpenses, getPauschRate } from './profit';
 import {
   basisFromQuarterlyPrescription,
   calculateSvsYear,
@@ -23,7 +24,9 @@ import { calculateAdditionalIncomeTax } from './tax';
 export interface YearFigures {
   revenueNet: number; // bezahlte Rechnungen netto
   revenueGross: number; // bezahlte Rechnungen brutto (für die Kleinunternehmergrenze)
-  deductibleExpenses: number;
+  deductibleExpenses: number; // Einnahmen-Ausgaben-Rechnung: alle absetzbaren Ausgaben
+  pauschalExtras: { ku: number; basis: number }; // Pauschalierung: zusätzlich absetzbare Ausgaben (§ 17 EStG)
+  reimbursedTravel: number; // weiterverrechnete Reisekosten (mindern bei Pauschalierung die Basis)
   depreciation: number; // Abschreibung der Anlagen im ganzen Jahr (KZ 9130)
   svsPaid: number; // erfasste SVS-Zahlungen im Jahr
 }
@@ -152,7 +155,14 @@ export function buildSvsTracker(input: TrackerInput) {
   const otherIncome = input.otherIncome ?? 0;
   const app = input.arbeitsplatzpauschale ?? 0;
   const pauschRate = input.profitMethod === 'pauschal' ? getPauschRate(input.pauschType ?? 'ku', input.industryType ?? undefined) : null;
-  const expensesFor = (revenue: number, deductible: number) => (pauschRate !== null ? round2(revenue * pauschRate) : deductible);
+  // Pauschalierung: Satz × Umsatz (ohne weiterverrechnete Reisekosten) + zusätzlich erlaubte Ausgaben; `scale` rechnet hoch
+  const expensesFor = (revenue: number, figures: YearFigures, scale = 1) =>
+    pauschRate !== null
+      ? round2(
+          calculatePauschaleExpenses(revenue, pauschRate, figures.reimbursedTravel * scale) +
+            pauschalExtrasFor(figures, input.pauschType) * scale,
+        )
+      : round2(figures.deductibleExpenses * scale);
   // Abschreibung steht fürs ganze Jahr fest (keine Hochrechnung); bei Pauschalierung im Pauschalsatz enthalten
   const depreciationFor = (figures: YearFigures) => (pauschRate !== null ? 0 : figures.depreciation);
   const depreciationFull = depreciationFor(current);
@@ -162,7 +172,7 @@ export function buildSvsTracker(input: TrackerInput) {
   const revenueEstimated = input.revenueEstimate != null;
   const revenueExpected = revenueEstimated ? round2(input.revenueEstimate!) : revenueProjected;
   const factor = months > 0 ? 12 / months : 1;
-  const expensesExpected = expensesFor(revenueExpected, round2(current.deductibleExpenses * factor));
+  const expensesExpected = expensesFor(revenueExpected, current, factor);
 
   // ─── Vorjahr (für die vorläufige Basis ab Jahr 4 und für offene Beträge) ───
   const prevYear = year - 1;
@@ -171,7 +181,7 @@ export function buildSvsTracker(input: TrackerInput) {
   const prevColumn = hasPrevious
     ? column(
         input.previous!.revenueNet,
-        expensesFor(input.previous!.revenueNet, input.previous!.deductibleExpenses),
+        expensesFor(input.previous!.revenueNet, input.previous!),
         depreciationFor(input.previous!),
         input.arbeitsplatzpauschalePrevious ?? 0,
         input.previous!.svsPaid,
@@ -218,7 +228,7 @@ export function buildSvsTracker(input: TrackerInput) {
   const ytdShare = Math.min(months, 12) / 12;
   const ytdBase = column(
     current.revenueNet,
-    expensesFor(current.revenueNet, current.deductibleExpenses),
+    expensesFor(current.revenueNet, current),
     round2(depreciationFull * ytdShare),
     round2(app * ytdShare),
     svsPaidYtd,

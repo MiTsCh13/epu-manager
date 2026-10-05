@@ -4,7 +4,9 @@ import {
   calculateDeductibleAmount,
   calculateGrundfreibetrag,
   calculateKilometergeld,
+  calculateNaechtigung,
   calculateProfit,
+  calculateTagesgeld,
   getPauschRate,
   isPauschalierungAllowed,
   otherIncomeAmount,
@@ -13,16 +15,17 @@ import {
 
 describe('getPauschRate', () => {
   it.each([
-    ['ku', 'service', 0.45],
-    ['ku', 'trade', 0.2],
+    // § 17 Abs. 3a EStG: Dienstleistungsbetriebe laut Verordnung 20 %, alle anderen 45 %
+    ['ku', 'service', 0.2],
+    ['ku', 'trade', 0.45],
     ['basis_15', 'service', 0.15],
     ['basis_6', 'trade', 0.06],
   ] as const)('%s / %s → %f', (type, industry, rate) => {
     expect(getPauschRate(type, industry)).toBe(rate);
   });
 
-  it('KU-Pauschalierung: Standard ist Dienstleistung', () => {
-    expect(getPauschRate('ku')).toBe(0.45);
+  it('KU-Pauschalierung: Standard ist Dienstleistungsbetrieb (vorsichtig: niedrigerer Satz)', () => {
+    expect(getPauschRate('ku')).toBe(0.2);
   });
 });
 
@@ -73,7 +76,7 @@ describe('calculateProfit – EÜR', () => {
 });
 
 describe('calculateProfit – Pauschalierung', () => {
-  it('KU-Pauschalierung Dienstleistung: 45 % von 27.500 € = 12.375 €', () => {
+  it('KU-Pauschalierung Dienstleistungsbetrieb: 20 % von 27.500 € = 5.500 €', () => {
     const r = calculateProfit({
       profitMethod: 'pauschal',
       pauschType: 'ku',
@@ -84,15 +87,15 @@ describe('calculateProfit – Pauschalierung', () => {
       arbeitsplatzpauschale: 300,
     });
     expect(r).toEqual({
-      pauschaleExpenses: 12375,
-      grossProfit: 15125,
-      netProfit: 12825,
-      grundfreibetrag: 1923.75,
-      taxableIncome: 10901.25,
+      pauschaleExpenses: 5500,
+      grossProfit: 22000,
+      netProfit: 19700,
+      grundfreibetrag: 2955,
+      taxableIncome: 16745,
     });
   });
 
-  it('KU-Pauschalierung Handel: 20 %', () => {
+  it('KU-Pauschalierung anderer Betrieb (z. B. Handel): 45 %', () => {
     const r = calculateProfit({
       profitMethod: 'pauschal',
       pauschType: 'ku',
@@ -101,8 +104,8 @@ describe('calculateProfit – Pauschalierung', () => {
       totalExpenses: 0,
       svsPayments: 0,
     });
-    expect(r.pauschaleExpenses).toBe(6000);
-    expect(r.netProfit).toBe(24000);
+    expect(r.pauschaleExpenses).toBe(13500);
+    expect(r.netProfit).toBe(16500);
   });
 
   it('Basispauschalierung 15 % und 6 %', () => {
@@ -111,9 +114,24 @@ describe('calculateProfit – Pauschalierung', () => {
     expect(calculateProfit({ ...args, pauschType: 'basis_6' }).netProfit).toBe(84000);
   });
 
-  it('ohne Angabe: KU-Pauschalierung Dienstleistung', () => {
+  it('ohne Angabe: KU-Pauschalierung Dienstleistungsbetrieb', () => {
     const r = calculateProfit({ profitMethod: 'pauschal', totalRevenue: 10000, totalExpenses: 0, svsPayments: 0 });
-    expect(r.pauschaleExpenses).toBe(4500);
+    expect(r.pauschaleExpenses).toBe(2000);
+  });
+
+  it('zusätzlich absetzbar; weiterverrechnete Reisekosten mindern die Basis der Pauschale', () => {
+    const r = calculateProfit({
+      profitMethod: 'pauschal',
+      pauschType: 'ku',
+      industryType: 'service',
+      totalRevenue: 30000,
+      totalExpenses: 0,
+      svsPayments: 0,
+      pauschalExtras: 1500, // 1.000 € weiterverrechnete Reise + 500 € halbe Öffi-Karte
+      reimbursedTravel: 1000,
+    });
+    expect(r.pauschaleExpenses).toBe(5800); // 20 % von 29.000 €
+    expect(r.grossProfit).toBe(22700);
   });
 });
 
@@ -195,5 +213,30 @@ describe('otherIncomeAmount', () => {
     expect(otherIncomeAmount('none', 18000)).toBe(0);
     expect(otherIncomeAmount(null, 18000)).toBe(0);
     expect(otherIncomeAmount('employment', null)).toBe(0);
+  });
+});
+
+describe('Diäten und Nächtigung', () => {
+  it.each([
+    [3, 0], // erst bei MEHR als 3 Stunden
+    [3.01, 10], // 4 angefangene Stunden à 2,50 €
+    [9.5, 25],
+    [11, 27.5],
+    [11.5, 30],
+    [24, 30],
+    [26, 30], // Rest 2 Stunden: nichts
+    [30, 45], // 24 h + 6 angefangene Stunden
+    [48, 60],
+    [51, 60], // Rest genau 3 Stunden: nichts
+    [36, 60], // Rest 12 Stunden: volles Tagesgeld
+    [-2, 0],
+    [0, 0],
+  ])('Tagesgeld bei %f Stunden = %f €', (hours, amount) => {
+    expect(calculateTagesgeld(hours)).toBe(amount);
+  });
+
+  it('Nächtigung pauschal 17 € pro Nacht', () => {
+    expect(calculateNaechtigung(2)).toBe(34);
+    expect(calculateNaechtigung(0)).toBe(0);
   });
 });

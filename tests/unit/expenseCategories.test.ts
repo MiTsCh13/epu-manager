@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { categoriesFor, E1A_KZ_NAMES, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_GROUPS, findCategoryByLabel } from '@/constants/expenseCategories';
+import {
+  countsUnder,
+  E1A_KZ_NAMES,
+  EXPENSE_CATEGORIES,
+  EXPENSE_TILES,
+  findCategoryById,
+  findCategoryByLabel,
+  tileOf,
+  tilesFor,
+  type CategoryContext,
+} from '@/constants/expenseCategories';
+
+const euer: CategoryContext = { businessType: 'neue_selbstaendige', profitMethod: 'euer', pauschType: null, smallApp: false };
+const ids = (ctx: CategoryContext, keep?: string) => tilesFor(ctx, keep).flatMap((t) => t.categories.map((c) => c.id));
+const tileIds = (ctx: CategoryContext) => tilesFor(ctx).map((t) => t.tile.id);
 
 describe('EXPENSE_CATEGORIES', () => {
   it('IDs und Labels sind eindeutig', () => {
@@ -7,32 +21,22 @@ describe('EXPENSE_CATEGORIES', () => {
     expect(new Set(EXPENSE_CATEGORIES.map((c) => c.label)).size).toBe(EXPENSE_CATEGORIES.length);
   });
 
-  it('jede Kategorie hat eine 4-stellige E1a-Kennzahl und eine gültige Gruppe', () => {
-    const groups = new Set(EXPENSE_CATEGORY_GROUPS.map((g) => g.id));
-    for (const c of EXPENSE_CATEGORIES) {
-      expect(c.kz).toMatch(/^\d{4}$/);
-      expect(groups.has(c.group)).toBe(true);
-    }
-  });
-
   it('jede Kennzahl ist eine Ausgaben-Kennzahl des E1a mit Bezeichnung', () => {
     for (const c of EXPENSE_CATEGORIES) expect(E1A_KZ_NAMES[c.kz], c.id).toBeTruthy();
     // 9090 ist im E1a „Übrige Erträge“ – eine Einnahme
     expect(EXPENSE_CATEGORIES.some((c) => c.kz === '9090')).toBe(false);
-    expect(findCategoryByLabel('Sonstige Ausgaben')?.kz).toBe('9230');
+  });
+
+  it('Bankgebühren auf 9230, Kreditzinsen auf 9220; Diäten und Öffi-Karte eigene Kennzahlen', () => {
+    expect(findCategoryById('bankgebuehren')?.kz).toBe('9230');
+    expect(findCategoryById('zinsen')?.kz).toBe('9220');
+    expect(findCategoryById('tagesgeld')?.kz).toBe('9160');
+    expect(findCategoryById('naechtigung')?.kz).toBe('9160');
+    expect(findCategoryById('oeffi')?.kz).toBe('9165');
   });
 
   it('jede Kategorie erklärt, was dazugehört', () => {
     for (const c of EXPENSE_CATEGORIES) expect(c.hint.length, c.id).toBeGreaterThan(20);
-  });
-
-  it('WKO-Grundumlage nur für Gewerbetreibende (außer beim Bearbeiten)', () => {
-    const ids = (list: { id: string }[]) => list.map((c) => c.id);
-    expect(ids(categoriesFor('gewerbetreibend'))).toContain('wko');
-    expect(ids(categoriesFor('neue_selbstaendige'))).not.toContain('wko');
-    expect(ids(categoriesFor(null))).not.toContain('wko');
-    expect(ids(categoriesFor('neue_selbstaendige', 'wko'))).toContain('wko');
-    expect(categoriesFor('neue_selbstaendige')).toHaveLength(EXPENSE_CATEGORIES.length - 1);
   });
 
   it('genau eine Bewirtungs-Kategorie', () => {
@@ -44,7 +48,36 @@ describe('EXPENSE_CATEGORIES', () => {
   });
 
   it('findCategoryByLabel', () => {
-    expect(findCategoryByLabel('Reisen & Fahrtkosten')?.hasKm).toBe(true);
+    expect(findCategoryByLabel('Fahrten & Reisen')?.hasKm).toBe(true);
     expect(findCategoryByLabel('gibt es nicht')).toBeUndefined();
+  });
+});
+
+describe('EXPENSE_TILES', () => {
+  it('jede Kategorie liegt in genau einer Kachel; Kacheln mit mehreren Kategorien fragen nach', () => {
+    for (const c of EXPENSE_CATEGORIES) expect(EXPENSE_TILES.filter((t) => t.categories.includes(c.id)), c.id).toHaveLength(1);
+    for (const t of EXPENSE_TILES) if (t.categories.length > 1) expect(t.question, t.id).toBeTruthy();
+    expect(tileOf('zinsen')?.id).toBe('bank');
+  });
+
+  it('Einnahmen-Ausgaben-Rechnung: 12 Kacheln (WKO nur Gewerbe, Büromöbel nur mit kleiner Arbeitsplatzpauschale)', () => {
+    expect(tileIds(euer)).toHaveLength(12);
+    expect(tileIds(euer)).not.toContain('wko');
+    expect(tileIds({ ...euer, businessType: 'gewerbetreibend' })).toContain('wko');
+    expect(tileIds(euer)).not.toContain('bueromoebel');
+    expect(tileIds({ ...euer, smallApp: true })).toContain('bueromoebel');
+    // Beim Bearbeiten bleibt die gespeicherte Kategorie sichtbar
+    expect(ids(euer, 'wko')).toContain('wko');
+  });
+
+  it('KU-Pauschalierung: nur Öffi-Karte und (weiterverrechnete) Reisen', () => {
+    const ku: CategoryContext = { ...euer, profitMethod: 'pauschal', pauschType: 'ku' };
+    expect(ids(ku)).toEqual(['reisen', 'oeffi']);
+  });
+
+  it('Basispauschalierung: zusätzlich Waren und Fremdleistungen, keine Diäten', () => {
+    const basis: CategoryContext = { ...euer, profitMethod: 'pauschal', pauschType: 'basis_15' };
+    expect(ids(basis)).toEqual(['reisen', 'oeffi', 'waren', 'subauftraege']);
+    expect(countsUnder(findCategoryById('tagesgeld')!, 'pauschal', 'basis_6')).toBe(false);
   });
 });

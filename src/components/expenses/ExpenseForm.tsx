@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Paperclip, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { findCategoryByLabel } from '@/constants/expenseCategories';
-import { KILOMETERGELD_PER_KM, VAT_RATES } from '@/constants/tax2026';
+import { countsUnder, findCategoryByLabel, type CategoryContext } from '@/constants/expenseCategories';
+import { KILOMETERGELD_PER_KM, NAECHTIGUNG_PAUSCHAL, TAGESGELD, VAT_RATES } from '@/constants/tax2026';
 import { depreciationSchedule, GWG_LIMIT, USEFUL_LIFE_PRESETS } from '@/lib/assets';
 import {
   computeAssetValues,
@@ -16,6 +16,7 @@ import {
   type ExpenseFormInput,
 } from '@/lib/expenses';
 import { toISODate } from '@/lib/invoices';
+import { calculateArbeitsplatzpauschale, otherIncomeAmount } from '@/lib/profit';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
 import { Alert } from '@/components/ui/Alert';
@@ -24,7 +25,7 @@ import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { CategoryGrid } from './CategoryGrid';
-import type { Asset, AssetInsert, BusinessType, Expense, ExpenseInsert, VatRate } from '@/types';
+import type { Asset, AssetInsert, BusinessType, Expense, ExpenseInsert, OtherIncomeKind, PauschType, ProfitMethod, VatRate } from '@/types';
 
 /** Was gerade bearbeitet wird: eine Ausgabe, eine Anlage oder nichts (neu erfassen). */
 export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asset'; asset: Asset } | null;
@@ -38,7 +39,19 @@ function vatRateOf(amount: number, net: number | null): VatRate {
 
 function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
   if (!entry) {
-    return { categoryId: '', amount: '', km: '', vatRate: isKU ? 0 : 20, date: toISODate(new Date()), description: '', spread: null, usefulLife: '' };
+    return {
+      categoryId: '',
+      amount: '',
+      km: '',
+      hours: '',
+      nights: '',
+      reimbursed: false,
+      vatRate: isKU ? 0 : 20,
+      date: toISODate(new Date()),
+      description: '',
+      spread: null,
+      usefulLife: '',
+    };
   }
   if (entry.kind === 'asset') {
     const a = entry.asset;
@@ -46,6 +59,9 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
       categoryId: findCategoryByLabel(a.category_label)?.id ?? 'geraete',
       amount: formatDecimalInput(Number(a.amount)),
       km: '',
+      hours: '',
+      nights: '',
+      reimbursed: false,
       vatRate: vatRateOf(Number(a.amount), a.amount_net === null ? null : Number(a.amount_net)),
       date: a.purchase_date,
       description: a.description,
@@ -56,8 +72,12 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
   const e = entry.expense;
   return {
     categoryId: findCategoryByLabel(e.category_label)?.id ?? 'sonstiges',
-    amount: e.km_driven ? '' : formatDecimalInput(Number(e.amount)),
+    // Bei Pauschalen (Kilometergeld, Tagesgeld, Nächtigung) rechnet Klaro den Betrag
+    amount: e.km_driven || e.trip_hours || e.nights ? '' : formatDecimalInput(Number(e.amount)),
     km: e.km_driven ? formatDecimalInput(Number(e.km_driven)) : '',
+    hours: e.trip_hours ? formatDecimalInput(Number(e.trip_hours)) : '',
+    nights: e.nights ? String(e.nights) : '',
+    reimbursed: e.reimbursed,
     vatRate: vatRateOf(Number(e.amount), e.amount_net === null ? null : Number(e.amount_net)),
     date: e.expense_date,
     description: e.description,
@@ -92,6 +112,20 @@ export function ExpenseFormModal({
 }) {
   const { user, profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
+  const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
+  const context: CategoryContext = {
+    businessType: (profile?.business_type as BusinessType | null) ?? null,
+    profitMethod: (profile?.profit_method ?? 'euer') as ProfitMethod,
+    pauschType: (profile?.pausch_type ?? null) as PauschType | null,
+    smallApp:
+      calculateArbeitsplatzpauschale({
+        homeOffice: profile?.home_office ?? null,
+        otherIncomeKind: otherKind,
+        otherIncomeAmount: otherIncomeAmount(otherKind, profile?.other_income_amount == null ? null : Number(profile.other_income_amount)),
+        year: new Date().getFullYear(),
+      }).size === 'klein',
+  };
+  const pauschal = context.profitMethod === 'pauschal';
   const record = entry?.kind === 'asset' ? entry.asset : (entry?.expense ?? null);
   const existingReceipt = record?.receipt_url ?? null;
   // Direkt mit den Werten initialisieren (Aufrufer setzt key je Eintrag) – kein leeres Aufblitzen
@@ -126,6 +160,10 @@ export function ExpenseFormModal({
   const today = toISODate(new Date());
   const category = findCategory(form.categoryId);
   const usesKm = !!category?.hasKm && form.km.trim() !== '';
+  const calculated = usesKm || !!category?.calc; // Betrag rechnet Klaro (Kilometergeld, Tagesgeld, Nächtigung)
+  // Bei Pauschalierung zählen Reisekosten nur, wenn sie weiterverrechnet werden
+  const reimbursedOnly = pauschal && !!category?.pauschalOnlyReimbursed;
+  const notCounted = pauschal && !!category && !countsUnder(category, 'pauschal', context.pauschType);
   const kind = entryKind(form, isKU);
   // Die Frage bleibt sichtbar, solange der Betrag über der Grenze liegt – so kann man die Antwort ändern
   const askSpread = category?.asset === 'ask' && entryKind({ ...form, spread: null }, isKU) === 'ask';
@@ -220,8 +258,52 @@ export function ExpenseFormModal({
           value={form.categoryId}
           onChange={(categoryId) => set({ categoryId })}
           error={errors.categoryId}
-          businessType={(profile?.business_type as BusinessType | null) ?? null}
+          context={context}
         />
+
+        {reimbursedOnly && (
+          <ChoiceCards<boolean>
+            legend="Verrechnest du diese Kosten deiner Kundin oder deinem Kunden weiter?"
+            name="reimbursed"
+            value={form.reimbursed}
+            columns={2}
+            onChange={(reimbursed) => set({ reimbursed })}
+            options={[
+              {
+                value: true,
+                title: 'Ja, in gleicher Höhe',
+                description: 'Dann zählen sie zusätzlich zur Pauschale. Klaro rechnet sie aus dem Umsatz für die Pauschale heraus.',
+              },
+              { value: false, title: 'Nein', description: 'Dann sind sie im Pauschalsatz schon enthalten und zählen nicht extra.' },
+            ]}
+          />
+        )}
+        {(notCounted || (reimbursedOnly && !form.reimbursed)) && (
+          <Alert type="warning">Das zählt bei Pauschalierung nicht extra – es ist im Pauschalsatz schon enthalten.</Alert>
+        )}
+
+        {category?.calc === 'tagesgeld' && (
+          <Field
+            label="Wie lange warst du unterwegs? (Stunden)"
+            inputMode="decimal"
+            placeholder="z. B. 9,5"
+            hint={`Von der Abfahrt bis zur Rückkehr. Ab mehr als ${TAGESGELD.minHours} Stunden ${formatEuro(TAGESGELD.perStartedHour)} pro angefangener Stunde, höchstens ${formatEuro(TAGESGELD.perDay)} pro Tag.`}
+            value={form.hours}
+            error={errors.hours}
+            onChange={(e) => set({ hours: e.target.value })}
+          />
+        )}
+        {category?.calc === 'naechtigung' && (
+          <Field
+            label="Wie viele Nächte?"
+            inputMode="numeric"
+            placeholder="z. B. 2"
+            hint={`${formatEuro(NAECHTIGUNG_PAUSCHAL)} pro Nacht inklusive Frühstück, ohne Beleg.`}
+            value={form.nights}
+            error={errors.nights}
+            onChange={(e) => set({ nights: e.target.value })}
+          />
+        )}
 
         {category?.hasKm && (
           <Field
@@ -241,15 +323,15 @@ export function ExpenseFormModal({
             label="Betrag (brutto, €)"
             inputMode="decimal"
             placeholder="0,00"
-            value={usesKm ? (preview ? formatDecimalInput(preview.amount) : '') : form.amount}
-            disabled={usesKm}
+            value={calculated ? (preview ? formatDecimalInput(preview.amount) : '') : form.amount}
+            disabled={calculated}
             error={errors.amount}
             onChange={(e) => set({ amount: e.target.value })}
           />
           <Field label="Datum" type="date" max={today} value={form.date} error={errors.date} onChange={(e) => set({ date: e.target.value })} />
         </div>
 
-        {!isKU && !usesKm && (
+        {!isKU && !calculated && (
           <Select
             label="Enthaltene Umsatzsteuer"
             hint="Die Vorsteuer holst du dir vom Finanzamt zurück – absetzbar ist der Nettobetrag."

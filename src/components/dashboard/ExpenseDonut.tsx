@@ -37,7 +37,7 @@ export function ExpenseDonut({
 
       {pauschal ? (
         <p className="mt-6 rounded-xl bg-slate-50 px-4 py-6 text-sm text-slate-600">
-          Bei Pauschalierung erfasst du keine Einzelausgaben – Klaro rechnet automatisch mit dem Pauschalsatz.
+          Bei Pauschalierung rechnet Klaro automatisch mit dem Pauschalsatz. Einzeln erfasst du nur, was zusätzlich zählt – z. B. die Öffi-Karte.
         </p>
       ) : sum === 0 ? (
         <Link

@@ -63,7 +63,7 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
       sub: model.pauschRate !== null ? 'statt einzelner Belege' : 'was du absetzen kannst',
       info:
         model.pauschRate !== null
-          ? `Bei der Pauschalierung gelten ${Math.round(model.pauschRate * 100)} % deines Umsatzes als Ausgaben. Einzelne Belege brauchst du dafür nicht.`
+          ? `Bei der Pauschalierung gelten ${Math.round(model.pauschRate * 100)} % deines Umsatzes als Ausgaben. Einzelne Belege brauchst du dafür nicht. Enthalten ist auch, was neben der Pauschale zusätzlich zählt, z. B. die halbe Öffi-Karte.`
           : isYtd
             ? 'Deine erfassten absetzbaren Ausgaben bis heute (Geschäftsessen nur zur Hälfte).'
             : 'Deine Ausgaben bis heute, aufs ganze Jahr hochgerechnet.',

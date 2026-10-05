@@ -190,6 +190,6 @@ describe('describeTaxChange', () => {
 
   it('neuer Pauschalsatz', () => {
     expect(describeTaxChange(saved, with_({ pausch_type: 'basis_6', industry_code: null }), 0)[0]?.title).toContain('6 %');
-    expect(describeTaxChange(saved, with_({ industry_code: 'trade' }), 0)[0]?.title).toContain('20 %');
+    expect(describeTaxChange(saved, with_({ industry_code: 'trade' }), 0)[0]?.title).toContain('45 %');
   });
 });

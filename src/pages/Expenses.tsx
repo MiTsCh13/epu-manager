@@ -4,7 +4,9 @@ import toast from 'react-hot-toast';
 import { ArrowRight, Laptop, Plus, ReceiptEuro } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
-import { calculateArbeitsplatzpauschale, calculateProfit, getPauschRate, otherIncomeAmount, sumDeductibleExpenses } from '@/lib/profit';
+import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
+import { countsAlongsidePauschal, expenseTotals, pauschalExtrasFor } from '@/lib/expenses';
+import { calculateArbeitsplatzpauschale, calculatePauschaleExpenses, getPauschRate, otherIncomeAmount } from '@/lib/profit';
 import { sumDepreciation } from '@/lib/assets';
 import { formatEuro } from '@/lib/money';
 import { deleteReceipt } from '@/lib/receipts';
@@ -49,9 +51,14 @@ export default function Expenses() {
   const industryType = (profile?.industry_code ?? null) as IndustryType | null;
   const pauschal = profitMethod === 'pauschal';
 
-  const deductible = sumDeductibleExpenses(
-    data.expenses.map((e) => ({ amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount), is_bewirtung: e.is_bewirtung })),
+  const totals = expenseTotals(
+    data.expenses.map((e) => ({ ...e, amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount) })),
   );
+  const deductible = totals.deductible;
+  // Pauschalierung: Satz × Umsatz (ohne weiterverrechnete Reisekosten) + was zusätzlich zählt
+  const pauschRate = pauschal ? getPauschRate(pauschType ?? 'ku', industryType ?? undefined) : 0;
+  const pauschaleOnly = pauschal ? calculatePauschaleExpenses(data.revenue, pauschRate, totals.reimbursedTravel) : 0;
+  const pauschalExtras = pauschal ? pauschalExtrasFor(totals, pauschType) : 0;
   const svsPaid = data.svsPayments.reduce((s, p) => s + Number(p.amount), 0);
   const depreciation = sumDepreciation(
     data.assets.map((a) => ({ cost: Number(a.cost ?? a.amount_net ?? a.amount), purchase_date: a.purchase_date, useful_life_years: a.useful_life_years })),
@@ -65,6 +72,11 @@ export default function Expenses() {
     year,
     registrationDate: profile?.svs_registration_date ? new Date(profile.svs_registration_date) : null,
   });
+
+  // Was bei der gewählten Pauschalierung zusätzlich zählt (Reisekosten nur weiterverrechnet)
+  const pauschalAllowed = EXPENSE_CATEGORIES.filter((c) => countsUnder(c, 'pauschal', pauschType)).map((c) =>
+    c.pauschalOnlyReimbursed ? `${c.label} (nur weiterverrechnet)` : c.label,
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -104,15 +116,17 @@ export default function Expenses() {
   return (
     <PageWrapper
       title="Ausgaben"
-      description={pauschal ? 'Bei Pauschalierung erfasst du nur deine SVS-Beiträge.' : 'Alles, was du für dein Business ausgibst – und was davon absetzbar ist.'}
+      description={
+        pauschal
+          ? 'Bei Pauschalierung gilt ein fixer Prozentsatz als Ausgaben. Einzeln erfasst du nur, was zusätzlich zählt.'
+          : 'Alles, was du für dein Business ausgibst – und was davon absetzbar ist.'
+      }
       actions={
         <>
           {yearSelect}
-          {!pauschal && (
-            <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
-              Ausgabe erfassen
-            </Button>
-          )}
+          <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+            Ausgabe erfassen
+          </Button>
         </>
       }
     >
@@ -130,9 +144,9 @@ export default function Expenses() {
           <section aria-label={`Summe Ausgaben ${year}`} className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className={`grid gap-6 ${!pauschal && depreciation > 0 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
               <div>
-                <p className="text-sm text-slate-600">{pauschal ? `Pauschale Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}</p>
+                <p className="text-sm text-slate-600">{pauschal ? `Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}</p>
                 <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="expenses-total">
-                  {formatEuro(pauschal ? calculateProfit({ profitMethod, pauschType: pauschType ?? undefined, industryType: industryType ?? undefined, totalRevenue: data.revenue, totalExpenses: 0, svsPayments: 0 }).pauschaleExpenses ?? 0 : deductible)}
+                  {formatEuro(pauschal ? pauschaleOnly + pauschalExtras : deductible)}
                 </p>
               </div>
               {!pauschal && depreciation > 0 && (
@@ -171,7 +185,49 @@ export default function Expenses() {
           </section>
 
           {pauschal ? (
-            <PauschalCard year={year} revenue={data.revenue} pauschType={pauschType} industryType={industryType} />
+            <div className="space-y-6">
+              <PauschalCard
+                year={year}
+                revenue={data.revenue}
+                rate={pauschRate}
+                reimbursedTravel={totals.reimbursedTravel}
+                pauschaleExpenses={pauschaleOnly}
+                extras={pauschalExtras}
+              />
+              <section className="space-y-3" aria-labelledby="pauschal-extras-heading">
+                <div>
+                  <h2 id="pauschal-extras-heading" className="text-lg font-semibold text-slate-900">
+                    Zusätzlich absetzbar {year}: {formatEuro(pauschalExtras)}
+                  </h2>
+                  <p className="text-sm text-slate-600">
+                    Neben der Pauschale zählen nur: {pauschalAllowed.join(', ')}. Dazu kommen SVS-Beiträge und die{' '}
+                    <Term k="arbeitsplatzpauschale" />.
+                  </p>
+                </div>
+                {data.expenses.length > 0 ? (
+                  <ExpenseList
+                    expenses={data.expenses}
+                    counts={(e) => countsAlongsidePauschal(e, pauschType ?? 'ku')}
+                    onEdit={(expense) => {
+                      setEditing({ kind: 'expense', expense });
+                      setFormOpen(true);
+                    }}
+                    onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
+                  />
+                ) : (
+                  <EmptyState
+                    icon={ReceiptEuro}
+                    title="Nichts Zusätzliches erfasst"
+                    description="Hast du eine Öffi-Karte, die du auch beruflich nutzt? Dann erfasse sie – die Hälfte zählt zusätzlich zur Pauschale."
+                    action={
+                      <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                        Ausgabe erfassen
+                      </Button>
+                    }
+                  />
+                )}
+              </section>
+            </div>
           ) : (
             <section className="space-y-3" aria-label={`Ausgaben und Anlagen ${year}`}>
               <div role="tablist" aria-label="Ansicht" className="inline-flex rounded-lg bg-slate-100 p-1">
@@ -301,34 +357,31 @@ export default function Expenses() {
 function PauschalCard({
   year,
   revenue,
-  pauschType,
-  industryType,
+  rate,
+  reimbursedTravel,
+  pauschaleExpenses,
+  extras,
 }: {
   year: number;
   revenue: number;
-  pauschType: PauschType | null;
-  industryType: IndustryType | null;
+  rate: number;
+  reimbursedTravel: number;
+  pauschaleExpenses: number;
+  extras: number;
 }) {
-  const rate = getPauschRate(pauschType ?? 'ku', industryType ?? undefined);
-  const { pauschaleExpenses = 0 } = calculateProfit({
-    profitMethod: 'pauschal',
-    pauschType: pauschType ?? undefined,
-    industryType: industryType ?? undefined,
-    totalRevenue: revenue,
-    totalExpenses: 0,
-    svsPayments: 0,
-  });
   return (
     <section className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6" aria-labelledby="pauschal-heading">
       <h2 id="pauschal-heading" className="text-lg font-semibold text-slate-900">
-        <Term k="pauschalierung">Pauschalierte</Term> Ausgaben {year}: {formatEuro(pauschaleExpenses)}
+        <Term k="pauschalierung">Pauschale</Term> Ausgaben {year}: {formatEuro(pauschaleExpenses)}
       </h2>
-      <p className="text-sm text-slate-600">
-        {Math.round(rate * 100)} % von {formatEuro(revenue)} Einnahmen
+      <p className="text-sm text-slate-600" data-testid="pauschal-basis">
+        {Math.round(rate * 100)} % von {formatEuro(Math.max(revenue - reimbursedTravel, 0))} Einnahmen
+        {reimbursedTravel > 0 && ` (ohne ${formatEuro(reimbursedTravel)} weiterverrechnete Reisekosten)`}
+        {extras > 0 && ` · dazu ${formatEuro(extras)} einzeln erfasst`}
       </p>
       <Alert type="info">
-        Bei Pauschalierung musst du keine einzelnen Ausgaben erfassen – das Finanzamt akzeptiert den Pauschalbetrag
-        automatisch.
+        Für die Pauschale brauchst du keine Belege – das Finanzamt akzeptiert den Prozentsatz automatisch. Belege brauchst
+        du nur für das, was du unten zusätzlich erfasst.
       </Alert>
     </section>
   );

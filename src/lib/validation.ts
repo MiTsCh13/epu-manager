@@ -100,7 +100,7 @@ export function validateOnboardingStep(step: 1 | 2 | 3, data: OnboardingData, to
       } else if (data.pausch_type === 'ku' && data.is_kleinunternehmer === false) {
         e.pausch_type = 'Die Kleinunternehmerpauschalierung gibt es nur für Kleinunternehmer.';
       } else if (data.pausch_type === 'ku' && !data.industry_code) {
-        e.industry_code = 'Bitte wähle, ob du Dienstleistungen oder Waren verkaufst.';
+        e.industry_code = 'Bitte wähle, ob du einen Dienstleistungsbetrieb hast.';
       }
     }
     if (data.home_office === null) e.home_office = 'Bitte wähle, ob du von zu Hause arbeitest.';

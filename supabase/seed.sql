@@ -89,14 +89,14 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Ausgaben (deductible_amount setzt der Trigger; Bewirtung → 50 %)
 INSERT INTO public.expenses (id, user_id, description, amount, e1a_kz, category_label, is_bewirtung, km_driven, expense_date) VALUES
-  ('44444444-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Adobe Creative Cloud (Jahresabo)', 714.00, '9230', 'Software & Abos', false, NULL, '2026-01-08'),
-  ('44444444-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Druckerpapier & Toner', 86.40, '9230', 'Büromaterial', false, NULL, '2026-02-03'),
-  ('44444444-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Kundentermin Innsbruck (180 km)', 90.00, '9160', 'Reisen & Fahrtkosten', false, 180.0, '2026-03-12'),
-  ('44444444-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'Geschäftsessen Alpenblick', 124.50, '9200', 'Bewirtung (50%)', true, NULL, '2026-04-10'),
-  ('44444444-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'LinkedIn-Anzeigen', 250.00, '9200', 'Marketing & Werbung', false, NULL, '2026-05-20'),
-  ('44444444-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'Magenta Mobil & Internet', 49.90, '9230', 'Telefon & Internet', false, NULL, '2026-09-01'),
-  ('44444444-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'Online-Kurs Figma Advanced', 189.00, '9230', 'Fortbildung & Kurse', false, NULL, '2026-09-15'),
-  ('44444444-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'Kaffee mit Neukundin', 18.60, '9200', 'Bewirtung (50%)', true, NULL, '2026-09-28')
+  ('44444444-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Adobe Creative Cloud (Jahresabo)', 714.00, '9230', 'Büro & Software', false, NULL, '2026-01-08'),
+  ('44444444-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Druckerpapier & Toner', 86.40, '9230', 'Büro & Software', false, NULL, '2026-02-03'),
+  ('44444444-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Kundentermin Innsbruck (180 km)', 90.00, '9160', 'Fahrten & Reisen', false, 180.0, '2026-03-12'),
+  ('44444444-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'Geschäftsessen Alpenblick', 124.50, '9200', 'Geschäftsessen (50 %)', true, NULL, '2026-04-10'),
+  ('44444444-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'LinkedIn-Anzeigen', 250.00, '9200', 'Werbung', false, NULL, '2026-05-20'),
+  ('44444444-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'Magenta Mobil & Internet', 49.90, '9230', 'Büro & Software', false, NULL, '2026-09-01'),
+  ('44444444-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'Online-Kurs Figma Advanced', 189.00, '9230', 'Kurse & Fachbücher', false, NULL, '2026-09-15'),
+  ('44444444-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'Kaffee mit Neukundin', 18.60, '9200', 'Geschäftsessen (50 %)', true, NULL, '2026-09-28')
 ON CONFLICT (id) DO NOTHING;
 
 -- SVS-Vorschreibungen 2026 (vorläufige Beiträge auf Mindestbasis)

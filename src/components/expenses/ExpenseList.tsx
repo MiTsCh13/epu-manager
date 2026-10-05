@@ -10,8 +10,10 @@ export function ExpenseList({
   expenses,
   onEdit,
   onDelete,
+  counts,
 }: {
   expenses: Expense[];
+  counts?: (e: Expense) => boolean; // Pauschalierung: zählt die Ausgabe zusätzlich?
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
 }) {
@@ -20,6 +22,7 @@ export function ExpenseList({
       {expenses.map((e) => {
         const deductible = Number(e.deductible_amount ?? e.amount);
         const partial = deductible !== Number(e.amount);
+        const notCounted = counts ? !counts(e) : false;
         return (
           <li key={e.id} className="flex items-center gap-3 py-3 pl-4 pr-2 sm:pl-5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
@@ -30,11 +33,18 @@ export function ExpenseList({
               <p className="truncate text-xs text-slate-500">
                 {formatDate(e.expense_date)} · {e.category_label}
                 {e.km_driven && ` · ${String(e.km_driven).replace('.', ',')} km`}
+                {e.trip_hours && ` · ${String(e.trip_hours).replace('.', ',')} Std.`}
+                {e.nights && ` · ${e.nights} ${e.nights === 1 ? 'Nacht' : 'Nächte'}`}
+                {e.reimbursed && ' · weiterverrechnet'}
               </p>
             </button>
             <div className="shrink-0 text-right">
               <p className="font-semibold tabular-nums text-slate-900">{formatEuro(Number(e.amount))}</p>
-              {partial && <p className="text-xs tabular-nums text-slate-500">absetzbar {formatEuro(deductible)}</p>}
+              {notCounted ? (
+                <p className="text-xs text-amber-700">zählt bei Pauschalierung nicht</p>
+              ) : (
+                partial && <p className="text-xs tabular-nums text-slate-500">absetzbar {formatEuro(deductible)}</p>
+              )}
             </div>
             <div className="flex shrink-0">
               {e.receipt_url && (

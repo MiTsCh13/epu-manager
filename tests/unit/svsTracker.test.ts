@@ -15,8 +15,8 @@ const base: TrackerInput = {
   industryType: null,
   quarterlyPrescription: null,
   revenueEstimate: 42000,
-  current: { revenueNet: 31800, revenueGross: 31800, deductibleExpenses: 4900, depreciation: 0, svsPaid: 1447.29 },
-  previous: { revenueNet: 19800, revenueGross: 19800, deductibleExpenses: 3400, depreciation: 0, svsPaid: 1608.1 },
+  current: { revenueNet: 31800, revenueGross: 31800, deductibleExpenses: 4900, pauschalExtras: { ku: 0, basis: 0 }, reimbursedTravel: 0, depreciation: 0, svsPaid: 1447.29 },
+  previous: { revenueNet: 19800, revenueGross: 19800, deductibleExpenses: 3400, pauschalExtras: { ku: 0, basis: 0 }, reimbursedTravel: 0, depreciation: 0, svsPaid: 1608.1 },
 };
 
 describe('Hilfsfunktionen', () => {
@@ -194,9 +194,18 @@ describe('buildSvsTracker – Varianten', () => {
 
   it('Pauschalierung: Ausgaben = Satz × Umsatz, kein „was bleibt“', () => {
     const m = buildSvsTracker({ ...base, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service' });
-    expect(m.full.expenses).toBe(18900);
-    expect(m.ytd.expenses).toBe(14310);
+    // Dienstleistungsbetrieb: 20 % (§ 17 Abs. 3a EStG)
+    expect(m.full.expenses).toBe(8400);
+    expect(m.ytd.expenses).toBe(6360);
     expect(m.remaining).toBeNull();
+  });
+
+  it('Pauschalierung: zusätzlich erlaubte Ausgaben, weiterverrechnete Reisekosten mindern die Basis', () => {
+    const current = { ...base.current, revenueNet: 30000, pauschalExtras: { ku: 1500, basis: 4000 }, reimbursedTravel: 1000 };
+    const ku = buildSvsTracker({ ...base, revenueEstimate: null, current, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service' });
+    expect(ku.ytd.expenses).toBe(7300); // 20 % von 29.000 € + 1.500 €
+    const basis = buildSvsTracker({ ...base, revenueEstimate: null, current, profitMethod: 'pauschal', pauschType: 'basis_15' });
+    expect(basis.ytd.expenses).toBe(8350); // 15 % von 29.000 € + 4.000 €
   });
 
   it('Neue Selbständige unter der Versicherungsgrenze: nicht versichert, keine SVS-Nachzahlung in der Rücklage', () => {
@@ -204,7 +213,7 @@ describe('buildSvsTracker – Varianten', () => {
       ...base,
       businessType: 'neue_selbstaendige',
       revenueEstimate: 4000,
-      current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, depreciation: 0, svsPaid: 0 },
+      current: { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, pauschalExtras: { ku: 0, basis: 0 }, reimbursedTravel: 0, depreciation: 0, svsPaid: 0 },
       previous: null,
     });
     expect(m.svs.notInsured).toBe(true);
@@ -212,7 +221,7 @@ describe('buildSvsTracker – Varianten', () => {
   });
 
   it('Kleinstunternehmer-Ausnahme: nur UV; fällt weg, wenn die Grenze überschritten wird', () => {
-    const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, depreciation: 0, svsPaid: 0 };
+    const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, pauschalExtras: { ku: 0, basis: 0 }, reimbursedTravel: 0, depreciation: 0, svsPaid: 0 };
     const exempt = buildSvsTracker({ ...base, exempt: true, revenueEstimate: 4000, current: small });
     expect(exempt.svs.exempt).toBe(true);
     expect(exempt.svs.final.total).toBe(155.4);

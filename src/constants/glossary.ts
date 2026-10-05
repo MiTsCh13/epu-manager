@@ -17,7 +17,7 @@ export const GLOSSARY = {
   },
   kuPauschalierung: {
     term: 'Kleinunternehmerpauschalierung',
-    text: 'Nur für Kleinunternehmer (bis 55.000 € Umsatz): 45 % der Einnahmen gelten als Ausgaben bei Dienstleistungen, 20 % bei Handel und Produktion.',
+    text: 'Für Kleinunternehmer (bis 55.000 € Umsatz): 20 % der Einnahmen gelten als Ausgaben bei Dienstleistungsbetrieben (z. B. IT, Fotografie, Design, Werbung, Beratung, Unterricht), 45 % bei allen anderen (z. B. Handel, Handwerk, Produktion). Welche Betriebe als Dienstleistung gelten, legt eine Verordnung fest.',
   },
   basisPauschalierung: {
     term: 'Basispauschalierung',

@@ -5,8 +5,10 @@ import {
   GRUNDFREIBETRAG_MAX,
   GRUNDFREIBETRAG_RATE,
   KILOMETERGELD_PER_KM,
+  NAECHTIGUNG_PAUSCHAL,
   PAUSCH_RATES,
   PAUSCH_REVENUE_LIMITS,
+  TAGESGELD,
 } from '@/constants/tax2026';
 import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 import { round2 } from './money';
@@ -21,6 +23,11 @@ export function isPauschalierungAllowed(pauschType: PauschType, annualRevenue: n
   return annualRevenue <= PAUSCH_REVENUE_LIMITS[pauschType];
 }
 
+/** Pauschale Ausgaben: Satz × Umsatz; weiterverrechnete Reisekosten zählen nicht zum Umsatz für die Pauschale. */
+export function calculatePauschaleExpenses(revenue: number, rate: number, reimbursedTravel = 0): number {
+  return round2(Math.max(revenue - reimbursedTravel, 0) * rate);
+}
+
 /** Grundfreibetrag: 15 % des Gewinns, max. 4.950 €; bei Verlust 0. */
 export function calculateGrundfreibetrag(profit: number): number {
   return round2(Math.min(Math.max(profit, 0) * GRUNDFREIBETRAG_RATE, GRUNDFREIBETRAG_MAX));
@@ -33,13 +40,17 @@ export function calculateProfit(params: {
   totalRevenue: number; // Summe aller Einnahmen (netto)
   totalExpenses: number; // Summe absetzbarer Ausgaben (bei EÜR)
   svsPayments: number; // SVS-Beiträge (immer absetzbar)
+  // Nur Pauschalierung: Ausgaben, die § 17 EStG zusätzlich erlaubt (z. B. Öffi-Karte, bei Basispauschalierung Waren)
+  pauschalExtras?: number;
+  // Nur Pauschalierung: an Kund:innen weiterverrechnete Reisekosten – sie mindern die Basis für den Pauschalsatz
+  reimbursedTravel?: number;
   arbeitsplatzpauschale?: number; // 300 € bzw. 1.200 € – bei allen Gewinnermittlungsarten zusätzlich absetzbar
 }): {
   grossProfit: number; // Einnahmen − Ausgaben (vor SVS)
   netProfit: number; // Gewinn nach SVS und Arbeitsplatzpauschale
   taxableIncome: number; // Steuerpflichtiges Einkommen (nach Grundfreibetrag)
   grundfreibetrag: number; // Angewendeter Grundfreibetrag
-  pauschaleExpenses?: number; // Bei Pauschalierung: berechnete pauschale Ausgaben
+  pauschaleExpenses?: number; // Bei Pauschalierung: Pauschalsatz × Umsatz (ohne weiterverrechnete Reisekosten)
 } {
   const { totalRevenue, svsPayments } = params;
 
@@ -48,8 +59,8 @@ export function calculateProfit(params: {
 
   if (params.profitMethod === 'pauschal') {
     const rate = getPauschRate(params.pauschType ?? 'ku', params.industryType);
-    pauschaleExpenses = round2(totalRevenue * rate);
-    grossProfit = round2(totalRevenue - pauschaleExpenses);
+    pauschaleExpenses = calculatePauschaleExpenses(totalRevenue, rate, params.reimbursedTravel ?? 0);
+    grossProfit = round2(totalRevenue - pauschaleExpenses - (params.pauschalExtras ?? 0));
   } else {
     grossProfit = round2(totalRevenue - params.totalExpenses);
   }
@@ -112,6 +123,23 @@ export function calculateDeductibleAmount(params: {
 }): number {
   const rate = params.isBewirtung ? BEWIRTUNG_DEDUCTIBLE_RATE : (params.deductibleRate ?? 1);
   return round2(params.amount * rate);
+}
+
+/**
+ * Tagesgeld für eine Geschäftsreise: 30 € je volle 24 Stunden; für den Rest (und eintägige Reisen) ab MEHR als
+ * 3 Stunden 2,50 € pro angefangener Stunde, höchstens 30 €.
+ */
+export function calculateTagesgeld(hours: number): number {
+  if (!(hours > 0)) return 0;
+  const fullDays = Math.floor(hours / 24);
+  const rest = hours - fullDays * 24;
+  const restAmount = rest > TAGESGELD.minHours ? Math.min(Math.ceil(rest) * TAGESGELD.perStartedHour, TAGESGELD.perDay) : 0;
+  return round2(fullDays * TAGESGELD.perDay + restAmount);
+}
+
+/** Nächtigungsgeld ohne Beleg: Pauschale × Nächte. */
+export function calculateNaechtigung(nights: number): number {
+  return round2(Math.max(Math.floor(nights), 0) * NAECHTIGUNG_PAUSCHAL);
 }
 
 /** Kilometergeld: km × amtlicher Satz. */

@@ -114,7 +114,10 @@ export type Database = {
           id: string
           is_bewirtung: boolean
           km_driven: number | null
+          nights: number | null
           receipt_url: string | null
+          reimbursed: boolean
+          trip_hours: number | null
           user_id: string
         }
         Insert: {
@@ -129,7 +132,10 @@ export type Database = {
           id?: string
           is_bewirtung?: boolean
           km_driven?: number | null
+          nights?: number | null
           receipt_url?: string | null
+          reimbursed?: boolean
+          trip_hours?: number | null
           user_id?: string
         }
         Update: {
@@ -144,7 +150,10 @@ export type Database = {
           id?: string
           is_bewirtung?: boolean
           km_driven?: number | null
+          nights?: number | null
           receipt_url?: string | null
+          reimbursed?: boolean
+          trip_hours?: number | null
           user_id?: string
         }
         Relationships: []

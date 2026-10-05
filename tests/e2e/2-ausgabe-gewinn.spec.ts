@@ -2,10 +2,11 @@
 import type { Page } from '@playwright/test';
 import { completeProfile, createUser, expect, login, parseEuro, seedPaidInvoices, test } from './support';
 
-async function addExpense(page: Page, category: string, amount: string) {
+async function addExpense(page: Page, tile: string, amount: string, subCategory?: string) {
   await page.getByRole('button', { name: 'Ausgabe erfassen' }).first().click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: category }).click();
+  await dialog.getByRole('button', { name: tile }).click();
+  if (subCategory) await dialog.getByRole('radio', { name: subCategory }).click();
   await dialog.getByLabel('Betrag (brutto, €)').fill(amount);
   return dialog;
 }
@@ -26,13 +27,13 @@ test('Ausgaben senken den Gewinn – Bewirtung nur zur Hälfte', async ({ page, 
 
   // Software 1.000 € → voll absetzbar
   await page.goto('/ausgaben');
-  let dialog = await addExpense(page, 'Software & Abos', '1000');
+  let dialog = await addExpense(page, 'Büro & Software', '1000');
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId('expenses-total')).toHaveText(/1\.000,00/);
 
   // Geschäftsessen 200 € → nur 100 € absetzbar
-  dialog = await addExpense(page, 'Bewirtung (50%)', '200');
+  dialog = await addExpense(page, 'Werbung & Geschäftsessen', '200', 'Geschäftsessen (50 %)');
   await expect(dialog.getByTestId('deductible-preview')).toContainText('100,00');
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(dialog).toBeHidden();

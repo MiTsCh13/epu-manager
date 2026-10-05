@@ -177,7 +177,7 @@ export function StepAccounting({ data, errors, update }: StepProps) {
             {
               value: 'ku',
               title: <Term k="kuPauschalierung" />,
-              description: data.is_kleinunternehmer === false ? 'Nur für Kleinunternehmer möglich.' : '45 % bzw. 20 % deiner Einnahmen',
+              description: data.is_kleinunternehmer === false ? 'Nur für Kleinunternehmer möglich.' : '20 % bzw. 45 % deiner Einnahmen',
               disabled: data.is_kleinunternehmer === false,
             },
             { value: 'basis_15', title: <Term k="basisPauschalierung">Basispauschalierung 15 %</Term>, description: 'Allgemein' },
@@ -192,15 +192,23 @@ export function StepAccounting({ data, errors, update }: StepProps) {
 
       {data.profit_method === 'pauschal' && data.pausch_type === 'ku' && (
         <ChoiceCards<IndustryType>
-          legend="Was verkaufst du hauptsächlich?"
+          legend="Welche Art von Betrieb hast du?"
           name="industry_code"
           value={data.industry_code}
           error={errors.industry_code}
           columns={2}
           onChange={(industry_code) => update({ industry_code })}
           options={[
-            { value: 'service', title: 'Dienstleistungen', description: '45 % pauschale Ausgaben' },
-            { value: 'trade', title: 'Waren / Produktion', description: '20 % pauschale Ausgaben' },
+            {
+              value: 'service',
+              title: 'Dienstleistungsbetrieb',
+              description: '20 % pauschale Ausgaben. Z. B. IT, Fotografie, Design, Werbung, Beratung, Unterricht, Übersetzung, Gesundheit, Kunst.',
+            },
+            {
+              value: 'trade',
+              title: 'Anderer Betrieb',
+              description: '45 % pauschale Ausgaben. Z. B. Handel, Handwerk, Bau, Produktion, Gastronomie, Transport.',
+            },
           ]}
         />
       )}
