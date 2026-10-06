@@ -2,9 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { confirmRedirectUrl } from '@/lib/authLinks';
 import { isValidEmail, MIN_PASSWORD_LENGTH, translateAuthError } from '@/lib/validation';
 import { BILLING_ENABLED } from '@/lib/subscription';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { ResendConfirmation } from '@/components/auth/ResendConfirmation';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -33,7 +35,7 @@ export default function Register() {
       password,
       options: {
         data: { full_name: fullName.trim() },
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: confirmRedirectUrl(),
       },
     });
     setLoading(false);
@@ -50,7 +52,7 @@ export default function Register() {
 
   if (awaitingConfirmation) {
     return (
-      <AuthLayout title="Fast geschafft!">
+      <AuthLayout title="Fast geschafft – schau in dein Postfach">
         <div className="space-y-4 text-center">
           <MailCheck className="mx-auto h-12 w-12 text-primary" aria-hidden="true" />
           <p className="text-slate-700">
@@ -58,6 +60,7 @@ export default function Register() {
             Konto zu bestätigen – danach richten wir gemeinsam dein Profil ein.
           </p>
           <p className="text-sm text-slate-500">Keine E-Mail bekommen? Schau auch im Spam-Ordner nach.</p>
+          <ResendConfirmation email={email} />
           <Link to="/login" className="inline-block text-sm font-semibold text-primary hover:underline">
             Zur Anmeldung
           </Link>

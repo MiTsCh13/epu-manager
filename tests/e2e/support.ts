@@ -1,10 +1,13 @@
-// Hilfen für die E2E-Tests: eigene Testnutzer pro Test, Daten per API, Aufräumen über „delete-account“.
+// Hilfen für die E2E-Tests: eigene Testnutzer pro Test (über die Admin-API, ohne Mailversand),
+// Daten per API, Aufräumen über „delete-account“. Der Service-Role-Key bleibt in .env.local (nie VITE_).
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { test as base, expect, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/types/database';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? '';
 const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY ?? '';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 export const PASSWORD = 'KlaroE2E-2026!';
 
 type Client = SupabaseClient<Database>;
@@ -14,20 +17,58 @@ function newClient(): Client {
   return createClient<Database>(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+function adminClient(): Client {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY fehlt in .env.local');
+  return createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 export function uniqueEmail(tag: string): string {
   return `klaro-e2e-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-/** Testnutzer per API registrieren (E-Mail-Bestätigung ist im Projekt deaktiviert). */
-export async function createUser(tag: string, cleanup: (email: string) => void): Promise<{ email: string; client: Client }> {
-  const client = newClient();
+/**
+ * Testnutzer über die Admin-API anlegen – es geht keine Mail raus. Standard: E-Mail schon bestätigt und angemeldet;
+ * mit `confirmed: false` wie nach einer Registrierung, deren Link noch nicht geklickt wurde.
+ */
+export async function createUser(
+  tag: string,
+  cleanup: (email: string) => void,
+  { confirmed = true }: { confirmed?: boolean } = {},
+): Promise<{ email: string; client: Client }> {
   const email = uniqueEmail(tag);
   cleanup(email);
-  const { data, error } = await client.auth.signUp({ email, password: PASSWORD, options: { data: { full_name: 'E2E Test' } } });
-  if (error || !data.session) {
-    throw new Error(`Testnutzer konnte nicht angelegt werden: ${error?.message ?? 'keine Session – ist die E-Mail-Bestätigung aktiv?'}`);
+  const { error } = await adminClient().auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: confirmed,
+    user_metadata: { full_name: 'E2E Test' },
+  });
+  if (error) throw new Error(`Testnutzer konnte nicht angelegt werden: ${error.message}`);
+  const client = newClient();
+  if (confirmed) {
+    const { error: loginError } = await client.auth.signInWithPassword({ email, password: PASSWORD });
+    if (loginError) throw new Error(`Testnutzer konnte sich nicht anmelden: ${loginError.message}`);
   }
   return { email, client };
+}
+
+/**
+ * Link wie aus der Mail-Vorlage (supabase/templates), aber ohne Mail: die Admin-API erzeugt den Token.
+ * `signup` legt dabei den (unbestätigten) Nutzer an – so wie eine echte Registrierung.
+ */
+export async function emailLink(
+  type: 'signup' | 'recovery',
+  email: string,
+  options: { password?: string; fullName?: string } = {},
+): Promise<string> {
+  const admin = adminClient().auth.admin;
+  const { data, error } =
+    type === 'signup'
+      ? await admin.generateLink({ type, email, password: options.password ?? PASSWORD, options: { data: { full_name: options.fullName } } })
+      : await admin.generateLink({ type, email });
+  if (error) throw new Error(`Link konnte nicht erzeugt werden: ${error.message}`);
+  const otpType: EmailOtpType = type === 'signup' ? 'email' : type;
+  return `/auth/bestaetigen?token_hash=${data.properties.hashed_token}&type=${otpType}`;
 }
 
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
@@ -85,11 +126,16 @@ export async function seedPaidInvoices(client: Client, amounts: number[]) {
   if (error) throw new Error(`Rechnungen konnten nicht angelegt werden: ${error.message}`);
 }
 
-/** Testnutzer samt aller Daten löschen (gleicher Weg wie „Konto löschen“ in der App). */
+/**
+ * Testnutzer samt aller Daten löschen (gleicher Weg wie „Konto löschen“ in der App).
+ * Angemeldet wird per Magic-Link-Token – klappt auch nach Passwortwechsel oder ohne bestätigte E-Mail.
+ */
 async function deleteUser(email: string) {
+  const { data: link, error: linkError } = await adminClient().auth.admin.generateLink({ type: 'magiclink', email });
+  if (linkError) return; // wurde nie angelegt
   const client = newClient();
-  const { data, error } = await client.auth.signInWithPassword({ email, password: PASSWORD });
-  if (error || !data.session) return; // wurde nie angelegt
+  const { data, error } = await client.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: 'magiclink' });
+  if (error || !data.session) throw new Error(`Testnutzer ${email} konnte nicht angemeldet werden: ${error?.message}`);
   const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: ANON_KEY, 'Content-Type': 'application/json' },

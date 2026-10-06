@@ -13,6 +13,7 @@ import {
   normalizeUid,
   translateAuthError,
   validateOnboardingStep,
+  validateNewPassword,
   validatePasswordChange,
   MIN_PASSWORD_LENGTH,
   type OnboardingData,
@@ -242,5 +243,27 @@ describe('validatePasswordChange', () => {
   });
   it('Wiederholung stimmt nicht überein', () => {
     expect(validatePasswordChange({ ...ok, confirm: 'anders' })).toEqual({ confirm: 'Die beiden Passwörter stimmen nicht überein.' });
+  });
+});
+
+describe('validateNewPassword', () => {
+  it('prüft Länge und Wiederholung', () => {
+    expect(validateNewPassword({ next: 'langesPasswort1', confirm: 'langesPasswort1' })).toEqual({});
+    expect(validateNewPassword({ next: 'kurz', confirm: 'kurz' }).next).toContain(String(MIN_PASSWORD_LENGTH));
+    expect(validateNewPassword({ next: 'langesPasswort1', confirm: 'anders' })).toEqual({
+      confirm: 'Die beiden Passwörter stimmen nicht überein.',
+    });
+  });
+});
+
+describe('translateAuthError – Links und Wartezeit', () => {
+  it('übersetzt abgelaufene Links und die Wartezeit beim erneuten Senden', () => {
+    expect(translateAuthError('Email link is invalid or has expired')).toBe('Dieser Link ist abgelaufen oder wurde schon verwendet.');
+    expect(translateAuthError('Token has expired or is invalid')).toBe('Dieser Link ist abgelaufen oder wurde schon verwendet.');
+    expect(translateAuthError('otp_expired')).toBe('Dieser Link ist abgelaufen oder wurde schon verwendet.');
+    expect(translateAuthError('Signups not allowed for otp')).not.toContain('abgelaufen');
+    expect(translateAuthError('For security purposes, you can only request this after 42 seconds.')).toBe(
+      'Bitte warte kurz, bevor du eine weitere E-Mail anforderst.',
+    );
   });
 });

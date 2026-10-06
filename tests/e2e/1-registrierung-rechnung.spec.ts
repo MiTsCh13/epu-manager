@@ -1,17 +1,44 @@
-// Flow 1: Registrierung → Onboarding → erste Rechnung erstellen → PDF herunterladen
+// Flow 1: Registrierung → Bestätigungslink → Onboarding → erste Rechnung erstellen → PDF herunterladen
 import { readFile } from 'node:fs/promises';
-import { expect, PASSWORD, test, uniqueEmail } from './support';
+import { emailLink, expect, PASSWORD, test, uniqueEmail } from './support';
 
 test('neue:r Nutzer:in stellt die erste Rechnung aus und lädt das PDF herunter', async ({ page, cleanup }) => {
   const email = uniqueEmail('rechnung');
   cleanup(email);
 
-  // Registrierung
+  // Registrierung – die Antwort von Supabase wird nachgestellt, damit keine Mail an @example.com rausgeht
+  // (unzustellbare Mails schaden dem Ruf des SMTP-Absenders). Der echte Nutzer entsteht unten mit dem Link.
+  let signupRequest: { url: string; body: { email?: string; data?: { full_name?: string } } } | null = null;
+  await page.route('**/auth/v1/signup**', async (route) => {
+    signupRequest = { url: route.request().url(), body: route.request().postDataJSON() };
+    const now = new Date().toISOString();
+    await route.fulfill({
+      json: {
+        id: '00000000-0000-4000-8000-000000000001',
+        aud: 'authenticated',
+        role: '',
+        email,
+        confirmation_sent_at: now,
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: { full_name: 'Erika Musterfrau' },
+        identities: [{ identity_id: 'e2e', id: 'e2e', user_id: 'e2e', provider: 'email', identity_data: { email } }],
+        created_at: now,
+        updated_at: now,
+      },
+    });
+  });
   await page.goto('/registrieren');
   await page.getByLabel('Dein Name').fill('Erika Musterfrau');
   await page.getByLabel('E-Mail').fill(email);
   await page.getByLabel('Passwort').fill(PASSWORD);
   await page.getByRole('button', { name: 'Kostenlos starten' }).click();
+  await expect(page.getByRole('heading', { name: /schau in dein Postfach/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bestätigungsmail erneut senden' })).toBeVisible();
+  expect(signupRequest!.body).toMatchObject({ email, data: { full_name: 'Erika Musterfrau' } });
+  expect(decodeURIComponent(signupRequest!.url)).toContain('redirect_to=http://localhost:5173/auth/bestaetigen');
+
+  // Klick auf den Link aus der Bestätigungsmail → Setup-Seite
+  await page.goto(await emailLink('signup', email, { fullName: 'Erika Musterfrau' }));
   await expect(page).toHaveURL(/\/onboarding/);
 
   // Schritt 1 – Wer bist du?

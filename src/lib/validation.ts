@@ -143,14 +143,23 @@ export interface PasswordChangeData {
 export type PasswordChangeErrors = Partial<Record<keyof PasswordChangeData, string>>;
 
 export function validatePasswordChange(data: PasswordChangeData): PasswordChangeErrors {
-  const e: PasswordChangeErrors = {};
+  const e: PasswordChangeErrors = { ...validateNewPassword(data) };
   if (!data.current) e.current = 'Bitte gib dein aktuelles Passwort ein.';
+  if (!e.next && data.next === data.current) {
+    e.next = 'Das neue Passwort muss sich von deinem aktuellen unterscheiden.';
+    delete e.confirm;
+  }
+  return e;
+}
+
+/** Neues Passwort + Wiederholung (auch für „Passwort vergessen“, dort ohne aktuelles Passwort). */
+export function validateNewPassword(data: Pick<PasswordChangeData, 'next' | 'confirm'>): Pick<PasswordChangeErrors, 'next' | 'confirm'> {
+  const e: Pick<PasswordChangeErrors, 'next' | 'confirm'> = {};
   if (data.next.length < MIN_PASSWORD_LENGTH) {
     e.next = `Dein neues Passwort braucht mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`;
-  } else if (data.next === data.current) {
-    e.next = 'Das neue Passwort muss sich von deinem aktuellen unterscheiden.';
+  } else if (data.confirm !== data.next) {
+    e.confirm = 'Die beiden Passwörter stimmen nicht überein.';
   }
-  if (!e.next && data.confirm !== data.next) e.confirm = 'Die beiden Passwörter stimmen nicht überein.';
   return e;
 }
 
@@ -168,6 +177,10 @@ export function translateAuthError(message: string): string {
   if (m.includes('password') && (m.includes('at least') || m.includes('short') || m.includes('weak'))) {
     return 'Dein Passwort ist zu kurz oder zu schwach. Bitte verwende mindestens 8 Zeichen.';
   }
+  if (m.includes('expired') || m.includes('invalid or has')) {
+    return 'Dieser Link ist abgelaufen oder wurde schon verwendet.';
+  }
+  if (m.includes('security purposes')) return 'Bitte warte kurz, bevor du eine weitere E-Mail anforderst.';
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Zu viele Versuche. Bitte warte ein paar Minuten und versuche es dann erneut.';
   }

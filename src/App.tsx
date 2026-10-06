@@ -10,6 +10,9 @@ import Register from '@/pages/Register';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 
 // Seiten einzeln nachladen: Login/Registrierung bleiben klein, Diagramme & Co. kommen erst bei Bedarf
+const AuthConfirm = lazy(() => import('@/pages/AuthConfirm'));
+const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Invoices = lazy(() => import('@/pages/Invoices'));
@@ -29,6 +32,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<RedirectIfAuthenticated><Login /></RedirectIfAuthenticated>} />
           <Route path="/registrieren" element={<RedirectIfAuthenticated><Register /></RedirectIfAuthenticated>} />
+          <Route path="/passwort-vergessen" element={<RedirectIfAuthenticated><ForgotPassword /></RedirectIfAuthenticated>} />
+          {/* Links aus den Auth-Mails – bewusst ohne Weiterleitung, auch wer schon angemeldet ist, löst den Link ein */}
+          <Route path="/auth/bestaetigen" element={<AuthConfirm />} />
+          <Route path="/passwort-neu" element={<RequireAuth allowIncompleteOnboarding><ResetPassword /></RequireAuth>} />
           <Route path="/onboarding" element={<RequireAuth allowIncompleteOnboarding><Onboarding /></RequireAuth>} />
 
           <Route element={<RequireAuth><AppLayout /></RequireAuth>}>

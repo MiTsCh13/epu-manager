@@ -224,7 +224,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -244,10 +244,31 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Klaro-Vorlagen (Deutsch, Du). Ins verknüpfte Projekt kommen sie per `node scripts/push-auth-templates.mjs --apply`,
+# nicht per `supabase config push` (das würde auch Site-URL, SMTP und Limits aus dieser lokalen Datei übertragen).
+[auth.email.template.confirmation]
+subject = "Bitte bestätige deine E-Mail-Adresse für Klaro"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Neues Passwort für Klaro festlegen"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Dein Anmeldelink für Klaro"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Bitte bestätige deine neue E-Mail-Adresse für Klaro"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.invite]
+subject = "Du wurdest zu Klaro eingeladen"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Dein Bestätigungscode für Klaro"
+content_path = "./supabase/templates/reauthentication.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

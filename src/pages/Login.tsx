@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { isValidEmail, translateAuthError } from '@/lib/validation';
 import { BILLING_ENABLED } from '@/lib/subscription';
 import { AuthLayout } from '@/components/auth/AuthLayout';
+import { ResendConfirmation } from '@/components/auth/ResendConfirmation';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -17,6 +18,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // E-Mail noch nicht bestätigt → neuen Bestätigungslink anbieten
+  const [unconfirmed, setUnconfirmed] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,9 +28,13 @@ export default function Login() {
 
     setLoading(true);
     setError(null);
+    setUnconfirmed(false);
     const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (authError) return setError(translateAuthError(authError.message));
+    if (authError) {
+      setUnconfirmed(authError.message.toLowerCase().includes('email not confirmed'));
+      return setError(translateAuthError(authError.message));
+    }
     navigate(from, { replace: true });
   }
 
@@ -35,13 +42,17 @@ export default function Login() {
     <AuthLayout title="Willkommen zurück" subtitle="Melde dich an, um deine Finanzen im Blick zu behalten.">
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && <Alert type="critical">{error}</Alert>}
+        {unconfirmed && <ResendConfirmation email={email} />}
         <Field
           label="E-Mail"
           type="email"
           autoComplete="email"
           inputMode="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setUnconfirmed(false);
+          }}
           required
         />
         <Field
@@ -52,6 +63,11 @@ export default function Login() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
+        <p className="-mt-2 text-right text-sm">
+          <Link to="/passwort-vergessen" className="font-medium text-primary hover:underline">
+            Passwort vergessen?
+          </Link>
+        </p>
         <Button type="submit" fullWidth loading={loading}>
           Anmelden
         </Button>
