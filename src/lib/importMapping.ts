@@ -28,6 +28,21 @@ function hasKeyword(text: string, keywords: readonly string[]): boolean {
   );
 }
 
+/** Wie hasKeyword, liefert aber das getroffene Wort (Index in `text.split(' ')`) bzw. die Phrase. */
+function findKeyword(text: string, keywords: readonly string[]): { index: number; phrase: string } | null {
+  const words = text.split(' ');
+  for (const k of keywords) {
+    if (k.includes(' ') && !k.startsWith('=') && !k.startsWith('*')) {
+      if (text.includes(k)) return { index: -1, phrase: k };
+      continue;
+    }
+    const kw = k.replace(/^[=*]/, '');
+    const index = words.findIndex((w) => (k.startsWith('=') ? w === kw : k.startsWith('*') ? w.includes(kw) : w.startsWith(kw)));
+    if (index >= 0) return { index, phrase: kw };
+  }
+  return null;
+}
+
 // ─── Spalten ────────────────────────────────────────────────
 
 export type ColumnRole = 'ignore' | 'date' | 'description' | 'amount' | 'income' | 'expense' | 'category' | 'vat' | 'reference';
@@ -336,7 +351,7 @@ export const targetCategoryId = (t: Target): string | null => (t.startsWith('cat
 
 // Stichwörter (normalisiert) → Ziel. Reihenfolge = Vorrang: Spezielles vor Allgemeinem.
 const TARGET_KEYWORDS: [Target, string[]][] = [
-  ['skip', ['einkommensteuer', 'est vorauszahlung', 'est vz', 'privatentnahme', 'privateinlage', 'privat entnahme', 'privat einlage', 'umsatzsteuer', 'ust zahlung', 'ust vorauszahlung', '=uva', 'finanzamt', 'umbuchung', 'saldo', 'uebertrag', 'eigenueberweisung', 'kredittilgung', 'tilgung', 'bankomat', 'behebung', 'bargeldbehebung']],
+  ['skip', ['einkommensteuer', 'est vorauszahlung', 'est vz', 'privatentnahme', 'privateinlage', 'privat entnahme', 'privat einlage', 'umsatzsteuerzahlung', 'umsatzsteuervorauszahlung', 'umsatzsteuer vorauszahlung', 'zahllast', 'ust zahlung', 'ust vorauszahlung', '=uva', 'finanzamt', 'umbuchung', 'saldo', 'uebertrag', 'eigenueberweisung', 'kredittilgung', 'tilgung', 'bankomatbehebung', 'bankomat behebung', '=behebung', 'bargeldbehebung']],
   ['svs', ['svs', 'sozialversicherung', 'gsvg', 'fsvg', 'sva', 'pensionsversicherung', 'krankenversicherung sv']],
   ['income', ['einnahme', 'erloes', 'umsatz', 'zahlungseingang', 'honorar', 'gage']],
   [catTarget('wko'), ['wko', 'wirtschaftskammer', 'grundumlage', 'kammerumlage']],
@@ -345,30 +360,87 @@ const TARGET_KEYWORDS: [Target, string[]][] = [
   [catTarget('naechtigung'), ['naechtigungsgeld', 'naechtigungspauschale', 'naechtigung pauschal']],
   [catTarget('bewirtung'), ['bewirtung', 'geschaeftsessen', 'kundenessen', 'restaurant', '=essen']],
   [catTarget('zinsen'), ['zinsen', 'kreditzins', 'sollzins']],
-  [catTarget('bankgebuehren'), ['bankspesen', 'bankgebuehr', '=bank', 'kontofuehrung', 'spesen', 'gebuehr', 'kartengebuehr']],
-  [catTarget('versicherung'), ['versicherung', 'haftpflicht', 'rechtsschutz', 'steuerberat', 'buchhaltung', 'rechtsanwalt', 'anwalt', 'notar', 'beratung']],
+  [catTarget('bankgebuehren'), ['bankspesen', 'bankgebuehr', 'kontofuehrung', 'kontogebuehr', 'kartengebuehr', 'transaktionsgebuehr', 'paypal gebuehr']],
+  [catTarget('versicherung'), ['versicherung', 'uniqa', 'generali', 'allianz', 'wiener staedtische', 'donau versicherung', 'helvetia', '=zurich', 'grawe', 'kanzlei', 'haftpflicht', 'rechtsschutz', 'steuerberat', 'buchhaltung', 'rechtsanwalt', 'anwalt', 'notar', 'beratung']],
   [catTarget('miete'), ['miete', 'leasing', 'coworking', 'pacht', 'bueromiete']],
-  [catTarget('buero'), ['buero', 'software', '=abo', 'abonnement', 'adobe', 'microsoft', 'office', 'telefon', 'handyvertrag', 'handyrechnung', 'mobilfunk', 'internet', 'porto', '=post', 'domain', 'hosting', 'website', 'webseite', 'cloud', 'dropbox', 'icloud', 'papier', 'druckerpatrone', 'toner', 'canva', 'notion', 'zoom', 'lizenz software']],
-  [catTarget('geraete'), ['laptop', 'notebook', 'computer', '=pc', 'macbook', 'iphone', 'handy', 'smartphone', 'kamera', 'objektiv', 'monitor', 'bildschirm', 'drucker', 'tablet', 'ipad', 'werkzeug', 'geraet', 'hardware', 'ausruestung', 'moebel', 'schreibtisch']],
-  [catTarget('reisen'), ['fahrt', 'reise', 'bahn', 'oebb', '=zug', 'zugticket', 'westbahn', 'flug', 'taxi', '=uber', 'parken', 'parkgebuehr', 'garage', 'hotel', 'kilometergeld', 'km geld', 'maut', 'vignette', 'tanken', 'treibstoff', 'benzin', 'diesel']],
-  [catTarget('werbung'), ['werbung', 'marketing', 'inserat', 'anzeige', 'ads', 'flyer', 'visitenkarte', 'werbegeschenk', '=messe', 'messestand', 'social media']],
-  [catTarget('kurse'), ['kurs', 'seminar', 'fortbildung', 'weiterbildung', 'schulung', 'workshop', 'fachbuch', 'buch', 'buecher', 'zeitschrift', 'konferenz', 'webinar', 'ausbildung']],
+  [catTarget('buero'), ['buero', 'a1 telekom', 'magenta', 'drei mobilfunk', 'hutchison', 'spusu', 'hofer telekom', 'google workspace', 'gsuite', 'microsoft 365', 'apple com', 'slack', 'figma', 'chatgpt', 'openai', 'anthropic', 'github', 'hetzner', 'world4you', 'easyname', '=wix', 'squarespace', 'wordpress', 'mailchimp', 'libro', 'pagro', 'viking', '=dhl', '=gls', '=dpd', 'oesterreichische post', 'lexoffice', 'sevdesk', 'software', '=abo', 'abonnement', 'adobe', 'microsoft', 'office', 'telefon', 'handyvertrag', 'handyrechnung', 'mobilfunk', 'internet', 'porto', '=post', 'domain', 'hosting', 'website', 'webseite', 'cloud', 'dropbox', 'icloud', 'papier', 'druckerpatrone', 'toner', 'canva', 'notion', 'zoom', 'lizenz software']],
+  [catTarget('geraete'), ['laptop', 'mediamarkt', 'media markt', 'saturn', 'cyberport', 'e tec', 'apple store', 'ikea', '=kika', 'leiner', 'xxxlutz', 'moebelix', 'notebook', 'computer', '=pc', 'macbook', 'iphone', 'handy', 'smartphone', 'kamera', 'objektiv', 'monitor', 'bildschirm', 'drucker', 'tablet', 'ipad', 'werkzeug', 'geraet', 'hardware', 'ausruestung', 'moebel', 'schreibtisch']],
+  [catTarget('reisen'), ['fahrt', 'austrian airlines', 'ryanair', 'wizz', 'easyjet', '=bolt', 'omv', '=bp', '=shell', '=eni', '=jet', 'turmoel', 'apcoa', 'wipark', 'booking com', 'airbnb', 'flixbus', 'flixtrain', 'reise', 'bahn', 'oebb', '=zug', 'zugticket', 'westbahn', 'flug', 'taxi', '=uber', 'parken', 'parkgebuehr', 'parkgarage', 'hotel', 'kilometergeld', 'km geld', 'maut', 'vignette', 'tanken', 'treibstoff', 'benzin', 'diesel']],
+  [catTarget('werbung'), ['werbung', 'google ads', 'facebook ads', 'meta ads', 'meta platforms', 'linkedin ads', 'vistaprint', 'flyeralarm', 'saxoprint', 'marketing', 'inserat', 'anzeige', 'ads', 'flyer', 'visitenkarte', 'werbegeschenk', '=messe', 'messestand', 'social media']],
+  [catTarget('kurse'), ['=kurs', '=kurse', 'kursgebuehr', 'onlinekurs', 'udemy', 'coursera', 'skillshare', '=wifi', '=bfi', 'thalia', 'morawa', 'seminar', 'fortbildung', 'weiterbildung', 'schulung', 'workshop', 'fachbuch', '=buch', '=buecher', 'fachbuecher', 'zeitschrift', 'konferenz', 'webinar', 'ausbildung']],
   [catTarget('subauftraege'), ['subauftrag', 'subunternehm', 'fremdleistung', 'freelancer', 'werkvertrag', 'fremdpersonal']],
-  [catTarget('lizenzen'), ['lizenz', 'provision', 'bildrechte', 'stockfoto', 'stock', 'fonts', 'schriftart', 'musikrechte', 'akm']],
-  [catTarget('waren'), ['waren', 'wareneinkauf', 'material', 'rohstoff']],
+  [catTarget('lizenzen'), ['lizenz', 'provision', 'bildrechte', 'stockfoto', 'shutterstock', 'istock', 'adobe stock', 'getty', 'fonts', 'schriftart', 'musikrechte', 'akm']],
+  [catTarget('waren'), ['waren', 'hornbach', '=obi', 'bauhaus', 'lagerhaus', 'wareneinkauf', 'material', 'rohstoff']],
   [catTarget('sonstiges'), ['sonstig', 'diverse', 'divers', 'andere']],
 ];
 
-/** Ziel aus einem Text (Kategorie oder Beschreibung) erraten. Kein Treffer → null. */
-export function guessTarget(text: string, exclude: readonly Target[] = []): Target | null {
+/** Ziel aus einem Text samt dem Wort, an dem Klaro es erkannt hat. */
+export function matchTarget(text: string, exclude: readonly Target[] = []): { target: Target; word: string } | null {
   const t = normalizeText(text);
   if (!t) return null;
-  for (const [target, keywords] of TARGET_KEYWORDS) {
-    if (!exclude.includes(target) && hasKeyword(t, keywords)) return target;
-  }
   // Kategorie-Namen aus Klaro (z. B. aus einem früheren Export) direkt erkennen
   const byLabel = EXPENSE_CATEGORIES.find((c) => normalizeText(c.label) === t);
-  return byLabel ? catTarget(byLabel.id) : null;
+  if (byLabel && !exclude.includes(catTarget(byLabel.id))) return { target: catTarget(byLabel.id), word: byLabel.label };
+  const original = text.split(/[^\p{L}\p{N}%]+/u).filter(Boolean);
+  for (const [target, keywords] of TARGET_KEYWORDS) {
+    if (exclude.includes(target)) continue;
+    const hit = findKeyword(t, keywords);
+    if (hit) return { target, word: (hit.index >= 0 && original.length === t.split(' ').length ? original[hit.index] : undefined) ?? hit.phrase };
+  }
+  return null;
+}
+
+/** Ziel aus einem Text (Kategorie oder Beschreibung) erraten. Kein Treffer → null. */
+export function guessTarget(text: string, exclude: readonly Target[] = []): Target | null {
+  return matchTarget(text, exclude)?.target ?? null;
+}
+
+// ─── Aus bisherigen Ausgaben lernen ─────────────────────────
+
+/** Wörter aus bisherigen Ausgaben → Kategorie (wie oft). Kurze und allgemeine Wörter zählen nicht. */
+export type CategoryHistory = Map<string, Map<string, number>>;
+
+const STOPWORDS = new Set([
+  'fuer', 'und', 'oder', 'mit', 'von', 'beim', 'rechnung', 'zahlung', 'ueberweisung', 'lastschrift', 'kartenzahlung', 'bankomatzahlung',
+  'bezahlung', 'gutschrift', 'sepa', 'debit', 'visa', 'mastercard', 'maestro', 'karte', 'online', 'store', 'shop', 'gmbh', 'austria',
+  'oesterreich', 'wien', 'graz', 'linz', 'salzburg', 'innsbruck', 'klagenfurt', 'villach', 'wels', 'bregenz', 'eisenstadt', 'poelten',
+  'monat', 'jahr', 'januar', 'jaenner', 'februar', 'maerz', 'april', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'dezember',
+]);
+const historyWords = (text: string) =>
+  [...new Set(normalizeText(text).split(' ').filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !STOPWORDS.has(w)))];
+
+export function buildHistory(expenses: readonly { description: string; category_label: string }[]): CategoryHistory {
+  const history: CategoryHistory = new Map();
+  for (const e of expenses) {
+    const cat = EXPENSE_CATEGORIES.find((c) => c.label === e.category_label);
+    if (!cat || cat.id === 'sonstiges') continue;
+    for (const w of historyWords(e.description)) {
+      const counts = history.get(w) ?? new Map<string, number>();
+      counts.set(cat.id, (counts.get(cat.id) ?? 0) + 1);
+      history.set(w, counts);
+    }
+  }
+  return history;
+}
+
+/**
+ * Kategorie, unter der du ähnliche Ausgaben bisher erfasst hast. Ein Wort zählt nur, wenn es mindestens zweimal vorkam
+ * und zu mindestens 75 % in einer Kategorie stand – sonst entscheiden die allgemeinen Stichwörter.
+ */
+export function matchHistory(history: CategoryHistory | undefined, text: string): { target: Target; word: string } | null {
+  if (!history || history.size === 0) return null;
+  const score = new Map<string, { n: number; word: string }>();
+  for (const w of historyWords(text)) {
+    const counts = history.get(w);
+    if (!counts) continue;
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    const [cat, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
+    if (total < 2 || n / total < 0.75) continue;
+    const prev = score.get(cat);
+    score.set(cat, { n: (prev?.n ?? 0) + n, word: prev?.word ?? w });
+  }
+  const best = [...score.entries()].sort((a, b) => b[1].n - a[1].n)[0];
+  return best ? { target: catTarget(best[0]), word: best[1].word } : null;
 }
 
 /**
@@ -406,34 +478,56 @@ export function categoryValues(rows: readonly SourceRow[]): CategoryValueSummary
 export interface ResolvedTarget {
   target: Target;
   note: string | null; // Erklärung, wenn Klaro vom Vorschlag abweicht
+  reason: string | null; // Woran Klaro die Kategorie erkannt hat
+  unclear: boolean; // Keine Kategorie erkannt – landet bei „Sonstige Ausgaben“
 }
 
 /**
  * Endgültiges Ziel einer Zeile: Zuordnung der Kategorie-Spalte, sonst Stichwörter in der Beschreibung.
  * Einnahmen bleiben Einnahmen (außer „Nicht übernehmen“). Ausgaben-Kategorien, die nicht zählen, werden angepasst.
  */
-export function resolveTarget(row: SourceRow, categoryMap: Readonly<Record<string, CategoryChoice>>, ctx: CategoryContext): ResolvedTarget {
+/**
+ * Reihenfolge: Zuordnung der Kategorie-Spalte; sonst Stichwörter für Privates/Steuern/SVS; dann deine bisherigen
+ * Ausgaben (`history`); dann allgemeine Stichwörter. Ohne Treffer: „Sonstige Ausgaben“, als unklar markiert.
+ */
+export function resolveTarget(
+  row: SourceRow,
+  categoryMap: Readonly<Record<string, CategoryChoice>>,
+  ctx: CategoryContext,
+  history?: CategoryHistory,
+): ResolvedTarget {
   const choice = row.category ? categoryMap[row.category] : undefined;
   const fromCategory = choice === 'auto' ? undefined : choice;
-  // „Honorar an Freelancer“ in einer Ausgabenzeile ist keine Einnahme – nur die Kategorie-Spalte darf das festlegen
-  const mapped = fromCategory ?? guessTarget(row.description, row.direction === 'out' ? ['income'] : []);
+  const r = (target: Target, note: string | null = null, reason: string | null = null, unclear = false): ResolvedTarget => ({ target, note, reason, unclear });
 
-  if (mapped === 'skip') return { target: 'skip', note: fromCategory ? null : 'Sieht privat bzw. nach Steuerzahlung aus – zählt nicht als Betriebsausgabe' };
-  if (mapped === 'income') return { target: 'income', note: null };
+  let mapped: Target | null = fromCategory ?? null;
+  let reason: string | null = fromCategory ? `Kategorie „${row.category}“` : null;
+  if (!fromCategory) {
+    // „Honorar an Freelancer“ in einer Ausgabenzeile ist keine Einnahme – nur die Kategorie-Spalte darf das festlegen
+    const keyword = matchTarget(row.description, row.direction === 'out' ? ['income'] : []);
+    const special = keyword && (keyword.target === 'skip' || keyword.target === 'svs' || keyword.target === 'income') ? keyword : null;
+    const learned = row.direction === 'out' && !special ? matchHistory(history, row.description) : null;
+    const hit = special ?? learned ?? keyword;
+    mapped = hit?.target ?? null;
+    if (hit) reason = hit === learned ? `wie deine bisherigen Ausgaben mit „${hit.word}“` : `erkannt an „${hit.word}“`;
+  }
+
+  if (mapped === 'skip') return r('skip', fromCategory ? null : 'Sieht privat bzw. nach Steuerzahlung aus – zählt nicht als Betriebsausgabe', reason);
+  if (mapped === 'income') return r('income', null, reason);
   if (row.direction === 'in') {
     // Betrag steht in der Tabelle als Einnahme – das hat Vorrang vor der Kategorie
-    return { target: 'income', note: fromCategory ? 'Steht in deiner Tabelle als Einnahme – deshalb als Einnahme übernommen' : null };
+    return r('income', fromCategory ? 'Steht in deiner Tabelle als Einnahme – deshalb als Einnahme übernommen' : null);
   }
-  if (mapped === 'svs') return { target: 'svs', note: null };
+  if (mapped === 'svs') return r('svs', null, reason);
 
   const cat = mapped ? findCategoryById(targetCategoryId(mapped) ?? '') : undefined;
-  if (cat && isCategoryOffered(cat, ctx)) return { target: catTarget(cat.id), note: null };
+  if (cat && isCategoryOffered(cat, ctx)) return r(catTarget(cat.id), null, reason, false);
   if (cat && ctx.profitMethod === 'pauschal') {
-    return { target: 'skip', note: `„${cat.label}“ ist bei Pauschalierung schon im Pauschalsatz enthalten` };
+    return r('skip', `„${cat.label}“ ist bei Pauschalierung schon im Pauschalsatz enthalten`, reason);
   }
   const fallback = findCategoryById('sonstiges')!;
-  if (isCategoryOffered(fallback, ctx)) return { target: catTarget('sonstiges'), note: null };
-  return { target: 'skip', note: 'Bei Pauschalierung schon im Pauschalsatz enthalten' };
+  if (isCategoryOffered(fallback, ctx)) return r(catTarget('sonstiges'), null, null, !cat);
+  return r('skip', 'Bei Pauschalierung schon im Pauschalsatz enthalten');
 }
 
 // ─── Prüfen ─────────────────────────────────────────────────
@@ -442,6 +536,8 @@ export interface ReviewRow extends SourceRow {
   id: number;
   target: Target;
   note: string | null;
+  reason: string | null; // Woran Klaro die Kategorie erkannt hat
+  unclear: boolean; // Keine Kategorie erkannt („Sonstige Ausgaben“) – bitte ansehen
   include: boolean;
   duplicate: boolean;
   spread: boolean; // „Auf mehrere Jahre verteilen“ bei Büro & Software / Sonstiges über 1.000 €
@@ -481,14 +577,17 @@ export function buildReviewRows(
   categoryMap: Readonly<Record<string, CategoryChoice>>,
   ctx: CategoryContext,
   vat: { isKU: boolean; defaultVat: VatRate; amountsNet?: boolean },
+  history?: CategoryHistory,
 ): ReviewRow[] {
   return rows.map((r, id) => {
-    const { target, note } = resolveTarget(r, categoryMap, ctx);
+    const { target, note, reason, unclear } = resolveTarget(r, categoryMap, ctx, history);
     const row: ReviewRow = {
       ...r,
       id,
       target,
       note,
+      reason,
+      unclear,
       include: !r.problem && target !== 'skip',
       duplicate: false,
       spread: false,

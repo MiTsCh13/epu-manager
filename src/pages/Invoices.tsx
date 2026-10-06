@@ -7,6 +7,7 @@ import { useIncomes } from '@/hooks/useIncomes';
 import { useInvoices, type InvoiceListItem } from '@/hooks/useInvoices';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { FILTER_LABELS, getDisplayStatus, matchesFilter, type InvoiceFilter } from '@/lib/invoices';
+import { searchAndSort, type ListSort } from '@/lib/expenses';
 import { formatEuro } from '@/lib/money';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { InvoiceList } from '@/components/invoices/InvoiceList';
@@ -16,6 +17,9 @@ import { ClientListSkeleton } from '@/components/clients/ClientList';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ListControls } from '@/components/ui/ListControls';
+import { YearSelect } from '@/components/ui/YearSelect';
+import { ImportLink } from '@/components/import/ImportLink';
 
 const FILTERS: InvoiceFilter[] = ['all', 'open', 'paid', 'overdue'];
 
@@ -36,7 +40,9 @@ export default function Invoices() {
   const error = invoicesError ?? other.error;
   const reload = () => Promise.all([reloadInvoices(), other.reload()]);
   const { profile } = useAuth();
-  const year = new Date().getFullYear();
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ListSort>('date-desc');
   // Filter steht in der Adresse (?filter=open) – Links vom Dashboard kommen vorgefiltert an
   const [searchParams, setSearchParams] = useSearchParams();
   const param = searchParams.get('filter') as InvoiceFilter | null;
@@ -44,27 +50,56 @@ export default function Invoices() {
   const setFilter = (f: InvoiceFilter) => setSearchParams(f === 'all' ? {} : { filter: f }, { replace: true });
   const [paying, setPaying] = useState<InvoiceListItem | null>(null);
 
-  const withStatus = useMemo(() => invoices.map((inv) => ({ inv, status: getDisplayStatus(inv) })), [invoices]);
-  const counts = useMemo(
-    () => Object.fromEntries(FILTERS.map((f) => [f, withStatus.filter((x) => matchesFilter(x.status, f)).length])) as Record<InvoiceFilter, number>,
-    [withStatus],
+  const yearOf = (iso: string | null) => Number((iso ?? '').slice(0, 4));
+  const dataYears = useMemo(
+    () => [...invoices.map((i) => yearOf(i.invoice_date)), ...other.incomes.map((i) => yearOf(i.income_date))].filter(Boolean),
+    [invoices, other.incomes],
   );
-  const openSum = withStatus.filter((x) => matchesFilter(x.status, 'open')).reduce((s, x) => s + Number(x.inv.total), 0);
-  const visible = withStatus.filter((x) => matchesFilter(x.status, filter)).map((x) => x.inv);
-  const overdueSum = withStatus.filter((x) => x.status === 'overdue').reduce((s, x) => s + Number(x.inv.total), 0);
+  const withStatus = useMemo(() => invoices.map((inv) => ({ inv, status: getDisplayStatus(inv) })), [invoices]);
+  const inYear = withStatus.filter((x) => yearOf(x.inv.invoice_date) === year);
+  const counts = Object.fromEntries(FILTERS.map((f) => [f, inYear.filter((x) => matchesFilter(x.status, f)).length])) as Record<InvoiceFilter, number>;
+  // Offene Beträge über alle Jahre – eine unbezahlte Rechnung vom Vorjahr soll nicht untergehen
+  const openAll = withStatus.filter((x) => matchesFilter(x.status, 'open'));
+  const openSum = openAll.reduce((s, x) => s + Number(x.inv.total), 0);
+  const overdueAll = withStatus.filter((x) => x.status === 'overdue');
+  const overdueSum = overdueAll.reduce((s, x) => s + Number(x.inv.total), 0);
+  const openOtherYears = openAll.filter((x) => yearOf(x.inv.invoice_date) !== year).length;
+  const visible = searchAndSort(
+    inYear.filter((x) => matchesFilter(x.status, filter)).map((x) => x.inv),
+    query,
+    sort,
+    (i) => ({ date: i.invoice_date, amount: Number(i.total), texts: [i.invoice_number, i.clientName] }),
+  );
   // Einnahmen = bezahlte Rechnungen nach Zahlungsdatum + weitere Einnahmen (wie im Dashboard und in der Jahresrechnung)
-  const paidThisYear = invoices.filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getFullYear() === year);
-  const otherThisYear = other.incomes.filter((i) => Number(i.income_date.slice(0, 4)) === year);
+  const paidThisYear = invoices.filter((i) => i.status === 'paid' && i.paid_at && yearOf(i.paid_at) === year);
+  const otherThisYear = other.incomes.filter((i) => yearOf(i.income_date) === year);
   const earnedNet =
     paidThisYear.reduce((s, i) => s + Number(i.subtotal), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount_net ?? i.amount), 0);
   const earnedGross = paidThisYear.reduce((s, i) => s + Number(i.total), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount), 0);
   const earnedSub = otherThisYear.length > 0 ? 'Rechnungen und weitere Einnahmen' : 'bezahlte Rechnungen';
+  const isKU = !!profile?.is_kleinunternehmer;
+
+  const earnedCard = (
+    <StatCard
+      label={`Eingenommen ${year}`}
+      value={formatEuro(earnedNet, true)}
+      sub={isKU ? earnedSub : `netto · brutto ${formatEuro(earnedGross, true)}`}
+      icon={Banknote}
+      testId="invoices-earned"
+    />
+  );
 
   return (
     <PageWrapper
       title="Rechnungen"
       description="Deine Einnahmen: alle Rechnungen und Honorarnoten."
-      actions={invoices.length > 0 && newInvoiceLink}
+      actions={
+        <>
+          <YearSelect value={year} onChange={setYear} extraYears={dataYears} />
+          <ImportLink />
+          {invoices.length > 0 && newInvoiceLink}
+        </>
+      }
     >
       {loading ? (
         <ClientListSkeleton />
@@ -77,47 +112,31 @@ export default function Invoices() {
         </div>
       ) : invoices.length === 0 ? (
         <div className="space-y-8">
-          {otherThisYear.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-              <StatCard
-                label={`Eingenommen ${year}`}
-                value={formatEuro(earnedNet, true)}
-                sub={profile?.is_kleinunternehmer ? earnedSub : `netto · brutto ${formatEuro(earnedGross, true)}`}
-                icon={Banknote}
-                testId="invoices-earned"
-              />
-            </div>
-          )}
+          {otherThisYear.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{earnedCard}</div>}
           <EmptyState
             icon={FileText}
             title="Noch keine Rechnungen"
             description="Schreib deine erste Rechnung – Klaro achtet auf alle Pflichtangaben und rechnet automatisch mit."
             action={newInvoiceLink}
           />
-          <OtherIncomes incomes={other.incomes} isKU={!!profile?.is_kleinunternehmer} onDelete={other.deleteIncome} />
+          <OtherIncomes key={year} incomes={otherThisYear} year={year} isKU={isKU} onDelete={other.deleteIncomes} />
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <StatCard
-              label={`Eingenommen ${year}`}
-              value={formatEuro(earnedNet, true)}
-              sub={profile?.is_kleinunternehmer ? earnedSub : `netto · brutto ${formatEuro(earnedGross, true)}`}
-              icon={Banknote}
-              testId="invoices-earned"
-            />
+            {earnedCard}
             <StatCard
               label="Offen"
               value={formatEuro(openSum, true)}
-              sub={counts.open === 1 ? '1 Rechnung' : `${counts.open} Rechnungen`}
+              sub={`${openAll.length === 1 ? '1 Rechnung' : `${openAll.length} Rechnungen`}${openOtherYears > 0 ? `, davon ${openOtherYears} aus anderen Jahren` : ''}`}
               icon={FileClock}
               testId="invoices-open"
             />
-            {counts.overdue > 0 && (
+            {overdueAll.length > 0 && (
               <StatCard
                 label="Davon überfällig"
                 value={formatEuro(overdueSum, true)}
-                sub={counts.overdue === 1 ? '1 Rechnung – Zeit für eine Erinnerung' : `${counts.overdue} Rechnungen – Zeit für eine Erinnerung`}
+                sub={overdueAll.length === 1 ? '1 Rechnung – Zeit für eine Erinnerung' : `${overdueAll.length} Rechnungen – Zeit für eine Erinnerung`}
                 icon={AlertCircle}
               />
             )}
@@ -139,15 +158,18 @@ export default function Invoices() {
               </button>
             ))}
           </div>
+          {inYear.length > 0 && (
+            <ListControls query={query} onQuery={setQuery} sort={sort} onSort={setSort} placeholder="Rechnungsnummer, Kunde oder Betrag" />
+          )}
           {visible.length === 0 ? (
             <p className="rounded-2xl bg-white py-10 text-center text-sm text-slate-500 ring-1 ring-slate-200">
-              Keine Rechnungen in „{FILTER_LABELS[filter]}“.
+              {inYear.length === 0 ? `Keine Rechnungen in ${year}.` : query ? 'Nichts gefunden.' : `Keine Rechnungen in „${FILTER_LABELS[filter]}“.`}
             </p>
           ) : (
             <InvoiceList invoices={visible} onMarkPaid={setPaying} />
           )}
           <div className="pt-4">
-            <OtherIncomes incomes={other.incomes} isKU={!!profile?.is_kleinunternehmer} onDelete={other.deleteIncome} />
+            <OtherIncomes key={year} incomes={otherThisYear} year={year} isKU={isKU} onDelete={other.deleteIncomes} />
           </div>
         </div>
       )}

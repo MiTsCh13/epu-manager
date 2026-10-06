@@ -87,6 +87,14 @@ export const GLOSSARY = {
     term: 'Arbeitsplatzpauschale',
     text: 'Ein fixer Betrag, den du absetzen kannst, wenn du von zu Hause arbeitest: 1.200 € im Jahr. Hast du daneben ein Gehalt über 13.539 € aus einem Job außer Haus, sind es 300 €. Du brauchst keine Belege, Klaro zieht ihn automatisch ab – auch bei Pauschalierung.',
   },
+  kilometergeld: {
+    term: 'Kilometergeld',
+    text: 'Fährst du beruflich mit deinem eigenen Fahrzeug, setzt du pro Kilometer einen fixen Betrag ab – statt Sprit, Service und Versicherung einzeln: Auto 0,50 €, Motorrad, Moped und Fahrrad 0,25 €. Höchstens für 30.000 km im Jahr. Notiere jede Fahrt (Datum, Strecke, Zweck, Kilometer).',
+  },
+  gesamtAbsetzbar: {
+    term: 'Gesamt absetzbar',
+    text: 'Alles, was deinen Gewinn senkt: deine Ausgaben (bzw. bei Pauschalierung der Pauschalsatz plus was zusätzlich zählt), die Abschreibung von Geräten, deine SVS-Beiträge und die Arbeitsplatzpauschale.',
+  },
   abschreibung: {
     term: 'Abschreibung',
     text: 'Ein Gerät über 1.000 €, das du mehrere Jahre nutzt, setzt du nicht auf einmal ab. Der Kaufpreis wird gleichmäßig auf die Nutzungsdauer verteilt, z. B. ein Laptop um 1.500 € auf 3 Jahre mit je 500 €. Kaufst du ab Juli, zählt im ersten Jahr nur die Hälfte. Im Steuerformular heißt das AfA (Kennzahl 9130).',

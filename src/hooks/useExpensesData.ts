@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { findCategoryById } from '@/constants/expenseCategories';
+import { recategorize } from '@/lib/expenses';
 import { fetchAll } from '@/lib/fetchAll';
+import { deleteReceipt } from '@/lib/receipts';
 import { supabase } from '@/lib/supabase';
 import type { Asset, AssetInsert, Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
 
@@ -13,9 +16,13 @@ export function useExpensesData(year: number) {
   const [revenue, setRevenue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Jahre mit Ausgaben oder Anlagen (für die Jahresauswahl, z. B. nach einem Import älterer Jahre)
+  const [years, setYears] = useState<number[]>([]);
+  const loadedYear = useRef<number | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Ladeanzeige nur beim ersten Laden eines Jahres – beim Neuladen nach dem Speichern bleiben Suche und Filter erhalten
+    if (loadedYear.current !== year) setLoading(true);
     setError(null);
     const from = `${year}-01-01`;
     const to = `${year}-12-31`;
@@ -36,6 +43,7 @@ export function useExpensesData(year: number) {
       setExpenses(exp.data);
       setSvsPayments(svs.data);
       setAssets(ast.data);
+      loadedYear.current = year;
       setRevenue(
         inv.data.reduce((s, i) => s + Number(i.subtotal), 0) + inc.data.reduce((s, i) => s + Number(i.amount_net ?? i.amount), 0),
       );
@@ -46,6 +54,17 @@ export function useExpensesData(year: number) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void Promise.all([
+      supabase.from('expenses').select('expense_date').order('expense_date', { ascending: true }).limit(1),
+      supabase.from('assets').select('purchase_date').order('purchase_date', { ascending: true }).limit(1),
+    ]).then(([e, a]) => {
+      const first = Math.min(Number(e.data?.[0]?.expense_date.slice(0, 4) ?? 9999), Number(a.data?.[0]?.purchase_date.slice(0, 4) ?? 9999));
+      const current = new Date().getFullYear();
+      if (first < current) setYears(Array.from({ length: current - first + 1 }, (_, i) => current - i));
+    });
+  }, []);
 
   const saveExpense = useCallback(
     async (values: ExpenseInsert, id?: string): Promise<Result> => {
@@ -66,6 +85,54 @@ export function useExpensesData(year: number) {
     setExpenses((list) => list.filter((e) => e.id !== id));
     return { error: null };
   }, []);
+
+  /** Mehrere Ausgaben in eine Kategorie verschieben. Was nur einzeln geht, wird übersprungen und zurückgemeldet. */
+  const recategorizeExpenses = useCallback(
+    async (ids: readonly string[], categoryId: string): Promise<{ changed: number; skipped: { description: string; reason: string }[]; error: string | null }> => {
+      const cat = findCategoryById(categoryId);
+      if (!cat) return { changed: 0, skipped: [], error: 'Unbekannte Kategorie.' };
+      const skipped: { description: string; reason: string }[] = [];
+      const updates: { id: string; values: object }[] = [];
+      for (const e of expenses.filter((x) => ids.includes(x.id))) {
+        const r = recategorize(
+          { ...e, amount: Number(e.amount), amount_net: e.amount_net === null ? null : Number(e.amount_net), km_driven: e.km_driven === null ? null : Number(e.km_driven), trip_hours: e.trip_hours === null ? null : Number(e.trip_hours) },
+          cat,
+        );
+        if (r.ok) updates.push({ id: e.id, values: r.values });
+        else skipped.push({ description: e.description, reason: r.reason });
+      }
+      let failed = 0;
+      // In kleinen Gruppen parallel – jede Zeile hat eigene Werte (absetzbarer Betrag)
+      for (let i = 0; i < updates.length; i += 20) {
+        const results = await Promise.all(updates.slice(i, i + 20).map((u) => supabase.from('expenses').update(u.values).eq('id', u.id)));
+        failed += results.filter((r) => r.error).length;
+      }
+      await load();
+      return { changed: updates.length - failed, skipped, error: failed ? `${failed} Ausgaben konnten nicht geändert werden.` : null };
+    },
+    [expenses, load],
+  );
+
+  /** Mehrere Ausgaben löschen, samt Belegen. */
+  const deleteExpenses = useCallback(
+    async (ids: readonly string[]): Promise<Result> => {
+      const receiptOf = new Map(expenses.filter((e) => e.receipt_url).map((e) => [e.id, e.receipt_url!]));
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        const { error: err } = await supabase.from('expenses').delete().in('id', chunk);
+        if (err) {
+          await load();
+          return { error: 'Nicht alle Ausgaben konnten gelöscht werden.' };
+        }
+        // Belege je gelöschtem Block entfernen – auch wenn ein späterer Block scheitert
+        await Promise.all(chunk.flatMap((id) => (receiptOf.has(id) ? [deleteReceipt(receiptOf.get(id)!)] : [])));
+      }
+      const gone = new Set(ids);
+      setExpenses((list) => list.filter((e) => !gone.has(e.id)));
+      return { error: null };
+    },
+    [expenses, load],
+  );
 
   const saveAsset = useCallback(
     async (values: AssetInsert, id?: string): Promise<Result> => {
@@ -111,9 +178,12 @@ export function useExpensesData(year: number) {
     revenue,
     loading,
     error,
+    years,
     reload: load,
     saveExpense,
     deleteExpense,
+    recategorizeExpenses,
+    deleteExpenses,
     saveAsset,
     deleteAsset,
     addSvsPayment,

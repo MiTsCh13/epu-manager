@@ -4,13 +4,13 @@ import {
   BEWIRTUNG_DEDUCTIBLE_RATE,
   GRUNDFREIBETRAG_MAX,
   GRUNDFREIBETRAG_RATE,
-  KILOMETERGELD_PER_KM,
+  KILOMETERGELD_RATES,
   NAECHTIGUNG_PAUSCHAL,
   PAUSCH_RATES,
   PAUSCH_REVENUE_LIMITS,
   TAGESGELD,
 } from '@/constants/tax2026';
-import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod, Vehicle } from '@/types';
 import { round2 } from './money';
 
 export { GRUNDFREIBETRAG_MAX, GRUNDFREIBETRAG_RATE, PAUSCH_RATES };
@@ -142,9 +142,16 @@ export function calculateNaechtigung(nights: number): number {
   return round2(Math.max(Math.floor(nights), 0) * NAECHTIGUNG_PAUSCHAL);
 }
 
-/** Kilometergeld: km × amtlicher Satz. */
-export function calculateKilometergeld(km: number): number {
-  return round2(Math.max(km, 0) * KILOMETERGELD_PER_KM);
+/** Amtlicher Satz pro km für das Fahrzeug am Tag der Fahrt (ISO-Datum; ohne Datum: heute gültiger Satz). */
+export function kilometergeldRate(vehicle: Vehicle = 'car', date?: string): number {
+  const rates = KILOMETERGELD_RATES[vehicle];
+  const day = date || '9999-12-31';
+  return [...rates].reverse().find((r) => r.from <= day)?.rate ?? rates[0].rate;
+}
+
+/** Kilometergeld: km × amtlicher Satz (Auto 0,50 €, Motorrad/Moped und Fahrrad 0,25 €). */
+export function calculateKilometergeld(km: number, vehicle: Vehicle = 'car', date?: string): number {
+  return round2(Math.max(km, 0) * kilometergeldRate(vehicle, date));
 }
 
 /**

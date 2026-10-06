@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isMonthFirstColumn, parseAmount, parseDate, parseDelimited, parseVatRate } from '@/lib/importParse';
 import {
   amountsLookNet,
+  buildHistory,
   buildRecords,
   guessAmountMode,
   buildReviewRows,
@@ -13,6 +14,7 @@ import {
   guessRoles,
   guessTarget,
   markDuplicates,
+  matchTarget,
   readRows,
   resolveTarget,
   rowKind,
@@ -430,5 +432,62 @@ describe('Werte bauen', () => {
       { kind: 'income' as const, date: '2026-03-05', amount: 700 },
     ];
     expect(markDuplicates(rows, existing, true).map((r) => r.duplicate)).toEqual([true, true, false]);
+  });
+});
+
+describe('Kategorie-Vorschläge', () => {
+  it('lernt aus bisherigen Ausgaben – vor allgemeinen Stichwörtern, aber nach SVS/Privat', () => {
+    const history = buildHistory([
+      { description: 'Hetzner Server', category_label: 'Büro & Software' },
+      { description: 'Druckerei Huber Flyer', category_label: 'Werbung' },
+      { description: 'Druckerei Huber Plakate', category_label: 'Werbung' },
+      { description: 'Huber Zufall', category_label: 'Sonstige Ausgaben' }, // Sonstiges lehrt nichts
+    ]);
+    const r = resolveTarget(src({ description: 'Druckerei Huber' }), {}, euer, history);
+    expect(r.target).toBe(catTarget('werbung'));
+    expect(r.reason).toContain('bisherigen Ausgaben');
+    expect(resolveTarget(src({ description: 'SVS Huber' }), {}, euer, history).target).toBe('svs');
+  });
+
+  it('nennt das Wort, an dem Klaro die Kategorie erkannt hat', () => {
+    expect(matchTarget('Abo Adobe Creative Cloud')).toEqual({ target: catTarget('buero'), word: 'Abo' });
+    expect(resolveTarget(src({ description: 'OMV Tankstelle' }), {}, euer).reason).toBe('erkannt an „OMV“');
+  });
+
+  it('ohne Treffer: Sonstige Ausgaben, als unklar markiert', () => {
+    const r = resolveTarget(src({ description: 'XY 4711' }), {}, euer);
+    expect(r).toMatchObject({ target: catTarget('sonstiges'), unclear: true });
+    expect(resolveTarget(src({ description: 'Diverses' }), {}, euer).unclear).toBe(false);
+  });
+});
+
+describe('Stichwörter ohne Falsch-Treffer', () => {
+  it.each([
+    ['Bankomatzahlung Adobe', catTarget('buero')],
+    ['Bankomat Behebung', 'skip'],
+    ['Hotel drei Nächte', catTarget('reisen')],
+    ['Seminar drei Tage', catTarget('kurse')],
+    ['Kontoführung Erste Bank', catTarget('bankgebuehren')],
+    ['USt-Vorauszahlung Q1', 'skip'],
+  ] as const)('%s → %s', (text, target) => {
+    expect(guessTarget(text)).toBe(target);
+  });
+
+  it('„Umsatzsteuer“ im Text einer Ausgabe ist keine Steuerzahlung und keine Einnahme', () => {
+    expect(resolveTarget(src({ description: 'Laptop inkl. Umsatzsteuer' }), {}, euer).target).toBe(catTarget('geraete'));
+  });
+
+  it.each(['Erste Bank Überweisung', 'Buchung 4711', 'Kursdifferenz', 'Stockerau Lieferung', 'DIN A1 Plakat Druck'])('%s → keine Kategorie', (text) => {
+    expect([null, catTarget('werbung')]).toContain(guessTarget(text));
+  });
+
+  it('Historie zählt nur eindeutige, wiederholte Wörter', () => {
+    const history = buildHistory([
+      { description: 'Fahrt Wien Graz', category_label: 'Fahrten & Reisen' },
+      { description: 'Fahrt Wien Linz', category_label: 'Fahrten & Reisen' },
+      { description: 'Musterfirma Projekt', category_label: 'Subaufträge & Freelancer' },
+    ]);
+    expect(resolveTarget(src({ description: 'Billa Wien' }), {}, euer, history).unclear).toBe(true); // Ortsname zählt nicht
+    expect(resolveTarget(src({ description: 'Musterfirma' }), {}, euer, history).unclear).toBe(true); // nur einmal gesehen
   });
 });

@@ -52,7 +52,13 @@ export const TAX_RETURN_DEADLINE = { month: 6, day: 30 } as const;
 
 // Sonderregeln Ausgaben
 export const BEWIRTUNG_DEDUCTIBLE_RATE = 0.5; // Bewirtung nur zu 50 % absetzbar
-export const KILOMETERGELD_PER_KM = 0.5; // Amtliches Kilometergeld PKW
+// Amtliches Kilometergeld je Fahrzeug (Quelle: bmf.gv.at „Kilometergeld“). Einspurige: 1.1.–30.6.2025 kurz 0,50 €,
+// seit 1.7.2025 wieder 0,25 €. Auto bis 2024: 0,42 €. Höchstens 30.000 km im Jahr (Fahrrad bei Arbeitnehmer:innen 3.000 km).
+export const KILOMETERGELD_RATES = {
+  car: [{ from: '2000-01-01', rate: 0.42 }, { from: '2025-01-01', rate: 0.5 }],
+  motorbike: [{ from: '2000-01-01', rate: 0.24 }, { from: '2025-01-01', rate: 0.5 }, { from: '2025-07-01', rate: 0.25 }],
+  bike: [{ from: '2000-01-01', rate: 0.38 }, { from: '2025-01-01', rate: 0.5 }, { from: '2025-07-01', rate: 0.25 }],
+} as const;
 
 // Diäten und Nächtigung bei Geschäftsreisen (§ 4 Abs. 5 iVm § 26 Z 4 EStG, Werte ab 2025) – nur Einnahmen-Ausgaben-Rechnung.
 // Quelle: usp.gv.at „Reisekosten“. Reise: mindestens 25 km vom Betriebsort; kein Tagesgeld, wenn man länger als

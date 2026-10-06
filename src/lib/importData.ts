@@ -3,7 +3,7 @@ import { fetchAll } from './fetchAll';
 import { deleteReceipt } from './receipts';
 import { supabase } from './supabase';
 import { parseDelimited, type Table } from './importParse';
-import type { ExistingEntry, ImportRecords, ImportSummary } from './importMapping';
+import { buildHistory, type CategoryHistory, type ExistingEntry, type ImportRecords, type ImportSummary } from './importMapping';
 import type { ImportRecord } from '@/types';
 
 export interface Sheet {
@@ -65,6 +65,12 @@ export async function fetchExisting(from: string, to: string): Promise<ExistingE
     ...ast.data.map((a) => ({ kind: 'expense' as const, date: a.purchase_date, amount: Number(a.amount) })),
     ...svs.data.map((p) => ({ kind: 'svs' as const, date: p.payment_date, amount: Number(p.amount) })),
   ];
+}
+
+/** Deine bisherigen Ausgaben als Lernbasis für Kategorie-Vorschläge (ohne Fehler: dann eben ohne Lernen). */
+export async function fetchHistory(): Promise<CategoryHistory> {
+  const { data } = await fetchAll((a, b) => supabase.from('expenses').select('description, category_label').order('id').range(a, b));
+  return buildHistory(data);
 }
 
 const CHUNK = 500;

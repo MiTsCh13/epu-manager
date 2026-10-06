@@ -7,11 +7,14 @@ import {
   computeExpenseValues,
   entryKind,
   findCategory,
+  recategorize,
+  searchAndSort,
   sumByCategory,
   validateExpenseForm,
   validateReceiptFile,
   type ExpenseFormInput,
 } from '@/lib/expenses';
+import { findCategoryById } from '@/constants/expenseCategories';
 
 const today = '2026-10-03';
 const base: ExpenseFormInput = { categoryId: 'buero', amount: '120', km: '', hours: '', nights: '', reimbursed: false, vatRate: 20, date: '2026-10-01', description: '', spread: null, usefulLife: '' };
@@ -49,6 +52,7 @@ describe('computeExpenseValues', () => {
       deductible_amount: 120,
       is_bewirtung: false,
       km_driven: null,
+      vehicle: null,
       trip_hours: null,
       nights: null,
       reimbursed: false,
@@ -79,10 +83,20 @@ describe('computeExpenseValues', () => {
       deductible_amount: 90.25,
       is_bewirtung: false,
       km_driven: 180.5,
+      vehicle: 'car',
       trip_hours: null,
       nights: null,
       reimbursed: false,
     });
+  });
+
+  it('Kilometergeld mit Fahrrad bzw. Motorrad: 0,25 €/km (seit 1.7.2025), davor anders', () => {
+    const trip = { ...base, categoryId: 'reisen', km: '100', amount: '' };
+    expect(computeExpenseValues({ ...trip, vehicle: 'bike' }, true)).toMatchObject({ amount: 25, vehicle: 'bike' });
+    expect(computeExpenseValues({ ...trip, vehicle: 'motorbike' }, true).amount).toBe(25);
+    expect(computeExpenseValues({ ...trip, vehicle: 'bike', date: '2025-03-01' }, true).amount).toBe(50);
+    expect(computeExpenseValues({ ...trip, vehicle: 'bike', date: '2024-12-31' }, true).amount).toBe(38);
+    expect(computeExpenseValues({ ...trip, date: '2024-12-31' }, true).amount).toBe(42); // Auto bis 2024: 0,42 €
   });
 
   it('Fahrtkosten ohne km: normaler Betrag', () => {
@@ -218,5 +232,40 @@ describe('Summen je Gewinnermittlungsart', () => {
     expect(countsAlongsidePauschal(row('Waren & Material', 1), 'ku')).toBe(false);
     expect(countsAlongsidePauschal(row('Waren & Material', 1), 'basis_15')).toBe(true);
     expect(countsAlongsidePauschal(row('Unbekannt', 1), 'basis_15')).toBe(false);
+  });
+});
+
+describe('recategorize', () => {
+  const e = { amount: 120, amount_net: 100, km_driven: null, trip_hours: null, nights: null, reimbursed: true };
+  it('übernimmt Kennzahl und rechnet absetzbar neu (Bewirtung 50 % vom Netto)', () => {
+    expect(recategorize(e, findCategoryById('bewirtung')!)).toEqual({
+      ok: true,
+      values: { e1a_kz: '9200', category_label: 'Geschäftsessen (50 %)', is_bewirtung: true, deductible_amount: 50, reimbursed: false },
+    });
+    expect(recategorize(e, findCategoryById('reisen')!)).toMatchObject({ ok: true, values: { deductible_amount: 100, reimbursed: true } });
+  });
+  it('berechnete Einträge, Diäten-Ziel und Geräte über 1.000 € gehen nur einzeln', () => {
+    expect(recategorize({ ...e, km_driven: 100 }, findCategoryById('buero')!).ok).toBe(false);
+    expect(recategorize(e, findCategoryById('tagesgeld')!).ok).toBe(false);
+    expect(recategorize({ ...e, amount: 1500, amount_net: 1250 }, findCategoryById('geraete')!).ok).toBe(false);
+    expect(recategorize({ ...e, amount: 1500, amount_net: 1250 }, findCategoryById('buero')!).ok).toBe(true);
+  });
+});
+
+describe('searchAndSort', () => {
+  const items = [
+    { d: '2026-03-01', a: 59.99, t: 'Adobe' },
+    { d: '2026-01-15', a: 1200, t: 'Laptop' },
+    { d: '2026-02-10', a: 12, t: 'Porto' },
+  ];
+  const get = (i: (typeof items)[number]) => ({ date: i.d, amount: i.a, texts: [i.t] });
+  it('sucht in Text und Betrag', () => {
+    expect(searchAndSort(items, 'ado', 'date-desc', get).map((i) => i.t)).toEqual(['Adobe']);
+    expect(searchAndSort(items, '59,99', 'date-desc', get).map((i) => i.t)).toEqual(['Adobe']);
+    expect(searchAndSort(items, '1.200,00', 'date-desc', get).map((i) => i.t)).toEqual(['Laptop']);
+  });
+  it('sortiert nach Datum und Betrag', () => {
+    expect(searchAndSort(items, '', 'date-asc', get).map((i) => i.t)).toEqual(['Laptop', 'Porto', 'Adobe']);
+    expect(searchAndSort(items, '', 'amount-desc', get).map((i) => i.t)).toEqual(['Laptop', 'Adobe', 'Porto']);
   });
 });

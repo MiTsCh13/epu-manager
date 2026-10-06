@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Laptop, Plus, ReceiptEuro, Upload } from 'lucide-react';
+import { ArrowRight, Laptop, Plus, ReceiptEuro } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
-import { countsAlongsidePauschal, expenseTotals, pauschalExtrasFor } from '@/lib/expenses';
+import { categoryContextFor, countsAlongsidePauschal, expenseTotals, pauschalExtrasFor } from '@/lib/expenses';
 import { calculateArbeitsplatzpauschale, calculatePauschaleExpenses, getPauschRate, otherIncomeAmount } from '@/lib/profit';
 import { sumDepreciation } from '@/lib/assets';
 import { formatEuro } from '@/lib/money';
 import { deleteReceipt } from '@/lib/receipts';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AssetList } from '@/components/expenses/AssetList';
+import { ImportLink } from '@/components/import/ImportLink';
+import { YearSelect } from '@/components/ui/YearSelect';
 import { ExpenseFormModal, type ExpenseEntry } from '@/components/expenses/ExpenseForm';
-import { ExpenseList } from '@/components/expenses/ExpenseList';
+import { ExpenseBrowser } from '@/components/expenses/ExpenseBrowser';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
 import { Alert } from '@/components/ui/Alert';
@@ -50,6 +52,7 @@ export default function Expenses() {
   const pauschType = (profile?.pausch_type ?? null) as PauschType | null;
   const industryType = (profile?.industry_code ?? null) as IndustryType | null;
   const pauschal = profitMethod === 'pauschal';
+  const context = categoryContextFor(profile);
 
   const totals = expenseTotals(
     data.expenses.map((e) => ({ ...e, amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount) })),
@@ -72,6 +75,11 @@ export default function Expenses() {
     year,
     registrationDate: profile?.svs_registration_date ? new Date(profile.svs_registration_date) : null,
   });
+
+  // Alles, was den Gewinn mindert: Ausgaben (bzw. Pauschale + Extras), Abschreibung, SVS, Arbeitsplatzpauschale
+  const totalDeductible = (pauschal ? pauschaleOnly + pauschalExtras : deductible + depreciation) + svsPaid + app.amount;
+  // Kacheln vor „Gesamt absetzbar“ – bestimmt, ob die Gesamt-Kachel eine Lücke füllt oder eine eigene Zeile bekommt
+  const partTiles = 2 + (!pauschal && depreciation > 0 ? 1 : 0) + (app.amount > 0 ? 1 : 0);
 
   // Was bei der gewählten Pauschalierung zusätzlich zählt (Reisekosten nur weiterverrechnet)
   const pauschalAllowed = EXPENSE_CATEGORIES.filter((c) => countsUnder(c, 'pauschal', pauschType)).map((c) =>
@@ -98,20 +106,6 @@ export default function Expenses() {
     setDeleting(null);
   }
 
-  const yearSelect = (
-    <select
-      aria-label="Jahr"
-      value={year}
-      onChange={(e) => setYear(Number(e.target.value))}
-      className="min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-    >
-      {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
-        <option key={y} value={y}>
-          {y}
-        </option>
-      ))}
-    </select>
-  );
 
   return (
     <PageWrapper
@@ -123,14 +117,8 @@ export default function Expenses() {
       }
       actions={
         <>
-          {yearSelect}
-          <Link
-            to="/importieren"
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          >
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            Aus Excel übernehmen
-          </Link>
+          <YearSelect value={year} onChange={setYear} extraYears={data.years} />
+          <ImportLink />
           <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
             Ausgabe erfassen
           </Button>
@@ -148,47 +136,52 @@ export default function Expenses() {
         </div>
       ) : (
         <div className="space-y-8">
-          <section aria-label={`Summe Ausgaben ${year}`} className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className={`grid gap-6 ${!pauschal && depreciation > 0 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-              <div>
-                <p className="text-sm text-slate-600">{pauschal ? `Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="expenses-total">
-                  {formatEuro(pauschal ? pauschaleOnly + pauschalExtras : deductible)}
-                </p>
-              </div>
+          <section aria-label={`Summe Ausgaben ${year}`} className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6">
+            {/* Zahlen unten bündig: Kacheln strecken sich auf gleiche Höhe, die Zahl sitzt am unteren Rand.
+                Breiter Bildschirm: alle Kacheln gleich breit in einer Reihe; sonst je zwei, „Gesamt absetzbar“ füllt die
+                Lücke bzw. die ganze Zeile. */}
+            <div className="-mx-3 grid grid-cols-2 gap-x-3 gap-y-1 xl:auto-cols-fr xl:grid-flow-col xl:grid-cols-none">
+              <SumTile
+                label={pauschal ? `Ausgaben ${year}` : <><Term k="absetzbar">Absetzbare</Term> Ausgaben {year}</>}
+                value={pauschal ? pauschaleOnly + pauschalExtras : deductible}
+                testId="expenses-total"
+              />
               {!pauschal && depreciation > 0 && (
-                <div>
-                  <p className="text-sm text-slate-600"><Term k="abschreibung">Abschreibung</Term> {year}</p>
-                  <p className="text-2xl font-bold tabular-nums text-slate-900" data-testid="depreciation-total">
-                    {formatEuro(depreciation)}
-                  </p>
-                </div>
+                <SumTile label={<><Term k="abschreibung">Abschreibung</Term> {year}</>} value={depreciation} testId="depreciation-total" />
               )}
-              <div>
-                <p className="text-sm text-slate-600"><Term k="svs">SVS-Beiträge</Term> {year}</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900">{formatEuro(svsPaid)}</p>
-              </div>
+              <SumTile label={<><Term k="svs">SVS-Beiträge</Term> {year}</>} value={svsPaid} />
+              {app.amount > 0 && (
+                <SumTile
+                  label={<><Term k="arbeitsplatzpauschale" />{app.months < 12 && ` (${app.months} Monate)`}</>}
+                  value={app.amount}
+                  testId="arbeitsplatzpauschale"
+                />
+              )}
+              <SumTile
+                label={<><Term k="gesamtAbsetzbar" /> {year}</>}
+                value={totalDeductible}
+                highlight
+                wide={partTiles % 2 === 0}
+                testId="expenses-grand-total"
+              />
             </div>
-            {app.amount > 0 && (
-              <p className="text-sm text-slate-600 sm:max-w-xs" data-testid="arbeitsplatzpauschale">
-                Dazu zieht Klaro automatisch die <Term k="arbeitsplatzpauschale" /> ab:{' '}
-                <span className="font-semibold tabular-nums text-slate-900">{formatEuro(app.amount)}</span>
-                {app.months < 12 && ` (${app.months} Monate)`}
-              </p>
-            )}
-            {profile?.home_office === null && (
-              <p className="text-sm text-slate-600 sm:max-w-xs">
-                Arbeitest du von zu Hause?{' '}
-                <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">
-                  In den Einstellungen angeben
-                </Link>{' '}
-                – dann zieht Klaro die <Term k="arbeitsplatzpauschale" /> automatisch ab.
-              </p>
-            )}
-            <Link to="/gewinn" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
-              Gewinn & Hochrechnung ansehen
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              {profile?.home_office === null ? (
+                <p className="text-sm text-slate-600 sm:max-w-md">
+                  Arbeitest du von zu Hause?{' '}
+                  <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">
+                    In den Einstellungen angeben
+                  </Link>{' '}
+                  – dann zieht Klaro die <Term k="arbeitsplatzpauschale" /> automatisch ab.
+                </p>
+              ) : (
+                <span />
+              )}
+              <Link to="/gewinn" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                Gewinn & Hochrechnung ansehen
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
           </section>
 
           {pauschal ? (
@@ -211,28 +204,30 @@ export default function Expenses() {
                     <Term k="arbeitsplatzpauschale" />.
                   </p>
                 </div>
-                {data.expenses.length > 0 ? (
-                  <ExpenseList
-                    expenses={data.expenses}
-                    counts={(e) => countsAlongsidePauschal(e, pauschType ?? 'ku')}
-                    onEdit={(expense) => {
-                      setEditing({ kind: 'expense', expense });
-                      setFormOpen(true);
-                    }}
-                    onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
-                  />
-                ) : (
-                  <EmptyState
-                    icon={ReceiptEuro}
-                    title="Nichts Zusätzliches erfasst"
-                    description="Hast du eine Öffi-Karte, die du auch beruflich nutzt? Dann erfasse sie – die Hälfte zählt zusätzlich zur Pauschale."
-                    action={
-                      <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
-                        Ausgabe erfassen
-                      </Button>
-                    }
-                  />
-                )}
+                <ExpenseBrowser
+                  expenses={data.expenses}
+                  context={context}
+                  counts={(e) => countsAlongsidePauschal(e, pauschType ?? 'ku')}
+                  onEdit={(expense) => {
+                    setEditing({ kind: 'expense', expense });
+                    setFormOpen(true);
+                  }}
+                  onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
+                  onRecategorize={data.recategorizeExpenses}
+                  onDeleteMany={data.deleteExpenses}
+                  empty={
+                    <EmptyState
+                      icon={ReceiptEuro}
+                      title="Nichts Zusätzliches erfasst"
+                      description="Hast du eine Öffi-Karte, die du auch beruflich nutzt? Dann erfasse sie – die Hälfte zählt zusätzlich zur Pauschale."
+                      action={
+                        <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                          Ausgabe erfassen
+                        </Button>
+                      }
+                    />
+                  }
+                />
               </section>
             </div>
           ) : (
@@ -266,27 +261,29 @@ export default function Expenses() {
                   <p className="text-sm text-slate-600">
                     <Term k="absetzbar">Absetzbar</Term> {year}: {formatEuro(deductible)}
                   </p>
-                  {data.expenses.length === 0 ? (
-                    <EmptyState
-                      icon={ReceiptEuro}
-                      title={`Noch keine Ausgaben ${year === currentYear ? 'dieses Jahr' : `in ${year}`}`}
-                      description="Erfasse deine erste Ausgabe – am besten gleich nach dem Kauf, mit Foto vom Beleg."
-                      action={
-                        <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
-                          Ausgabe erfassen
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <ExpenseList
-                      expenses={data.expenses}
-                      onEdit={(expense) => {
-                        setEditing({ kind: 'expense', expense });
-                        setFormOpen(true);
-                      }}
-                      onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
-                    />
-                  )}
+                  <ExpenseBrowser
+                    expenses={data.expenses}
+                    context={context}
+                    onEdit={(expense) => {
+                      setEditing({ kind: 'expense', expense });
+                      setFormOpen(true);
+                    }}
+                    onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
+                    onRecategorize={data.recategorizeExpenses}
+                    onDeleteMany={data.deleteExpenses}
+                    empty={
+                      <EmptyState
+                        icon={ReceiptEuro}
+                        title={`Noch keine Ausgaben ${year === currentYear ? 'dieses Jahr' : `in ${year}`}`}
+                        description="Erfasse deine erste Ausgabe – am besten gleich nach dem Kauf, mit Foto vom Beleg."
+                        action={
+                          <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                            Ausgabe erfassen
+                          </Button>
+                        }
+                      />
+                    }
+                  />
                 </div>
               ) : (
                 <div role="tabpanel" id="panel-anlagen" aria-labelledby="tab-anlagen" className="space-y-3">
@@ -391,5 +388,16 @@ function PauschalCard({
         du nur für das, was du unten zusätzlich erfasst.
       </Alert>
     </section>
+  );
+}
+
+function SumTile({ label, value, highlight, wide, testId }: { label: ReactNode; value: number; highlight?: boolean; wide?: boolean; testId?: string }) {
+  return (
+    <div className={`flex flex-col justify-between gap-1 rounded-xl p-3 ${wide ? 'col-span-2 xl:col-span-1' : ''} ${highlight ? 'bg-primary-50 ring-1 ring-primary-100' : ''}`}>
+      <p className={`text-sm ${highlight ? 'font-medium text-primary-900' : 'text-slate-600'}`}>{label}</p>
+      <p className={`text-2xl font-bold tabular-nums ${highlight ? 'text-primary-900' : 'text-slate-900'}`} data-testid={testId}>
+        {formatEuro(value)}
+      </p>
+    </div>
   );
 }

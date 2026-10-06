@@ -2,6 +2,7 @@ import { Paperclip, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
+import { sumDeductibleExpenses } from '@/lib/profit';
 import { getReceiptUrl } from '@/lib/receipts';
 import { ExpenseCategoryIcon } from './CategoryIcon';
 import type { Expense } from '@/types';
@@ -11,8 +12,12 @@ export function ExpenseList({
   onEdit,
   onDelete,
   counts,
+  selected,
+  onToggle,
 }: {
   expenses: Expense[];
+  selected?: ReadonlySet<string>; // Auswahl für Massenbearbeitung
+  onToggle?: (id: string) => void;
   counts?: (e: Expense) => boolean; // Pauschalierung: zählt die Ausgabe zusätzlich?
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
@@ -20,19 +25,32 @@ export function ExpenseList({
   return (
     <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
       {expenses.map((e) => {
-        const deductible = Number(e.deductible_amount ?? e.amount);
+        const deductible = sumDeductibleExpenses([
+          { amount: Number(e.amount), deductible_amount: e.deductible_amount == null ? null : Number(e.deductible_amount), is_bewirtung: e.is_bewirtung },
+        ]);
         const partial = deductible !== Number(e.amount);
         const notCounted = counts ? !counts(e) : false;
         return (
-          <li key={e.id} className="flex items-center gap-3 py-3 pl-4 pr-2 sm:pl-5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+          <li key={e.id} className={`flex items-center gap-3 py-3 pl-4 pr-2 sm:pl-5 ${selected?.has(e.id) ? 'bg-primary-50/60' : ''}`}>
+            {onToggle && (
+              <input
+                type="checkbox"
+                className="h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary"
+                checked={!!selected?.has(e.id)}
+                onChange={() => onToggle(e.id)}
+                aria-label={`${e.description} auswählen`}
+              />
+            )}
+            <span className={`h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 ${onToggle ? 'hidden sm:flex' : 'flex'}`}>
               <ExpenseCategoryIcon label={e.category_label} />
             </span>
             <button type="button" onClick={() => onEdit(e)} className="min-w-0 flex-1 text-left focus:outline-none focus-visible:underline" aria-label={`${e.description} bearbeiten`}>
               <p className="truncate font-medium text-slate-900">{e.description}</p>
-              <p className="truncate text-xs text-slate-500">
+              {/* Handy: zwei Zeilen, damit km, Stunden usw. nicht abgeschnitten werden */}
+              <p className="line-clamp-2 text-xs text-slate-500 sm:line-clamp-1">
                 {formatDate(e.expense_date)} · {e.category_label}
                 {e.km_driven && ` · ${String(e.km_driven).replace('.', ',')} km`}
+                {e.km_driven && e.vehicle && e.vehicle !== 'car' && ` ${e.vehicle === 'bike' ? 'mit dem Fahrrad' : 'mit Motorrad/Moped'}`}
                 {e.trip_hours && ` · ${String(e.trip_hours).replace('.', ',')} Std.`}
                 {e.nights && ` · ${e.nights} ${e.nights === 1 ? 'Nacht' : 'Nächte'}`}
                 {e.reimbursed && ' · weiterverrechnet'}

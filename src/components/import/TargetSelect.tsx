@@ -2,13 +2,14 @@ import { EXPENSE_CATEGORIES, isCategoryOffered, type CategoryContext } from '@/c
 import { catTarget, type CategoryChoice, type Target } from '@/lib/importMapping';
 
 /** Auswahl: Einnahme, SVS-Beitrag, die angebotenen Ausgaben-Kategorien, Nicht übernehmen. */
-export function TargetSelect<T extends CategoryChoice = Target>({
+export function TargetSelect<T extends CategoryChoice | '' = Target>({
   value,
   onChange,
   context,
   label,
   incomeOnly = false,
   allowAuto = false,
+  placeholder,
   className = '',
 }: {
   value: T;
@@ -17,6 +18,7 @@ export function TargetSelect<T extends CategoryChoice = Target>({
   label: string; // für Screenreader
   incomeOnly?: boolean; // nur Einnahmen-Zeilen: Einnahme oder nicht übernehmen
   allowAuto?: boolean; // „Automatisch nach Beschreibung“ anbieten (nur bei der Kategorie-Spalte)
+  placeholder?: string; // leere erste Option (Wert '')
   className?: string;
 }) {
   const categories = EXPENSE_CATEGORIES.filter((c) => isCategoryOffered(c, context) || catTarget(c.id) === value);
@@ -29,6 +31,7 @@ export function TargetSelect<T extends CategoryChoice = Target>({
         value === 'skip' ? 'text-slate-500' : ''
       } ${className}`}
     >
+      {placeholder && <option value="">{placeholder}</option>}
       {allowAuto && !incomeOnly && <option value="auto">Automatisch (nach Beschreibung)</option>}
       <option value="income">Einnahme</option>
       {!incomeOnly && <option value="svs">SVS-Beitrag</option>}

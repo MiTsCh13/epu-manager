@@ -37,5 +37,17 @@ export function useIncomes() {
     return { error: null };
   }, []);
 
-  return { incomes, loading, error, reload: load, deleteIncome };
+  const deleteIncomes = useCallback(async (ids: readonly string[]): Promise<{ error: string | null }> => {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error: err } = await supabase.from('incomes').delete().in('id', ids.slice(i, i + 200));
+      if (err) {
+        await load();
+        return { error: 'Nicht alle Einnahmen konnten gelöscht werden.' };
+      }
+    }
+    setIncomes((list) => list.filter((i) => !ids.includes(i.id)));
+    return { error: null };
+  }, [load]);
+
+  return { incomes, loading, error, reload: load, deleteIncome, deleteIncomes };
 }

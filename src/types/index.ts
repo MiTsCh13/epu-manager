@@ -31,6 +31,7 @@ export type SubscriptionStatus = 'trial' | 'active' | 'expired';
 export type InvoiceNumberFormat = 'YYYY-NNN' | 'KL-YYYY-NNN';
 export type VatRate = 0 | 10 | 13 | 20;
 export type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+export type Vehicle = 'car' | 'motorbike' | 'bike';
 
 export interface LineItem {
   description: string;

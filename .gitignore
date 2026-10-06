@@ -10,3 +10,4 @@ test-results
 playwright-report
 .vercel
 supabase/.temp
+.claude/settings.local.json

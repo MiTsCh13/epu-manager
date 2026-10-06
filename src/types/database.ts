@@ -123,6 +123,7 @@ export type Database = {
           reimbursed: boolean
           trip_hours: number | null
           user_id: string
+          vehicle: string | null
         }
         Insert: {
           amount: number
@@ -142,6 +143,7 @@ export type Database = {
           reimbursed?: boolean
           trip_hours?: number | null
           user_id?: string
+          vehicle?: string | null
         }
         Update: {
           amount?: number
@@ -161,6 +163,7 @@ export type Database = {
           reimbursed?: boolean
           trip_hours?: number | null
           user_id?: string
+          vehicle?: string | null
         }
         Relationships: []
       }

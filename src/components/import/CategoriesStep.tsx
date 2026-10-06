@@ -1,14 +1,23 @@
 import type { CategoryContext } from '@/constants/expenseCategories';
-import type { CategoryChoice, CategoryValueSummary } from '@/lib/importMapping';
+import type { CategoryChoice, CategoryValueSummary, Target } from '@/lib/importMapping';
+import { EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
 import { formatEuro } from '@/lib/money';
 import { Button } from '@/components/ui/Button';
 import { Term } from '@/components/ui/Tooltip';
 import { TargetSelect } from './TargetSelect';
 
+function targetName(t: Target): string {
+  if (t === 'income') return 'Einnahme';
+  if (t === 'svs') return 'SVS';
+  if (t === 'skip') return 'nicht übernehmen';
+  return EXPENSE_CATEGORIES.find((c) => `cat:${c.id}` === t)?.label ?? 'Ausgabe';
+}
+
 /** Schritt 3: Jeden Wert der Kategorie-Spalte einmal zuordnen – gilt dann für alle Zeilen mit diesem Wert. */
 export function CategoriesStep({
   values,
   map,
+  autoPreview,
   context,
   busy,
   onChange,
@@ -17,6 +26,7 @@ export function CategoriesStep({
 }: {
   values: CategoryValueSummary[];
   map: Record<string, CategoryChoice>;
+  autoPreview: Record<string, Map<string, number>>; // „automatisch“: Ziel → Anzahl
   context: CategoryContext;
   busy: boolean;
   onChange: (value: string, target: CategoryChoice) => void;
@@ -48,6 +58,15 @@ export function CategoriesStep({
                 <p className="text-xs text-slate-500">
                   {v.count === 1 ? '1 Eintrag' : `${v.count} Einträge`} · {formatEuro(v.total)}
                 </p>
+                {map[v.value] === 'auto' && autoPreview[v.value] && (
+                  <p className="text-xs text-primary-800">
+                    →{' '}
+                    {[...autoPreview[v.value]!.entries()]
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([t, n]) => `${n}× ${targetName(t as Target)}`)
+                      .join(', ')}
+                  </p>
+                )}
               </div>
               <TargetSelect<CategoryChoice>
                 allowAuto

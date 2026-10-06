@@ -31,6 +31,7 @@ export function ReviewStep({
   context,
   saving,
   onChange,
+  onChangeMany,
   onBack,
   onImport,
 }: {
@@ -39,11 +40,14 @@ export function ReviewStep({
   context: CategoryContext;
   saving: boolean;
   onChange: (id: number, patch: Partial<ReviewRow>) => void;
+  onChangeMany: (ids: readonly number[], patch: (r: ReviewRow) => Partial<ReviewRow>) => void;
   onBack: () => void;
   onImport: () => void;
 }) {
   // Bitte ansehen: Probleme, mögliche Duplikate, Hinweise und teure Käufe, bei denen „auf mehrere Jahre verteilen“ offen ist
-  const needsAttention = (r: ReviewRow) => !!r.problem || r.duplicate || !!r.note || canSpread(r, isKU);
+  const needsAttention = (r: ReviewRow) => !!r.problem || r.duplicate || !!r.note || r.unclear || canSpread(r, isKU);
+  const [query, setQuery] = useState('');
+  const [bulkTarget, setBulkTarget] = useState<Target | ''>('');
   const [filter, setFilter] = useState<Filter>(() => (rows.some(needsAttention) ? 'attention' : 'all'));
   const [shown, setShown] = useState(PAGE);
   const summary = useMemo(() => summarize(rows, isKU), [rows, isKU]);
@@ -64,7 +68,27 @@ export function ReviewStep({
     ['expense', 'Ausgaben'],
     ['svs', 'SVS'],
   ];
-  const visible = rows.filter((r) => matches(r, filter));
+  // Ist der aktive Filter leer geworden (z. B. alles erledigt), zurück auf „Alle“
+  const activeFilter: Filter = filter === 'all' || rows.some((r) => matches(r, filter)) ? filter : 'all';
+  const q = query.trim().toLowerCase();
+  const visible = rows.filter(
+    (r) => matches(r, activeFilter) && (!q || [r.description, r.category, r.reference].some((t) => t.toLowerCase().includes(q)) || r.amount.toFixed(2).includes(q.replace(',', '.'))),
+  );
+  // Massenänderung: Einnahmen nur zu Einnahmen, Ausgaben nur zu Ausgaben/SVS; „Nicht übernehmen“ für alle.
+  // Bereits abgewählte Zeilen (privat, Steuer) bleiben unangetastet, außer man wählt selbst „Nicht übernehmen“.
+  const fits = (r: ReviewRow, t: Target) =>
+    !r.problem && (t === 'skip' || (r.target !== 'skip' && (t === 'income' ? r.direction === 'in' : r.direction === 'out')));
+  const affected = bulkTarget ? visible.filter((r) => fits(r, bulkTarget)) : visible.filter((r) => !r.problem && r.target !== 'skip');
+
+  function applyBulk() {
+    if (!bulkTarget) return;
+    const t = bulkTarget;
+    onChangeMany(
+      affected.map((r) => r.id),
+      (r) => ({ target: t, note: null, reason: null, unclear: false, include: t !== 'skip' && !r.duplicate }),
+    );
+    setBulkTarget('');
+  }
 
   return (
     <div className="space-y-6">
@@ -91,20 +115,49 @@ export function ReviewStep({
               key={f}
               type="button"
               role="tab"
-              aria-selected={filter === f}
+              aria-selected={activeFilter === f}
               onClick={() => {
                 setFilter(f);
                 setShown(PAGE);
               }}
               className={`inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium ring-1 ring-inset transition-colors ${
-                filter === f ? 'bg-primary text-white ring-primary' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-50'
+                activeFilter === f ? 'bg-primary text-white ring-primary' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-50'
               }`}
             >
               {label}
-              <span className={`text-xs ${filter === f ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
+              <span className={`text-xs ${activeFilter === f ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
             </button>
           );
         })}
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          type="search"
+          aria-label="Zeilen suchen"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShown(PAGE);
+          }}
+          placeholder="Suchen, z. B. „Adobe“"
+          className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        />
+        {visible.some((r) => !r.problem) && (
+          <div className="flex gap-2">
+            <TargetSelect<Target | ''>
+              value={bulkTarget}
+              onChange={setBulkTarget}
+              context={context}
+              placeholder={`Alle ${affected.length} gefundenen ändern auf …`}
+              label="Zuordnung für alle angezeigten Zeilen"
+              className="sm:w-64"
+            />
+            <Button variant="secondary" onClick={applyBulk} disabled={!bulkTarget}>
+              Ändern
+            </Button>
+          </div>
+        )}
       </div>
 
       <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200" data-testid="import-review-list">
@@ -119,7 +172,7 @@ export function ReviewStep({
         </Button>
       )}
 
-      <div className="sticky bottom-20 z-10 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-lg ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
+      <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-lg ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
         <p className="text-sm text-slate-700">
           <span className="font-semibold">{total === 1 ? '1 Eintrag' : `${total} Einträge`}</span> werden übernommen
           {summary.skipped > 0 && `, ${summary.skipped} nicht`}.
@@ -190,12 +243,17 @@ function ReviewItem({
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={badge.tone}>{badge.label}</Badge>
           {r.duplicate && <Badge tone="warning">Gibt es schon in Klaro</Badge>}
+          {r.unclear && !r.problem && <Badge tone="warning">Kategorie unklar</Badge>}
         </div>
         {r.problem && <p className="text-sm text-red-700">{r.problem}</p>}
         {r.duplicate && !r.problem && (
           <p className="text-sm text-slate-600">Gleiches Datum, gleicher Betrag – deshalb abgewählt. Hak an, falls es doch ein eigener Eintrag ist.</p>
         )}
         {r.note && !r.problem && <p className="text-sm text-slate-600">{r.note}</p>}
+        {r.reason && !r.problem && kind !== 'skip' && <p className="text-xs text-slate-500">Vorschlag: {r.reason}</p>}
+        {r.unclear && !r.problem && (
+          <p className="text-sm text-slate-600">Klaro hat keine passende Kategorie erkannt – bitte rechts auswählen.</p>
+        )}
         {spreadable && (
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
@@ -240,7 +298,7 @@ function ReviewItem({
           value={r.target}
           context={context}
           label={`Zuordnung für ${r.description || 'Zeile ' + r.line}`}
-          onChange={(target: Target) => onChange({ target, note: null, include: target !== 'skip' })}
+          onChange={(target: Target) => onChange({ target, note: null, reason: null, unclear: false, include: target !== 'skip' && !r.duplicate })}
         />
       )}
     </li>

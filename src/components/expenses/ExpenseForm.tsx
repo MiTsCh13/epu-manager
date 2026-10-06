@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Paperclip, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { countsUnder, findCategoryByLabel, type CategoryContext } from '@/constants/expenseCategories';
-import { KILOMETERGELD_PER_KM, NAECHTIGUNG_PAUSCHAL, TAGESGELD, TAGESGELD_INPUT_HOURS, VAT_RATES } from '@/constants/tax2026';
+import { countsUnder, findCategoryByLabel } from '@/constants/expenseCategories';
+import { NAECHTIGUNG_PAUSCHAL, TAGESGELD, TAGESGELD_INPUT_HOURS, VAT_RATES } from '@/constants/tax2026';
 import { depreciationSchedule, GWG_LIMIT, USEFUL_LIFE_PRESETS } from '@/lib/assets';
 import {
+  categoryContextFor,
   computeAssetValues,
   computeExpenseValues,
   entryKind,
@@ -16,7 +17,7 @@ import {
   type ExpenseFormInput,
 } from '@/lib/expenses';
 import { toISODate } from '@/lib/invoices';
-import { calculateArbeitsplatzpauschale, otherIncomeAmount } from '@/lib/profit';
+import { kilometergeldRate } from '@/lib/profit';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
 import { Alert } from '@/components/ui/Alert';
@@ -24,8 +25,9 @@ import { Button } from '@/components/ui/Button';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
+import { Term } from '@/components/ui/Tooltip';
 import { CategoryGrid } from './CategoryGrid';
-import type { Asset, AssetInsert, BusinessType, Expense, ExpenseInsert, OtherIncomeKind, PauschType, ProfitMethod, VatRate } from '@/types';
+import type { Asset, AssetInsert, Expense, ExpenseInsert, VatRate, Vehicle } from '@/types';
 
 /** Was gerade bearbeitet wird: eine Ausgabe, eine Anlage oder nichts (neu erfassen). */
 export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asset'; asset: Asset } | null;
@@ -75,6 +77,7 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
     // Bei Pauschalen (Kilometergeld, Tagesgeld, Nächtigung) rechnet Klaro den Betrag
     amount: e.km_driven || e.trip_hours || e.nights ? '' : formatDecimalInput(Number(e.amount)),
     km: e.km_driven ? formatDecimalInput(Number(e.km_driven)) : '',
+    vehicle: (e.vehicle as Vehicle | null) ?? 'car',
     hours: e.trip_hours ? String(Math.ceil(Number(e.trip_hours))) : '',
     nights: e.nights ? String(e.nights) : '',
     reimbursed: e.reimbursed,
@@ -88,6 +91,8 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
 }
 
 const CUSTOM_LIFE = 'andere';
+
+export const VEHICLE_LABELS: Record<Vehicle, string> = { car: 'Auto', motorbike: 'Motorrad, Moped', bike: 'Fahrrad' };
 
 /**
  * Ausgabe erfassen bzw. bearbeiten (inkl. Beleg-Upload). Über 1.000 € wird daraus eine Anlage, die Klaro über die
@@ -112,19 +117,7 @@ export function ExpenseFormModal({
 }) {
   const { user, profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
-  const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
-  const context: CategoryContext = {
-    businessType: (profile?.business_type as BusinessType | null) ?? null,
-    profitMethod: (profile?.profit_method ?? 'euer') as ProfitMethod,
-    pauschType: (profile?.pausch_type ?? null) as PauschType | null,
-    smallApp:
-      calculateArbeitsplatzpauschale({
-        homeOffice: profile?.home_office ?? null,
-        otherIncomeKind: otherKind,
-        otherIncomeAmount: otherIncomeAmount(otherKind, profile?.other_income_amount == null ? null : Number(profile.other_income_amount)),
-        year: new Date().getFullYear(),
-      }).size === 'klein',
-  };
+  const context = categoryContextFor(profile);
   const pauschal = context.profitMethod === 'pauschal';
   const record = entry?.kind === 'asset' ? entry.asset : (entry?.expense ?? null);
   const existingReceipt = record?.receipt_url ?? null;
@@ -310,16 +303,32 @@ export function ExpenseFormModal({
         )}
 
         {category?.hasKm && (
-          <Field
-            label="Gefahrene Kilometer"
-            optional
-            inputMode="decimal"
-            placeholder="z. B. 180"
-            hint={`Mit eigenem Auto? Dann gilt das Kilometergeld: ${formatEuro(KILOMETERGELD_PER_KM)} pro km. Für Tickets einfach den Betrag eingeben.`}
-            value={form.km}
-            error={errors.km}
-            onChange={(e) => set({ km: e.target.value })}
-          />
+          <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="Gefahrene Kilometer"
+                optional
+                inputMode="decimal"
+                placeholder="z. B. 180"
+                value={form.km}
+                error={errors.km}
+                onChange={(e) => set({ km: e.target.value })}
+              />
+              <Select
+                label="Womit?"
+                value={form.vehicle ?? 'car'}
+                onChange={(e) => set({ vehicle: e.target.value as Vehicle })}
+                options={(['car', 'motorbike', 'bike'] as const).map((v) => ({
+                  value: v,
+                  label: `${VEHICLE_LABELS[v]} (${formatEuro(kilometergeldRate(v, form.date))}/km)`,
+                }))}
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              Mit dem eigenen Fahrzeug gilt das amtliche <Term k="kilometergeld" />, höchstens für 30.000 km im Jahr. Für
+              Tickets einfach den Betrag eingeben.
+            </p>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-3">

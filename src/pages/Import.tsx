@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { findCategoryById, isCategoryOffered, type CategoryContext } from '@/constants/expenseCategories';
-import { fetchExisting, saveImport, type Sheet } from '@/lib/importData';
+import { findCategoryById, isCategoryOffered } from '@/constants/expenseCategories';
+import { fetchExisting, fetchHistory, saveImport, type Sheet } from '@/lib/importData';
 import {
   buildRecords,
   buildReviewRows,
@@ -20,13 +20,15 @@ import {
   summarize,
   targetCategoryId,
   type ImportSummary,
+  resolveTarget,
   type CategoryChoice,
+  type CategoryHistory,
   type ReviewRow,
 } from '@/lib/importMapping';
 import type { Table } from '@/lib/importParse';
 import { toISODate } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
-import { calculateArbeitsplatzpauschale, otherIncomeAmount } from '@/lib/profit';
+import { categoryContextFor } from '@/lib/expenses';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { CategoriesStep } from '@/components/import/CategoriesStep';
 import { ColumnsStep, type ColumnSettings } from '@/components/import/ColumnsStep';
@@ -35,7 +37,6 @@ import { ReviewStep } from '@/components/import/ReviewStep';
 import { SourceStep } from '@/components/import/SourceStep';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import type { BusinessType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 
 type Step = 'source' | 'columns' | 'categories' | 'review' | 'done';
 
@@ -63,19 +64,7 @@ export default function Import() {
   const { profile } = useAuth();
   const isKU = profile?.is_kleinunternehmer ?? true;
   const today = toISODate(new Date());
-  const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
-  const context: CategoryContext = {
-    businessType: (profile?.business_type as BusinessType | null) ?? null,
-    profitMethod: (profile?.profit_method ?? 'euer') as ProfitMethod,
-    pauschType: (profile?.pausch_type ?? null) as PauschType | null,
-    smallApp:
-      calculateArbeitsplatzpauschale({
-        homeOffice: profile?.home_office ?? null,
-        otherIncomeKind: otherKind,
-        otherIncomeAmount: otherIncomeAmount(otherKind, profile?.other_income_amount == null ? null : Number(profile.other_income_amount)),
-        year: new Date().getFullYear(),
-      }).size === 'klein',
-  };
+  const context = useMemo(() => categoryContextFor(profile), [profile]);
 
   const [step, setStep] = useState<Step>('source');
   const [sheets, setSheets] = useState<Sheet[]>([]);
@@ -86,6 +75,11 @@ export default function Import() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportSummary | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
+  // Bisherige Ausgaben → bessere Kategorie-Vorschläge
+  const [learned, setLearned] = useState<CategoryHistory | undefined>();
+  useEffect(() => {
+    void fetchHistory().then(setLearned);
+  }, [historyKey]);
 
   const table = useMemo(() => (settings ? tableOf(sheets, settings.sheet) : []), [sheets, settings]);
   const rows = useMemo(
@@ -93,6 +87,17 @@ export default function Import() {
     [table, settings, today],
   );
   const values = useMemo(() => categoryValues(rows), [rows]);
+  // Vorschau für „automatisch“: was Klaro pro Kategorie-Wert aus den Beschreibungen machen würde
+  const autoPreview = useMemo(() => {
+    const preview: Record<string, Map<string, number>> = {};
+    for (const r of rows) {
+      if (!r.category || categoryMap[r.category] !== 'auto') continue;
+      const t = resolveTarget(r, { [r.category]: 'auto' }, context, learned).target;
+      const m = (preview[r.category] ??= new Map());
+      m.set(t, (m.get(t) ?? 0) + 1);
+    }
+    return preview;
+  }, [rows, categoryMap, learned, context]);
 
   function onLoaded(loaded: Sheet[], name: string) {
     // Erstes Blatt mit Daten vorauswählen
@@ -134,7 +139,7 @@ export default function Import() {
   async function goReview(map = categoryMap) {
     if (!settings) return;
     setBusy(true);
-    const built = buildReviewRows(rows, map, context, { isKU, defaultVat: settings.defaultVat, amountsNet: settings.amountsNet });
+    const built = buildReviewRows(rows, map, context, { isKU, defaultVat: settings.defaultVat, amountsNet: settings.amountsNet }, learned);
     const dates = built.flatMap((r) => (r.date ? [r.date.iso] : [])).sort();
     try {
       const existing = dates.length ? await fetchExisting(dates[0]!, dates[dates.length - 1]!) : [];
@@ -214,6 +219,7 @@ export default function Import() {
           <CategoriesStep
             values={values}
             map={categoryMap}
+            autoPreview={autoPreview}
             context={context}
             busy={busy}
             onChange={(value, target) => setCategoryMap((m) => ({ ...m, [value]: target }))}
@@ -231,6 +237,10 @@ export default function Import() {
             context={context}
             saving={busy}
             onChange={(id, patch) => setReviewRows((list) => list.map((r) => (r.id === id ? { ...r, ...patch } : r)))}
+            onChangeMany={(ids, patch) => {
+              const set = new Set(ids);
+              setReviewRows((list) => list.map((r) => (set.has(r.id) ? { ...r, ...patch(r) } : r)));
+            }}
             onBack={() => setStep(values.length > 0 ? 'categories' : 'columns')}
             onImport={() => void runImport()}
           />
