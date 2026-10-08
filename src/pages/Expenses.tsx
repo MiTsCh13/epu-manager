@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Laptop, Plus, ReceiptEuro } from 'lucide-react';
+import { ArrowRight, Laptop, Plus, ReceiptEuro, ScanText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
@@ -14,7 +14,10 @@ import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AssetList } from '@/components/expenses/AssetList';
 import { ImportLink } from '@/components/import/ImportLink';
 import { YearSelect } from '@/components/ui/YearSelect';
-import { ExpenseFormModal, type ExpenseEntry } from '@/components/expenses/ExpenseForm';
+import { ExpenseFormModal, type ExpenseEntry, type ReceiptScan } from '@/components/expenses/ExpenseForm';
+import { useReceiptScanner } from '@/components/expenses/ReceiptScanner';
+import { WindowReceiptDrop } from '@/components/expenses/ReceiptDrop';
+import { takePendingReceipt } from '@/lib/pendingReceipt';
 import { ExpenseBrowser } from '@/components/expenses/ExpenseBrowser';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
@@ -34,6 +37,7 @@ export default function Expenses() {
   const data = useExpensesData(year);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseEntry>(null);
+  const [scan, setScan] = useState<ReceiptScan | null>(null);
   const [deleting, setDeleting] = useState<ExpenseEntry>(null);
   const [tab, setTab] = useState<Tab>('ausgaben');
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -43,6 +47,7 @@ export default function Expenses() {
   useEffect(() => {
     if (searchParams.get('neu') !== null) {
       setEditing(null);
+      setScan(null);
       setFormOpen(true);
       setSearchParams({}, { replace: true });
     }
@@ -88,8 +93,26 @@ export default function Expenses() {
 
   const openNew = () => {
     setEditing(null);
+    setScan(null);
     setFormOpen(true);
   };
+  const openScan = (s: ReceiptScan) => {
+    setEditing(null);
+    setScan(s);
+    setFormOpen(true);
+  };
+  const scanner = useReceiptScanner({ onExpense: openScan, onAddSvs: data.addSvsPayment });
+  // Beleg im offenen Formular importiert: Formular schließen, auslesen, mit Vorschlag wieder öffnen
+  const importFromForm = (file: File) => {
+    setFormOpen(false);
+    scanner.start(file);
+  };
+
+  // Beleg aus der Übersicht (Drag & Drop oder „Beleg importieren“) → gleich auslesen
+  useEffect(() => {
+    const file = takePendingReceipt();
+    if (file) scanner.start(file);
+  }, []); // nur beim Öffnen der Seite
 
   const deletingRecord = deleting?.kind === 'asset' ? deleting.asset : (deleting?.expense ?? null);
 
@@ -119,6 +142,14 @@ export default function Expenses() {
         <>
           <YearSelect value={year} onChange={setYear} extraYears={data.years} />
           <ImportLink />
+          <Button
+            variant="secondary"
+            icon={<ScanText className="h-4 w-4" />}
+            onClick={scanner.pick}
+            title="Foto oder PDF – Klaro liest Betrag, Datum und Kategorie automatisch aus"
+          >
+            Beleg importieren
+          </Button>
           <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
             Ausgabe erfassen
           </Button>
@@ -209,6 +240,7 @@ export default function Expenses() {
                   context={context}
                   counts={(e) => countsAlongsidePauschal(e, pauschType ?? 'ku')}
                   onEdit={(expense) => {
+                    setScan(null);
                     setEditing({ kind: 'expense', expense });
                     setFormOpen(true);
                   }}
@@ -265,6 +297,7 @@ export default function Expenses() {
                     expenses={data.expenses}
                     context={context}
                     onEdit={(expense) => {
+                      setScan(null);
                       setEditing({ kind: 'expense', expense });
                       setFormOpen(true);
                     }}
@@ -307,6 +340,7 @@ export default function Expenses() {
                       assets={data.assets}
                       year={year}
                       onEdit={(asset) => {
+                        setScan(null);
                         setEditing({ kind: 'asset', asset });
                         setFormOpen(true);
                       }}
@@ -323,15 +357,20 @@ export default function Expenses() {
       )}
 
       <ExpenseFormModal
-        key={editing ? `${editing.kind}-${editing.kind === 'asset' ? editing.asset.id : editing.expense.id}` : 'new'}
+        key={editing ? `${editing.kind}-${editing.kind === 'asset' ? editing.asset.id : editing.expense.id}` : scan ? `scan-${scan.file.name}-${scan.file.lastModified}` : 'new'}
         open={formOpen}
         entry={editing}
+        scan={scan}
+        onImportReceipt={importFromForm}
         onClose={() => setFormOpen(false)}
         onSaveExpense={data.saveExpense}
         onSaveAsset={data.saveAsset}
         onDeleteExpense={data.deleteExpense}
         onDeleteAsset={data.deleteAsset}
       />
+
+      {scanner.elements}
+      <WindowReceiptDrop onFile={scanner.start} enabled={!formOpen && !scanner.busy && !deleting} />
 
       <Modal
         open={!!deleting}

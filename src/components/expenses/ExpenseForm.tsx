@@ -20,6 +20,7 @@ import { toISODate } from '@/lib/invoices';
 import { kilometergeldRate } from '@/lib/profit';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
+import type { ReceiptPrefill } from '@/lib/receiptPrefill';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
@@ -27,12 +28,19 @@ import { Field, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import { CategoryGrid } from './CategoryGrid';
+import { ReceiptDropArea } from './ReceiptDrop';
 import type { Asset, AssetInsert, Expense, ExpenseInsert, VatRate, Vehicle } from '@/types';
 
 /** Was gerade bearbeitet wird: eine Ausgabe, eine Anlage oder nichts (neu erfassen). */
 export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asset'; asset: Asset } | null;
 
 type Result = Promise<{ error: string | null }>;
+
+/** Ausgelesener Beleg: Datei + Vorschlag fürs Formular (nur bei neuen Ausgaben). */
+export interface ReceiptScan {
+  file: File;
+  prefill: ReceiptPrefill;
+}
 
 function vatRateOf(amount: number, net: number | null): VatRate {
   const rate = net ? Math.round((amount / net - 1) * 100) : 0;
@@ -101,6 +109,8 @@ export const VEHICLE_LABELS: Record<Vehicle, string> = { car: 'Auto', motorbike:
 export function ExpenseFormModal({
   open,
   entry,
+  scan = null,
+  onImportReceipt,
   onClose,
   onSaveExpense,
   onSaveAsset,
@@ -109,6 +119,9 @@ export function ExpenseFormModal({
 }: {
   open: boolean;
   entry: ExpenseEntry;
+  scan?: ReceiptScan | null;
+  /** Beleg importieren und auslesen (nur bei neuen Ausgaben ohne ausgelesenen Beleg) */
+  onImportReceipt?: (file: File) => void;
   onClose: () => void;
   onSaveExpense: (values: ExpenseInsert, id?: string) => Result;
   onSaveAsset: (values: AssetInsert, id?: string) => Result;
@@ -122,24 +135,25 @@ export function ExpenseFormModal({
   const record = entry?.kind === 'asset' ? entry.asset : (entry?.expense ?? null);
   const existingReceipt = record?.receipt_url ?? null;
   // Direkt mit den Werten initialisieren (Aufrufer setzt key je Eintrag) – kein leeres Aufblitzen
-  const [form, setForm] = useState<ExpenseFormInput>(() => toForm(entry, isKU));
+  const initialForm = () => (scan && !entry ? { ...toForm(null, isKU), ...scan.prefill.form } : toForm(entry, isKU));
+  const [form, setForm] = useState<ExpenseFormInput>(initialForm);
   const [customLife, setCustomLife] = useState(() => !!form.usefulLife && !USEFUL_LIFE_PRESETS.some((p) => String(p.years) === form.usefulLife));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(() => scan?.file ?? null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removeReceipt, setRemoveReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    const initial = toForm(entry, isKU);
+    const initial = initialForm();
     setForm(initial);
     setCustomLife(!!initial.usefulLife && !USEFUL_LIFE_PRESETS.some((p) => String(p.years) === initial.usefulLife));
     setErrors({});
-    setFile(null);
+    setFile(scan?.file ?? null);
     setFileError(null);
     setRemoveReceipt(false);
-  }, [open, entry, isKU]);
+  }, [open, entry, scan, isKU]);
 
   const set = (patch: Partial<ExpenseFormInput>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -234,7 +248,7 @@ export function ExpenseFormModal({
     <Modal
       open={open}
       onClose={saving ? () => undefined : onClose}
-      title={entry?.kind === 'asset' ? 'Anlage bearbeiten' : entry ? 'Ausgabe bearbeiten' : 'Ausgabe erfassen'}
+      title={entry?.kind === 'asset' ? 'Anlage bearbeiten' : entry ? 'Ausgabe bearbeiten' : scan ? 'Beleg prüfen' : 'Ausgabe erfassen'}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
@@ -247,12 +261,19 @@ export function ExpenseFormModal({
       }
     >
       <form id={formId} onSubmit={handleSubmit} noValidate className="space-y-5">
+        {scan && !entry && <ScanSummary prefill={scan.prefill} />}
+        {!scan && !entry && onImportReceipt && <ReceiptDropArea onFile={onImportReceipt} />}
         <CategoryGrid
           value={form.categoryId}
           onChange={(categoryId) => set({ categoryId })}
           error={errors.categoryId}
           context={context}
         />
+        {scan?.prefill.categoryReason && form.categoryId && form.categoryId === scan.prefill.form.categoryId && (
+          <p className="-mt-3 text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Vorschlag von Klaro:</span> {scan.prefill.categoryReason}
+          </p>
+        )}
 
         {reimbursedOnly && (
           <ChoiceCards<boolean>
@@ -508,5 +529,27 @@ export function ExpenseFormModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Hinweis oben im Formular, wenn Klaro den Beleg ausgelesen hat. */
+function ScanSummary({ prefill }: { prefill: ReceiptPrefill }) {
+  const notes = prefill.notes.length > 0 && (
+    <ul className="mt-1 list-disc space-y-1 pl-4">
+      {prefill.notes.map((n, i) => (
+        <li key={i}>{n}</li>
+      ))}
+    </ul>
+  );
+  return prefill.likelyPrivate ? (
+    <Alert type="warning" title="Klaro hat deinen Beleg gelesen – das ist vermutlich privat">
+      Private Ausgaben sind nicht absetzbar. Speichere den Beleg nur, wenn du ihn wirklich beruflich nutzt.
+      {notes}
+    </Alert>
+  ) : (
+    <Alert type="info" title="Klaro hat deinen Beleg gelesen">
+      Bitte prüf die Angaben, bevor du speicherst.
+      {notes}
+    </Alert>
   );
 }

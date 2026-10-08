@@ -1,5 +1,5 @@
 // Hilfen für die E2E-Tests: eigene Testnutzer pro Test (über die Admin-API, ohne Mailversand),
-// Daten per API, Aufräumen über „delete-account“. Der Service-Role-Key bleibt in .env.local (nie VITE_).
+// Daten per API, Aufräumen über die Admin-API (wie „delete-account“). Der Service-Role-Key bleibt in .env.local (nie VITE_).
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { test as base, expect, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -127,21 +127,22 @@ export async function seedPaidInvoices(client: Client, amounts: number[]) {
 }
 
 /**
- * Testnutzer samt aller Daten löschen (gleicher Weg wie „Konto löschen“ in der App).
- * Angemeldet wird per Magic-Link-Token – klappt auch nach Passwortwechsel oder ohne bestätigte E-Mail.
+ * Testnutzer samt aller Daten löschen – dieselben Schritte wie die Edge Function „delete-account“ (ohne Stripe,
+ * Testnutzer haben kein Abo), aber direkt über die Admin-API. So zählt das Aufräumen nicht gegen die
+ * Anmelde-Limits von Supabase Auth (viele Testläufe hintereinander liefen sonst in „rate limit reached“).
  */
 async function deleteUser(email: string) {
-  const { data: link, error: linkError } = await adminClient().auth.admin.generateLink({ type: 'magiclink', email });
-  if (linkError) return; // wurde nie angelegt
-  const client = newClient();
-  const { data, error } = await client.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: 'magiclink' });
-  if (error || !data.session) throw new Error(`Testnutzer ${email} konnte nicht angemeldet werden: ${error?.message}`);
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: 'LÖSCHEN' }),
-  });
-  if (!res.ok) throw new Error(`Testnutzer ${email} konnte nicht gelöscht werden (HTTP ${res.status})`);
+  const admin = adminClient();
+  // generateLink liefert die Nutzer-ID ohne Anmeldung; schlägt fehl, wenn es den Nutzer nie gab
+  const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+  if (linkError || !link.user) return;
+  const id = link.user.id;
+  const { data: files } = await admin.storage.from('receipts').list(id, { limit: 1000 });
+  if (files && files.length > 0) await admin.storage.from('receipts').remove(files.map((f) => `${id}/${f.name}`));
+  const { error: dataError } = await admin.rpc('delete_user_data', { p_user: id });
+  if (dataError) throw new Error(`Daten von ${email} konnten nicht gelöscht werden: ${dataError.message}`);
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) throw new Error(`Testnutzer ${email} konnte nicht gelöscht werden: ${error.message}`);
 }
 
 /** `cleanup(email)` merkt Testnutzer vor; nach dem Test werden sie gelöscht – auch wenn der Test fehlschlägt. */

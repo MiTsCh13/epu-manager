@@ -28,9 +28,9 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    // Erstes Eingabefeld fokussieren (sonst den Dialog selbst)
-    const first = panelRef.current?.querySelector<HTMLElement>('input, textarea, select');
-    (first ?? panelRef.current)?.focus();
+    // Erstes Eingabefeld fokussieren (sonst den Dialog selbst) – ohne zu scrollen, damit Hinweise oben sichtbar bleiben
+    const first = panelRef.current?.querySelector<HTMLElement>('input:not([type=file]):not([type=hidden]), textarea, select');
+    (first ?? panelRef.current)?.focus({ preventScroll: true });
 
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);

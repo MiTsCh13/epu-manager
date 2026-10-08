@@ -57,7 +57,15 @@ export type Database = {
           useful_life_years?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "assets_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       clients: {
         Row: {
@@ -165,7 +173,15 @@ export type Database = {
           user_id?: string
           vehicle?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       imports: {
         Row: {
@@ -225,7 +241,15 @@ export type Database = {
           reference?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "incomes_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoices: {
         Row: {
@@ -418,6 +442,36 @@ export type Database = {
         }
         Relationships: []
       }
+      receipt_scans: {
+        Row: {
+          created_at: string
+          id: string
+          input_tokens: number
+          model: string
+          output_tokens: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model: string
+          output_tokens?: number
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string
+          output_tokens?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       svs_payments: {
         Row: {
           amount: number
@@ -452,7 +506,15 @@ export type Database = {
           user_id?: string
           year?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "svs_payments_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

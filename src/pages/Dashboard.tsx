@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Banknote, FilePlus, FileClock, PiggyBank, ReceiptEuro, TrendingUp, UserPlus } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Banknote, FilePlus, FileClock, PiggyBank, ReceiptEuro, ScanText, TrendingUp, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAccessState } from '@/lib/subscription';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -9,7 +9,9 @@ import { openInvoicesSummary, topCategories } from '@/lib/dashboard';
 import { toISODate } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
 import { periodLabel, resolvePeriod, revenueBuckets, type DateRange, type PeriodPreset } from '@/lib/period';
+import { setPendingReceipt } from '@/lib/pendingReceipt';
 import { PageWrapper } from '@/components/layout/PageWrapper';
+import { WindowReceiptDrop } from '@/components/expenses/ReceiptDrop';
 import { ExpenseDonut } from '@/components/dashboard/ExpenseDonut';
 import { PeriodFilter } from '@/components/dashboard/PeriodFilter';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
@@ -25,6 +27,13 @@ const actionClass =
 export default function Dashboard() {
   const { profile } = useAuth();
   const svs = useSvsTracker();
+  const navigate = useNavigate();
+  const receiptInput = useRef<HTMLInputElement>(null);
+  // Beleg importieren: zu den Ausgaben wechseln, dort liest Klaro ihn sofort aus
+  const importReceipt = (file: File) => {
+    setPendingReceipt(file);
+    navigate('/ausgaben');
+  };
   const todayIso = toISODate(new Date());
 
   // Zeitraum für die Diagramme
@@ -52,6 +61,27 @@ export default function Dashboard() {
         <ReceiptEuro className="h-4 w-4" aria-hidden="true" />
         Ausgabe erfassen
       </Link>
+      <button
+        type="button"
+        onClick={() => receiptInput.current?.click()}
+        title="Foto oder PDF – Klaro liest Betrag, Datum und Kategorie automatisch aus"
+        className={`${actionClass} bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50`}
+      >
+        <ScanText className="h-4 w-4" aria-hidden="true" />
+        Beleg importieren
+      </button>
+      <input
+        ref={receiptInput}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        data-testid="dashboard-receipt-input"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) importReceipt(f);
+        }}
+      />
       <Link to="/kunden?neu" className={`${actionClass} bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50`}>
         <UserPlus className="h-4 w-4" aria-hidden="true" />
         Kunde anlegen
@@ -149,6 +179,7 @@ export default function Dashboard() {
           </section>
         </div>
       )}
+      <WindowReceiptDrop onFile={importReceipt} afterText="Du landest dafür bei den Ausgaben." />
     </PageWrapper>
   );
 }
