@@ -6,7 +6,6 @@ import { Calculator, FileText, UserRound } from 'lucide-react';
 import { StepAccounting, StepIdentity, StepInvoicing } from '@/components/onboarding/steps';
 import { Alert } from '@/components/ui/Alert';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
-import { TextArea } from '@/components/ui/Field';
 import { Term } from '@/components/ui/Tooltip';
 import { useSettingsSection } from '@/hooks/useSettingsSection';
 import { describeSvsChange, describeTaxChange } from '@/lib/profileSettings';
@@ -14,7 +13,6 @@ import { supabase } from '@/lib/supabase';
 import { generateInvoiceNumber } from '@/lib/tax';
 import { SettingsCard } from './SettingsCard';
 
-const FOOTER_MAX_LENGTH = 500;
 
 export function IdentitySection() {
   const state = useSettingsSection('identity');
@@ -132,16 +130,13 @@ export function InvoicingSection() {
             läuft einfach weiter. Bereits vergebene Nummern bleiben unverändert.
           </Alert>
         )}
-        <TextArea
-          label="Standard-Fußzeile für Rechnungen"
-          optional
-          rows={3}
-          maxLength={FOOTER_MAX_LENGTH}
-          placeholder="z. B. Vielen Dank für die gute Zusammenarbeit!"
-          hint="Wird bei jeder neuen Rechnung vorausgefüllt und lässt sich dort pro Rechnung anpassen."
-          value={data.invoice_footer_text}
-          onChange={(e) => update({ invoice_footer_text: e.target.value })}
-        />
+        <p className="text-sm text-slate-600">
+          Logo, Farbe, Texte und Fußzeile deiner Rechnungen gestaltest du in den{' '}
+          <a href="#vorlagen" className="font-semibold text-primary hover:underline">
+            Rechnungs-Vorlagen
+          </a>
+          .
+        </p>
       </div>
     </SettingsCard>
   );

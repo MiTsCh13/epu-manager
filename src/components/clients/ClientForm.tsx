@@ -5,6 +5,7 @@ import { Field, Select, TextArea } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import { EMPTY_CLIENT_FORM, validateClient, type ClientFormData, type ClientFormErrors } from '@/lib/validation';
+import { useTemplates } from '@/hooks/useTemplates';
 import type { Client } from '@/types';
 
 function toForm(client: Client | null): ClientFormData {
@@ -19,6 +20,7 @@ function toForm(client: Client | null): ClientFormData {
     country: client.country || 'AT',
     uid_number: client.uid_number ?? '',
     notes: client.notes ?? '',
+    template_id: client.template_id ?? '',
   };
 }
 
@@ -149,6 +151,7 @@ export function ClientFormModal({
           error={errors.uid_number}
           onChange={(e) => set({ uid_number: e.target.value })}
         />
+        <TemplateSelect value={form.template_id ?? ''} onChange={(template_id) => set({ template_id })} />
         <TextArea
           label="Notizen"
           optional
@@ -158,5 +161,23 @@ export function ClientFormModal({
         />
       </form>
     </Modal>
+  );
+}
+
+/** Vorlage für diesen Kunden – nur sichtbar, wenn es mehr als eine Vorlage gibt. */
+function TemplateSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const { templates, defaultTemplate } = useTemplates();
+  if (templates.length < 2) return null;
+  return (
+    <Select
+      label="Rechnungs-Vorlage"
+      hint="Neue Rechnungen an diesen Kunden bekommen automatisch diese Vorlage."
+      value={value}
+      options={[
+        { value: '', label: `Immer die Standard-Vorlage (derzeit „${defaultTemplate?.name ?? ''}“)` },
+        ...templates.map((t) => ({ value: t.id, label: t.name })),
+      ]}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }

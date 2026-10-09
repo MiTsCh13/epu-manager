@@ -78,6 +78,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          template_id: string | null
           uid_number: string | null
           user_id: string
           zip_code: string | null
@@ -92,6 +93,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          template_id?: string | null
           uid_number?: string | null
           user_id?: string
           zip_code?: string | null
@@ -106,11 +108,20 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          template_id?: string | null
           uid_number?: string | null
           user_id?: string
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_template_fkey"
+            columns: ["template_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_templates"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
       expenses: {
         Row: {
@@ -261,6 +272,36 @@ export type Database = {
           },
         ]
       }
+      invoice_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          settings: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          settings?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          settings?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           client_id: string | null
@@ -269,6 +310,7 @@ export type Database = {
           due_date: string | null
           footer_text: string | null
           id: string
+          intro_text: string | null
           invoice_date: string
           invoice_number: string
           is_honorarnote: boolean
@@ -280,6 +322,8 @@ export type Database = {
           service_date_to: string | null
           status: string
           subtotal: number
+          template_id: string | null
+          template_snapshot: Json | null
           total: number
           user_id: string
           vat_amount: number
@@ -292,6 +336,7 @@ export type Database = {
           due_date?: string | null
           footer_text?: string | null
           id?: string
+          intro_text?: string | null
           invoice_date: string
           invoice_number: string
           is_honorarnote?: boolean
@@ -303,6 +348,8 @@ export type Database = {
           service_date_to?: string | null
           status?: string
           subtotal?: number
+          template_id?: string | null
+          template_snapshot?: Json | null
           total?: number
           user_id?: string
           vat_amount?: number
@@ -315,6 +362,7 @@ export type Database = {
           due_date?: string | null
           footer_text?: string | null
           id?: string
+          intro_text?: string | null
           invoice_date?: string
           invoice_number?: string
           is_honorarnote?: boolean
@@ -326,6 +374,8 @@ export type Database = {
           service_date_to?: string | null
           status?: string
           subtotal?: number
+          template_id?: string | null
+          template_snapshot?: Json | null
           total?: number
           user_id?: string
           vat_amount?: number
@@ -338,6 +388,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_template_fkey"
+            columns: ["template_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_templates"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -608,6 +665,7 @@ export type Database = {
       }
       delete_user_data: { Args: { p_user: string }; Returns: undefined }
       has_active_access: { Args: { p_user: string }; Returns: boolean }
+      set_default_template: { Args: { p_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

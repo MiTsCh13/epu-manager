@@ -137,8 +137,11 @@ async function deleteUser(email: string) {
   const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   if (linkError || !link.user) return;
   const id = link.user.id;
-  const { data: files } = await admin.storage.from('receipts').list(id, { limit: 1000 });
-  if (files && files.length > 0) await admin.storage.from('receipts').remove(files.map((f) => `${id}/${f.name}`));
+  // Belege sowie Logos/Kopfbilder der Rechnungs-Vorlagen
+  for (const bucket of ['receipts', 'branding']) {
+    const { data: files } = await admin.storage.from(bucket).list(id, { limit: 1000 });
+    if (files && files.length > 0) await admin.storage.from(bucket).remove(files.map((f) => `${id}/${f.name}`));
+  }
   const { error: dataError } = await admin.rpc('delete_user_data', { p_user: id });
   if (dataError) throw new Error(`Daten von ${email} konnten nicht gelöscht werden: ${dataError.message}`);
   const { error } = await admin.auth.admin.deleteUser(id);

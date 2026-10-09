@@ -10,3 +10,15 @@
     @apply min-h-screen bg-white text-slate-800;
   }
 }
+
+/* Schriften der Rechnungs-Vorlagen (für die Auswahl im Editor; dieselben Dateien wie im PDF) */
+@font-face {
+  font-family: 'Inter PDF';
+  src: url('/fonts/inter-400-normal.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Lora PDF';
+  src: url('/fonts/lora-400-normal.ttf') format('truetype');
+  font-display: swap;
+}

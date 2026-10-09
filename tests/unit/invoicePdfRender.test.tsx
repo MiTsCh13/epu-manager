@@ -1,7 +1,9 @@
 import { writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { createInvoicePdfElement } from '@/lib/renderInvoicePdf';
+import { DESIGNS } from '@/lib/invoiceTemplates';
 import type { Invoice } from '@/types';
 
 const invoice = {
@@ -29,8 +31,12 @@ const invoice = {
   },
 } as unknown as Invoice;
 
+const FONTS = resolve(__dirname, '../../public/fonts') + '/';
+// 1×1-PNG als Logo und Kopfbild
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
 describe('InvoicePDF rendern', () => {
-  it.each([
+  it.each<[string, Invoice]>([
     ['ausgestellt', invoice],
     ['Entwurf, USt-pflichtig, viele Positionen (mehrseitig)', {
       ...invoice,
@@ -41,8 +47,24 @@ describe('InvoicePDF rendern', () => {
       issuer_snapshot: { ...(invoice.issuer_snapshot as object), is_kleinunternehmer: false, uid_number: 'ATU87654321' },
       line_items: Array.from({ length: 40 }, (_, i) => ({ description: `Position ${i + 1}`, quantity: 1, unit_price: 10, total: 10 })),
     } as unknown as Invoice],
-  ])('%s → gültiges PDF', async (name, inv) => {
-    const { element } = await createInvoicePdfElement(inv);
+    ['lange Texte: Schlusstext auf Seite 2, Fußzeile mit vielen Kontaktzeilen', {
+      ...invoice,
+      template_snapshot: { footer: { style: 'columns', contact: 'a\nb\nc\nd\ne\nf\ng' }, closing: { title: 'Danke', boxed: true } },
+      line_items: Array.from({ length: 14 }, (_, i) => ({ description: `Position ${i + 1}\n- Detail A\n- Detail B`, quantity: 1, unit_price: 10, total: 10 })),
+      notes: Array.from({ length: 12 }, (_, i) => `Absatz ${i + 1}: ` + 'Text '.repeat(40)).join('\n\n'),
+    } as unknown as Invoice],
+    ...DESIGNS.map((d): [string, Invoice] => [`Design ${d.id}`, {
+      ...invoice,
+      template_snapshot: { ...d.settings, header: { ...d.settings.header, logoPath: 'x/logo.png', imagePath: 'x/kopf.jpg' }, footer: { ...d.settings.footer, contact: 'www.klaro.at' } },
+      intro_text: 'Hiermit stelle ich folgende Leistungen in Rechnung:',
+      notes: 'Bitte überweisen Sie **{Rechnungsbetrag}** binnen {Zahlungsziel}.\n\n- Punkt eins\n- Punkt zwei\n\n*Kursiv*',
+      line_items: [
+        { description: 'DJ-Tätigkeit', quantity: 4, unit_price: 150, total: 600, unit: 'Std.' },
+        { description: 'Equipment\n• Mischpult\n• Lichtanlage', quantity: 1, unit_price: 650, total: 650, unit: 'pauschal' },
+      ],
+    } as unknown as Invoice]),
+  ])('%s → gültiges PDF', { timeout: 30_000 }, async (name, inv) => {
+    const { element } = await createInvoicePdfElement(inv, { fontBase: FONTS, images: { logo: PNG, header: PNG } });
     const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
     expect(buffer.length).toBeGreaterThan(2000);

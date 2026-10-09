@@ -12,6 +12,7 @@ export type Asset = Tables['assets']['Row'];
 export type Income = Tables['incomes']['Row'];
 export type ImportRecord = Tables['imports']['Row'];
 export type RecurringExpense = Tables['recurring_expenses']['Row'];
+export type InvoiceTemplate = Tables['invoice_templates']['Row'];
 
 export type ProfileUpdate = Tables['profiles']['Update'];
 export type ClientInsert = Tables['clients']['Insert'];
@@ -41,6 +42,7 @@ export interface LineItem {
   quantity: number;
   unit_price: number;
   total: number;
+  unit?: string; // z. B. „Std.“, „km“, „pauschal“ (optional)
 }
 
 export type AlertUrgency = 'info' | 'warning' | 'critical';

@@ -8,12 +8,14 @@ import { SubscriptionCard } from '@/components/billing/SubscriptionCard';
 import { BILLING_ENABLED } from '@/lib/subscription';
 import { AccountSection } from '@/components/settings/AccountSection';
 import { AccountingSection, IdentitySection, InvoicingSection } from '@/components/settings/ProfileSections';
+import { TemplatesSection } from '@/components/templates/TemplatesSection';
 
 const SECTIONS = [
   ...(BILLING_ENABLED ? [{ id: 'abo', label: 'Abo' }] : []),
   { id: 'profil', label: 'Über dich & SVS' },
   { id: 'steuer', label: 'Steuer' },
   { id: 'rechnungen', label: 'Adresse & Rechnungen' },
+  { id: 'vorlagen', label: 'Rechnungs-Vorlagen' },
   { id: 'import', label: 'Daten übernehmen' },
   { id: 'konto', label: 'Konto' },
 ];
@@ -72,6 +74,7 @@ export default function Settings() {
         <IdentitySection />
         <AccountingSection />
         <InvoicingSection />
+        <TemplatesSection />
         <section id="import" aria-labelledby="import-heading" className="scroll-mt-20 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
           <h2 id="import-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-900">
             <Upload className="h-5 w-5 text-primary" aria-hidden="true" />

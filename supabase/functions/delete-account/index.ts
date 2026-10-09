@@ -1,8 +1,9 @@
-// Konto löschen (DSGVO Art. 17): Abo beenden, Belegfotos und alle Daten löschen, Auth-Nutzer entfernen.
+// Konto löschen (DSGVO Art. 17): Abo beenden, Belegfotos, Logos und alle Daten löschen, Auth-Nutzer entfernen.
 // Der Stripe-Kunde bleibt bestehen – Zahlungsbelege des Abos unterliegen der Aufbewahrungspflicht (§ 132 BAO).
 import { admin, corsHeaders, getUser, json, stripe } from '../_shared/stripe.ts';
 
-const BUCKET = 'receipts';
+// Belege sowie Logos und Kopfbilder der Rechnungs-Vorlagen
+const BUCKETS = ['receipts', 'branding'];
 const CONFIRM_WORD = 'LÖSCHEN';
 
 /** Laufende Abos sofort beenden – schlägt das fehl, wird nichts gelöscht (sonst liefe die Zahlung weiter). */
@@ -14,16 +15,16 @@ async function cancelSubscriptions(customerId: string) {
   }
 }
 
-/** Alle Belegfotos im Ordner des Nutzers löschen (Storage lässt sich nicht per SQL leeren). */
-async function deleteReceipts(userId: string) {
+/** Alle Dateien im Ordner des Nutzers löschen (Storage lässt sich nicht per SQL leeren). */
+async function deleteFiles(bucket: string, userId: string) {
   for (let round = 0; round < 100; round++) {
-    const { data, error } = await admin.storage.from(BUCKET).list(userId, { limit: 1000 });
+    const { data, error } = await admin.storage.from(bucket).list(userId, { limit: 1000 });
     if (error) throw error;
     if (!data || data.length === 0) return;
-    const { error: removeError } = await admin.storage.from(BUCKET).remove(data.map((f) => `${userId}/${f.name}`));
+    const { error: removeError } = await admin.storage.from(bucket).remove(data.map((f) => `${userId}/${f.name}`));
     if (removeError) throw removeError;
   }
-  throw new Error('Belege konnten nicht vollständig gelöscht werden');
+  throw new Error(`Dateien in ${bucket} konnten nicht vollständig gelöscht werden`);
 }
 
 Deno.serve(async (req) => {
@@ -37,7 +38,7 @@ Deno.serve(async (req) => {
     const { data: profile } = await admin.from('profiles').select('stripe_customer_id').eq('id', user.id).single();
     if (profile?.stripe_customer_id) await cancelSubscriptions(profile.stripe_customer_id);
 
-    await deleteReceipts(user.id);
+    for (const bucket of BUCKETS) await deleteFiles(bucket, user.id);
 
     const { error: dataError } = await admin.rpc('delete_user_data', { p_user: user.id });
     if (dataError) throw dataError;

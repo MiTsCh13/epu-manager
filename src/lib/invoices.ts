@@ -81,6 +81,7 @@ export interface LineItemInput {
   description: string;
   quantity: string; // Rohtext aus dem Eingabefeld (deutsches Komma erlaubt)
   unit_price: string;
+  unit?: string; // z. B. „Std.“ (optional)
 }
 
 export interface InvoiceFormInput {
@@ -113,7 +114,10 @@ export function parseLineItems(items: LineItemInput[]): LineItem[] {
       const unitPrice = parseDecimal(i.unit_price);
       const q = Number.isNaN(quantity) ? 0 : quantity;
       const p = Number.isNaN(unitPrice) ? 0 : unitPrice;
-      return { description: i.description.trim(), quantity: q, unit_price: p, total: round2(q * p) };
+      const unit = i.unit?.trim();
+      // Mehrzeilige Bezeichnung: Zeilen behalten, nur Leerraum am Rand entfernen
+      const description = i.description.replace(/\r\n/g, '\n').trim();
+      return { description, quantity: q, unit_price: p, total: round2(q * p), ...(unit && { unit }) };
     });
 }
 

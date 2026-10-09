@@ -64,7 +64,13 @@ describe('buildInvoicePdfData – §11 UStG Pflichtangaben', () => {
     ]);
   });
   it('5./6. Menge, Bezeichnung, Entgelt', () => {
-    expect(d.items[1]).toEqual({ description: 'Buchungsmodul', quantity: '1,5', unitPrice: '€ 1.000,00', total: '€ 1.500,00' });
+    expect(d.items[1]).toEqual({
+      description: 'Buchungsmodul',
+      lines: [{ text: 'Buchungsmodul', bullet: false }],
+      quantity: '1,5',
+      unitPrice: '€ 1.000,00',
+      total: '€ 1.500,00',
+    });
     expect(d.grandTotal).toBe('€ 3.400,00');
   });
   it('7./8. Kleinunternehmer: Steuerbefreiungshinweis, keine USt-Zeile', () => {
@@ -89,7 +95,7 @@ describe('buildInvoicePdfData – §11 UStG Pflichtangaben', () => {
   it('Texte und Dateiname', () => {
     expect(d.title).toBe('Rechnung');
     expect(d.isDraft).toBe(false);
-    expect(d.notes).toBe('Vielen Dank!');
+    expect(d.closing).toEqual({ title: null, blocks: [{ kind: 'paragraph', segments: [{ text: 'Vielen Dank!' }] }], boxed: false });
     expect(d.footerText).toBe('Fußzeile');
     expect(d.fileName).toBe('Rechnung_2026-003.pdf');
   });
@@ -179,5 +185,66 @@ describe('buildInvoicePdfData – Varianten', () => {
 
   it('invoiceFileName', () => {
     expect(invoiceFileName('Rechnung', '2026-001', false)).toBe('Rechnung_2026-001.pdf');
+  });
+});
+
+describe('buildInvoicePdfData – Vorlage', () => {
+  const template = {
+    color: '#1e4e8c',
+    font: 'times',
+    header: { style: 'image' },
+    closing: { title: 'Danke, {Kunde}!', boxed: true },
+    greeting: { text: 'Liebe Grüße,', signature: 'Max // Klaro' },
+    footer: { style: 'columns', contact: 'Tel. 0660 123\nwww.klaro.at' },
+    payment: { box: false, terms: '2 % Skonto bis {Fällig am}' },
+    table: { priceFirst: true },
+    kuNote: 'totals',
+  };
+  const d = build({
+    ...base,
+    template_snapshot: template,
+    intro_text: 'Hiermit stelle ich in Rechnung:',
+    notes: 'Bitte überweise **{Rechnungsbetrag}** binnen {Zahlungsziel} mit „{Rechnungsnummer}“.\n\n*Trinkgeld freiwillig.*',
+    line_items: [
+      { description: 'DJ-Tätigkeit', quantity: 4, unit_price: 150, total: 600, unit: 'Std.' },
+      { description: 'Equipment\n• Mischpult\n- Lichtanlage', quantity: 1, unit_price: 650, total: 650, unit: 'pauschal' },
+    ],
+  } as unknown as Invoice);
+
+  it('Platzhalter, Formatierung, Einleitung', () => {
+    expect(d.intro).toEqual([{ kind: 'paragraph', segments: [{ text: 'Hiermit stelle ich in Rechnung:' }] }]);
+    expect(d.closing?.title).toBe('Danke, Alpenblick Hotel GmbH!');
+    expect(d.closing?.boxed).toBe(true);
+    expect(d.closing?.blocks).toEqual([
+      { kind: 'paragraph', segments: [{ text: 'Bitte überweise ' }, { text: '€ 3.400,00', bold: true }, { text: ' binnen 14 Tagen mit „2026-003“.' }] },
+      { kind: 'paragraph', segments: [{ text: 'Trinkgeld freiwillig.', italic: true }] },
+    ]);
+    expect(d.paymentTerms).toBe('2 % Skonto bis 24.04.2026');
+    expect(d.greeting).toEqual({ text: 'Liebe Grüße,', signature: 'Max // Klaro' });
+  });
+
+  it('Einheiten und mehrzeilige Positionen', () => {
+    expect(d.items[0]).toMatchObject({ quantity: '4', unitPrice: '€ 150,00 / Std.' });
+    expect(d.items[1]).toMatchObject({
+      quantity: 'pauschal',
+      unitPrice: '€ 650,00',
+      lines: [
+        { text: 'Equipment', bullet: false },
+        { text: 'Mischpult', bullet: true },
+        { text: 'Lichtanlage', bullet: true },
+      ],
+    });
+  });
+
+  it('Kleinunternehmer-Hinweis in der Summe, keine Zahlungsbox, Fußzeile in Spalten', () => {
+    expect(d.taxNoteInTotals).toBe(true);
+    expect(d.taxNote).toContain('§ 6 Abs. 1 Z 27 UStG');
+    expect(d.payment).toBeNull();
+    expect(d.footerColumns).toEqual([
+      ['Klaro Test GmbH', 'Max Mustermann', 'Mariahilfer Straße 1', '1060 Wien'].filter((l) => l !== 'Max Mustermann'),
+      ['Bank: Klaro Test GmbH Konto', 'IBAN: AT61 1904 3002 3457 3201'],
+      ['Tel. 0660 123', 'www.klaro.at'],
+    ]);
+    expect(d.template.font).toBe('times');
   });
 });

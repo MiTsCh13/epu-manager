@@ -23,6 +23,7 @@ const Clients = lazy(() => import('@/pages/Clients'));
 const SVSTracker = lazy(() => import('@/pages/SVSTracker'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Import = lazy(() => import('@/pages/Import'));
+const TemplateEditor = lazy(() => import('@/pages/TemplateEditor'));
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="svs" element={<Navigate to="/gewinn" replace />} />
             <Route path="einstellungen" element={<Settings />} />
             <Route path="importieren" element={<Import />} />
+            <Route path="vorlagen/:id" element={<TemplateEditor />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

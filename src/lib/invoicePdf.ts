@@ -3,7 +3,11 @@ import { KLEINUNTERNEHMER_NOTE } from '@/constants/tax2026';
 import { countryName } from '@/constants/countries';
 import { buildEpcPayload } from './epcQr';
 import { formatDate } from './invoices';
-import { formatEuro } from './money';
+import { descriptionLines, fillPlaceholders, normalizeTemplate, parseRichText, type PlaceholderValues, type RichBlock, type TemplateSettings } from './invoiceTemplates';
+import { formatEuro as formatEuroIntl } from './money';
+
+// Times und Helvetica (eingebaute PDF-Schriften) kennen keine geschützten Leerzeichen (Browser: U+202F, Node: U+00A0)
+const formatEuro = (n: number) => formatEuroIntl(n).replace(/[\u00a0\u202f\u2009]/g, ' ');
 import type { Invoice, LineItem } from '@/types';
 
 export interface PartySnapshot {
@@ -22,7 +26,16 @@ export interface PartySnapshot {
   is_kleinunternehmer?: boolean;
 }
 
+export interface InvoicePdfItem {
+  description: string;
+  lines: { text: string; bullet: boolean }[]; // Bezeichnung zeilenweise, Aufzählungen erkannt
+  quantity: string;
+  unitPrice: string; // inkl. Einheit, z. B. „€ 150,00 / Std.“
+  total: string;
+}
+
 export interface InvoicePdfData {
+  template: TemplateSettings; // Gestaltung (aus dem Snapshot der Rechnung)
   isDraft: boolean;
   title: string; // „Rechnung“ | „Honorarnote“
   fileName: string;
@@ -31,21 +44,34 @@ export interface InvoicePdfData {
   senderLine: string; // Absenderzeile über dem Empfänger
   recipientLines: string[]; // inkl. Name
   meta: [string, string][];
-  items: { description: string; quantity: string; unitPrice: string; total: string }[];
+  items: InvoicePdfItem[];
   totals: [string, string][];
   grandTotal: string;
   taxNote: string | null;
-  notes: string | null;
+  /** Kleinunternehmer-Hinweis als Zeile in der Summe (sonst als Satz darunter) */
+  taxNoteInTotals: boolean;
+  intro: RichBlock[];
+  closing: { title: string | null; blocks: RichBlock[]; boxed: boolean } | null;
+  greeting: { text: string; signature: string } | null;
+  paymentTerms: string | null;
   payment: {
     intro: string;
     rows: [string, string][]; // Empfänger (Kontoinhaber), IBAN, Verwendungszweck
     epcPayload: string | null; // Inhalt des QR-Codes
   } | null;
+  qr: boolean;
   footerLines: string[];
+  /** Fußzeile in drei Spalten: Anschrift, Bank, Kontakt (nur bei footer.style = 'columns') */
+  footerColumns: string[][] | null;
   footerText: string | null;
 }
 
 const quantity = (q: number) => String(q).replace('.', ',');
+
+/** Tage zwischen zwei ISO-Daten. */
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
 
 function addressLines(p: PartySnapshot): string[] {
   const place = [p.zip_code, p.city].filter(Boolean).join(' ');
@@ -64,6 +90,7 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   const issuer = (invoice.issuer_snapshot ?? {}) as PartySnapshot;
   const recipient = invoice.client_snapshot as PartySnapshot | null;
   const items = (invoice.line_items as unknown as LineItem[]) ?? [];
+  const template = normalizeTemplate(invoice.template_snapshot);
   const isDraft = invoice.status === 'draft';
   const title = invoice.is_honorarnote ? 'Honorarnote' : 'Rechnung';
   const isKU = issuer.is_kleinunternehmer ?? Number(invoice.vat_rate) === 0;
@@ -90,11 +117,28 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   if (issuer.uid_number) meta.push(['UID-Nr.', issuer.uid_number]);
   if (recipient?.uid_number) meta.push(['UID-Nr. Kunde', recipient.uid_number]);
 
+  const days = invoice.due_date ? daysBetween(invoice.invoice_date, invoice.due_date) : template.payment.days;
+  const values: PlaceholderValues = {
+    Rechnungsnummer: invoice.invoice_number,
+    Rechnungsbetrag: formatEuro(Number(invoice.total)),
+    Zahlungsziel: days === 1 ? '1 Tag' : `${days} Tagen`,
+    'Fällig am': invoice.due_date ? formatDate(invoice.due_date) : undefined,
+    Kunde: recipient?.name ?? undefined,
+  };
+  const fill = (text: string | null | undefined) => fillPlaceholders(text ?? '', values).trim();
+
   const vatRate = Number(invoice.vat_rate);
   const totals: [string, string][] = [['Summe netto', formatEuro(Number(invoice.subtotal))]];
   if (!isKU) totals.push([`USt ${vatRate} %`, formatEuro(Number(invoice.vat_amount))]);
 
+  const closingBlocks = parseRichText(fill(invoice.notes));
+  const closingTitle = fill(template.closing.title) || null;
+  // Höchstens 5 Kontaktzeilen – die Fußzeile soll nicht die halbe Seite füllen
+  const contact = template.footer.contact.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 5);
+  const bankLines = issuer.iban ? [`Bank: ${accountHolder}`, `IBAN: ${issuer.iban}`] : [];
+
   return {
+    template,
     isDraft,
     title,
     fileName: invoiceFileName(title, invoice.invoice_number, isDraft),
@@ -103,12 +147,17 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
     senderLine: [issuerName, ...issuerAddress].join(' · '),
     recipientLines: recipient ? [recipient.name ?? '', ...addressLines(recipient)].filter(Boolean) : [],
     meta,
-    items: items.map((li) => ({
-      description: li.description,
-      quantity: quantity(li.quantity),
-      unitPrice: formatEuro(li.unit_price),
-      total: formatEuro(li.total),
-    })),
+    items: items.map((li) => {
+      const unit = li.unit?.trim() || '';
+      const flat = unit.toLowerCase() === 'pauschal';
+      return {
+        description: li.description,
+        lines: descriptionLines(li.description),
+        quantity: flat && li.quantity === 1 ? 'pauschal' : quantity(li.quantity),
+        unitPrice: formatEuro(li.unit_price) + (unit && !flat ? ` / ${unit}` : ''),
+        total: formatEuro(li.total),
+      };
+    }),
     totals,
     grandTotal: formatEuro(Number(invoice.total)),
     taxNote: isKU
@@ -116,8 +165,12 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
       : vatRate === 0
         ? 'Steuerfreie Leistung – keine Umsatzsteuer ausgewiesen.'
         : null,
-    notes: invoice.notes,
-    payment: issuer.iban
+    taxNoteInTotals: isKU && template.kuNote === 'totals',
+    intro: parseRichText(fill(invoice.intro_text)),
+    closing: closingBlocks.length || closingTitle ? { title: closingTitle, blocks: closingBlocks, boxed: template.closing.boxed } : null,
+    greeting: template.greeting.text || template.greeting.signature ? { text: fill(template.greeting.text), signature: fill(template.greeting.signature) } : null,
+    paymentTerms: fill(template.payment.terms) || null,
+    payment: issuer.iban && template.payment.box
       ? {
           intro: `Bitte überweisen Sie ${formatEuro(Number(invoice.total))}${invoice.due_date ? ` bis ${formatDate(invoice.due_date)}` : ''} an:`,
           rows: [
@@ -133,10 +186,20 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
           }),
         }
       : null,
+    qr: template.payment.qr,
     footerLines: [
       [issuerName, ...issuerAddress].join(' · '),
       [issuer.uid_number && `UID ${issuer.uid_number}`, issuer.iban && `${accountHolder} · IBAN ${issuer.iban}`].filter(Boolean).join(' · '),
+      contact.join(' · '),
     ].filter(Boolean),
-    footerText: invoice.footer_text,
+    footerColumns:
+      template.footer.style === 'columns'
+        ? [
+            [issuerName, ...issuerAddress].filter(Boolean),
+            [...bankLines, ...(issuer.uid_number ? [`UID: ${issuer.uid_number}`] : [])],
+            contact,
+          ]
+        : null,
+    footerText: fill(invoice.footer_text) || null,
   };
 }

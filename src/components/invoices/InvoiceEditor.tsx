@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Eye, Plus, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Eye, Plus, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
+import { useTemplates } from '@/hooks/useTemplates';
+import { normalizeTemplate } from '@/lib/invoiceTemplates';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { supabase } from '@/lib/supabase';
 import { getAccessState } from '@/lib/subscription';
 import {
   addDays,
-  DEFAULT_PAYMENT_DAYS,
   hasFormErrors,
   invoiceYear,
   parseLineItems,
@@ -46,11 +47,16 @@ interface FormState {
   isPeriod: boolean;
   rows: LineItemRow[];
   vatRate: VatRate;
+  templateId: string; // '' = noch keine gewählt (neue Rechnung, Vorlagen laden noch)
+  templateTouched: boolean; // selbst gewählt → Kundenwechsel ändert sie nicht mehr
+  intro: string;
   notes: string;
   footer: string;
+  // Selbst geänderte Texte überschreibt ein Vorlagenwechsel nicht
+  touched: { intro: boolean; notes: boolean; footer: boolean };
 }
 
-function initialState(invoice: Invoice | null, footerDefault: string, isKU: boolean): FormState {
+function initialState(invoice: Invoice | null, isKU: boolean): FormState {
   const today = toISODate(new Date());
   if (!invoice) {
     return {
@@ -58,7 +64,7 @@ function initialState(invoice: Invoice | null, footerDefault: string, isKU: bool
       invoiceNumber: '',
       numberTouched: false,
       invoiceDate: today,
-      dueDate: addDays(today, DEFAULT_PAYMENT_DAYS),
+      dueDate: addDays(today, 14),
       dueTouched: false,
       serviceFrom: today,
       serviceTouched: false,
@@ -66,8 +72,12 @@ function initialState(invoice: Invoice | null, footerDefault: string, isKU: bool
       isPeriod: false,
       rows: [newRow()],
       vatRate: isKU ? 0 : 20,
+      templateId: '',
+      templateTouched: false,
+      intro: '',
       notes: '',
-      footer: footerDefault,
+      footer: '',
+      touched: { intro: false, notes: false, footer: false },
     };
   }
   const items = (invoice.line_items as unknown as LineItem[]) ?? [];
@@ -88,11 +98,16 @@ function initialState(invoice: Invoice | null, footerDefault: string, isKU: bool
           description: i.description,
           quantity: formatDecimalInput(i.quantity),
           unit_price: formatDecimalInput(i.unit_price),
+          unit: i.unit ?? '',
         }))
       : [newRow()],
     vatRate: Number(invoice.vat_rate) as VatRate,
+    templateId: invoice.template_id ?? '',
+    templateTouched: true,
+    intro: invoice.intro_text ?? '',
     notes: invoice.notes ?? '',
     footer: invoice.footer_text ?? '',
+    touched: { intro: true, notes: true, footer: true },
   };
 }
 
@@ -106,7 +121,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const expired = !!profile && getAccessState(profile).kind === 'expired';
   const { clients, loading: clientsLoading, create: createClient } = useClients();
 
-  const [form, setForm] = useState<FormState>(() => initialState(invoice, profile?.invoice_footer_text ?? '', isKU));
+  const { templates, defaultTemplate } = useTemplates();
+  const [form, setForm] = useState<FormState>(() => initialState(invoice, isKU));
   const [errors, setErrors] = useState<InvoiceFormErrors>({});
   const [ustErrors, setUstErrors] = useState<string[]>([]);
   const [ustWarnings, setUstWarnings] = useState<string[]>([]);
@@ -152,11 +168,46 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     [lineItems, form.vatRate, isKU],
   );
   const client = clients.find((c) => c.id === form.clientId) ?? null;
+  const template = templates.find((t) => t.id === form.templateId) ?? defaultTemplate;
+  const paymentDays = normalizeTemplate(template?.settings).payment.days;
+
+  /** Vorlage übernehmen: Texte (solange nicht selbst geändert) und Zahlungsziel (solange nicht selbst gesetzt). */
+  function applyTemplate(id: string, f: FormState, touched = f.templateTouched): Partial<FormState> {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return {};
+    const s = normalizeTemplate(t.settings);
+    return {
+      templateId: id,
+      templateTouched: touched,
+      ...(!f.touched.intro && { intro: s.intro }),
+      ...(!f.touched.notes && { notes: s.closing.text }),
+      ...(!f.touched.footer && { footer: s.footer.text }),
+      ...(!f.dueTouched && f.invoiceDate && { dueDate: addDays(f.invoiceDate, s.payment.days) }),
+    };
+  }
+
+  // Neue Rechnung: sobald Vorlagen (und Kunden) geladen sind, die Vorlage des Kunden bzw. den Standard übernehmen
+  useEffect(() => {
+    if (invoice || !defaultTemplate) return;
+    setForm((f) => {
+      if (f.templateTouched) return f;
+      const wanted = clients.find((c) => c.id === f.clientId)?.template_id ?? defaultTemplate.id;
+      return wanted === f.templateId ? f : { ...f, ...applyTemplate(wanted, f, false) };
+    });
+    // applyTemplate liest nur `templates` – über defaultTemplate und templates.length abgedeckt
+  }, [invoice, defaultTemplate, templates.length, clients]);
+
+  function onClientChange(clientId: string) {
+    const c = clients.find((x) => x.id === clientId);
+    // Vorlage des Kunden, sonst Standard – außer man hat selbst eine gewählt
+    const id = !form.templateTouched ? (c?.template_id ?? defaultTemplate?.id) : undefined;
+    set({ clientId, ...(id && id !== form.templateId && applyTemplate(id, form)) });
+  }
 
   function onInvoiceDateChange(date: string) {
     set({
       invoiceDate: date,
-      ...(!form.dueTouched && date && { dueDate: addDays(date, DEFAULT_PAYMENT_DAYS) }),
+      ...(!form.dueTouched && date && { dueDate: addDays(date, paymentDays) }),
       ...(!form.serviceTouched && { serviceFrom: date }),
     });
   }
@@ -175,6 +226,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       subtotal: totals.subtotal,
       vat_amount: totals.vatAmount,
       total: totals.total,
+      template_id: form.templateId || null,
+      intro_text: form.intro.trim() || null,
       notes: form.notes.trim() || null,
       footer_text: form.footer.trim() || null,
       status,
@@ -283,7 +336,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       toast.error(result.error);
       return false;
     }
-    set({ clientId: result.data.id });
+    onClientChange(result.data.id);
     toast.success(`${result.data.name} angelegt`);
     return true;
   }
@@ -360,7 +413,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
               label="Kunde"
               value={form.clientId}
               options={clientOptions}
-              onChange={(e) => set({ clientId: e.target.value })}
+              onChange={(e) => onClientChange(e.target.value)}
             />
             <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setClientModal(true)}>
               Neuer Kunde
@@ -395,7 +448,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
             type="date"
             value={form.dueDate}
             error={errors.dueDate}
-            hint={`Standard: ${DEFAULT_PAYMENT_DAYS} Tage`}
+            hint={`Laut Vorlage: ${paymentDays} Tage`}
             onChange={(e) => set({ dueDate: e.target.value, dueTouched: true })}
           />
           <div className="sm:col-span-2 lg:col-span-3">
@@ -477,23 +530,64 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
           </div>
         </section>
 
-        {/* Texte */}
-        <section className="grid gap-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6 lg:grid-cols-2">
-          <TextArea
-            label="Anmerkung"
-            optional
-            placeholder="z. B. Vielen Dank für Ihren Auftrag!"
-            hint="Steht auf der Rechnung unter den Positionen."
-            value={form.notes}
-            onChange={(e) => set({ notes: e.target.value })}
-          />
+        {/* Vorlage + Texte */}
+        <section className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            {templates.length > 1 ? (
+              <Select
+                className="flex-1"
+                label="Vorlage"
+                value={form.templateId || defaultTemplate?.id || ''}
+                options={templates.map((t) => ({ value: t.id, label: t.is_default ? `${t.name} (Standard)` : t.name }))}
+                hint={client?.template_id && client.template_id === form.templateId ? `Die Vorlage für ${client.name}.` : undefined}
+                onChange={(e) => set(applyTemplate(e.target.value, form, true))}
+              />
+            ) : (
+              <p className="flex-1 text-sm text-slate-600">
+                Aussehen laut Vorlage <strong className="font-medium text-slate-900">{template?.name ?? 'Standard'}</strong>.
+              </p>
+            )}
+            {template && (
+              <Link
+                to={`/vorlagen/${template.id}`}
+                target="_blank"
+                rel="noopener"
+                title="Öffnet in einem neuen Tab – deine Rechnung bleibt hier offen"
+                className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-primary hover:underline"
+              >
+                Vorlage gestalten
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            )}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TextArea
+              label="Text oben"
+              optional
+              rows={3}
+              placeholder="z. B. Hiermit stelle ich folgende Leistungen in Rechnung:"
+              hint="Steht über den Positionen."
+              value={form.intro}
+              onChange={(e) => set({ intro: e.target.value, touched: { ...form.touched, intro: true } })}
+            />
+            <TextArea
+              label="Text unten"
+              optional
+              rows={3}
+              placeholder="z. B. Vielen Dank für Ihren Auftrag!"
+              hint="Steht unter den Positionen. Platzhalter wie {Rechnungsnummer} setzt Klaro ein."
+              value={form.notes}
+              onChange={(e) => set({ notes: e.target.value, touched: { ...form.touched, notes: true } })}
+            />
+          </div>
           <TextArea
             label="Fußzeile"
             optional
-            placeholder="z. B. Zahlbar ohne Abzug. Bankverbindung siehe oben."
+            rows={2}
+            placeholder="z. B. Firmenbuch, Gerichtsstand"
             hint="Erscheint ganz unten auf der Rechnung."
             value={form.footer}
-            onChange={(e) => set({ footer: e.target.value })}
+            onChange={(e) => set({ footer: e.target.value, touched: { ...form.touched, footer: true } })}
           />
         </section>
 

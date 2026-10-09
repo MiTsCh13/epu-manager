@@ -201,6 +201,7 @@ export interface ClientFormData {
   country: string;
   uid_number: string;
   notes: string;
+  template_id?: string; // Rechnungs-Vorlage für diesen Kunden ('' = Standard)
 }
 
 export type ClientFormErrors = Partial<Record<keyof ClientFormData, string>>;
@@ -251,5 +252,6 @@ export function normalizeClient(data: ClientFormData) {
     country: data.country || 'AT',
     uid_number: data.uid_number.trim() ? normalizeUid(data.uid_number) : null,
     notes: opt(data.notes),
+    ...(data.template_id !== undefined && { template_id: data.template_id || null }),
   };
 }

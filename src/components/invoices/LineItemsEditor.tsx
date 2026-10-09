@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { LineItemInput, InvoiceFormErrors } from '@/lib/invoices';
 import { formatEuro, parseDecimal, round2 } from '@/lib/money';
+import { UNIT_SUGGESTIONS } from '@/lib/invoiceTemplates';
 
 export type LineItemRow = LineItemInput & { key: string };
 
@@ -16,7 +17,7 @@ function rowTotal(row: LineItemInput): number {
 }
 
 export function newRow(): LineItemRow {
-  return { key: crypto.randomUUID(), description: '', quantity: '1', unit_price: '' };
+  return { key: crypto.randomUUID(), description: '', quantity: '1', unit_price: '', unit: '' };
 }
 
 export function LineItemsEditor({
@@ -36,9 +37,15 @@ export function LineItemsEditor({
   return (
     <div>
       {/* Spaltenköpfe nur am Desktop */}
-      <div className="mb-1 hidden grid-cols-[1fr_6rem_8rem_7rem_2.5rem] gap-2 px-1 text-xs font-medium text-slate-500 sm:grid">
+      <datalist id="unit-suggestions">
+        {UNIT_SUGGESTIONS.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
+      <div className="mb-1 hidden grid-cols-[1fr_5rem_6rem_7.5rem_6.5rem_2.5rem] gap-2 px-1 text-xs font-medium text-slate-500 sm:grid">
         <span>Bezeichnung</span>
         <span>Menge</span>
+        <span>Einheit</span>
         <span>Einzelpreis (€)</span>
         <span className="text-right">Summe</span>
         <span />
@@ -49,13 +56,16 @@ export function LineItemsEditor({
           return (
             <li
               key={row.key}
-              className="grid grid-cols-[1fr_1fr] gap-2 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:grid-cols-[1fr_6rem_8rem_7rem_2.5rem] sm:items-start sm:bg-transparent sm:p-0 sm:ring-0"
+              className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:grid-cols-[1fr_5rem_6rem_7.5rem_6.5rem_2.5rem] sm:items-start sm:bg-transparent sm:p-0 sm:ring-0"
             >
-              <label className="col-span-2 sm:col-span-1">
+              <label className="col-span-3 sm:col-span-1">
                 <span className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">Bezeichnung<span className="sr-only"> (Position {idx + 1})</span></span>
-                <input
-                  className={inputClass()}
+                {/* Mehrzeilig: Zeilen mit „-“ werden auf der Rechnung zu Aufzählungspunkten */}
+                <textarea
+                  className={`${inputClass()} resize-none`}
+                  rows={Math.min(6, Math.max(1, row.description.split('\n').length))}
                   placeholder="z. B. Website-Gestaltung"
+                  title="Mehrere Zeilen möglich – „- “ am Zeilenanfang wird auf der Rechnung ein Aufzählungspunkt"
                   value={row.description}
                   onChange={(e) => update(row.key, { description: e.target.value })}
                 />
@@ -72,6 +82,17 @@ export function LineItemsEditor({
                 {err?.quantity && <span className="mt-0.5 block text-xs text-red-600">{err.quantity}</span>}
               </label>
               <label>
+                <span className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">Einheit<span className="sr-only"> (Position {idx + 1})</span></span>
+                <input
+                  className={inputClass()}
+                  list="unit-suggestions"
+                  placeholder="Std."
+                  maxLength={20}
+                  value={row.unit ?? ''}
+                  onChange={(e) => update(row.key, { unit: e.target.value })}
+                />
+              </label>
+              <label>
                 <span className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">Einzelpreis in €<span className="sr-only"> (Position {idx + 1})</span></span>
                 <input
                   className={inputClass(err?.unit_price)}
@@ -83,7 +104,7 @@ export function LineItemsEditor({
                 />
                 {err?.unit_price && <span className="mt-0.5 block text-xs text-red-600">{err.unit_price}</span>}
               </label>
-              <div className="flex items-center justify-between sm:block sm:pt-3 sm:text-right">
+              <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:block sm:pt-3 sm:text-right">
                 <span className="text-xs text-slate-500 sm:hidden">Summe</span>
                 <span className="text-sm font-semibold tabular-nums text-slate-900">{formatEuro(rowTotal(row))}</span>
               </div>
