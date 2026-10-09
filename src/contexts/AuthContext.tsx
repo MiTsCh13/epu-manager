@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { resetAutoBooking } from '@/lib/recurringSync';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/types';
 
@@ -31,7 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionLoading(false);
     });
     // Kein await im Callback (Supabase-Empfehlung) – Profil wird separat per Effekt geladen
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => setSession(newSession));
+    const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Anderes Konto → wiederkehrende Ausgaben dieses Kontos neu prüfen
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') resetAutoBooking();
+      setSession(newSession);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 

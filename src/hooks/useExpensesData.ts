@@ -3,6 +3,7 @@ import { findCategoryById } from '@/constants/expenseCategories';
 import { recategorize } from '@/lib/expenses';
 import { fetchAll } from '@/lib/fetchAll';
 import { deleteReceipt } from '@/lib/receipts';
+import { bookDueRecurring } from '@/lib/recurringSync';
 import { supabase } from '@/lib/supabase';
 import type { Asset, AssetInsert, Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
 
@@ -25,6 +26,7 @@ export function useExpensesData(year: number) {
     if (loadedYear.current !== year) setLoading(true);
     setError(null);
     const from = `${year}-01-01`;
+    await bookDueRecurring(); // automatisch gebuchte Serien-Zahlungen zuerst anlegen
     const to = `${year}-12-31`;
     const [exp, svs, inv, inc, ast] = await Promise.all([
       fetchAll((a, b) => supabase.from('expenses').select('*').gte('expense_date', from).lte('expense_date', to)
@@ -72,6 +74,8 @@ export function useExpensesData(year: number) {
         ? supabase.from('expenses').update(values).eq('id', id).select().single()
         : supabase.from('expenses').insert(values).select().single();
       const { error: err } = await query;
+      // UNIQUE (recurring_id, expense_date): pro Serie nur eine Zahlung je Tag
+      if (err?.code === '23505') return { error: 'An diesem Tag gibt es schon eine Zahlung dieser wiederkehrenden Ausgabe.' };
       if (err) return { error: 'Die Ausgabe konnte nicht gespeichert werden.' };
       await load();
       return { error: null };

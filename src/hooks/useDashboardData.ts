@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchAll } from '@/lib/fetchAll';
+import { bookDueRecurring } from '@/lib/recurringSync';
 import { supabase } from '@/lib/supabase';
 import type { DateRange } from '@/lib/period';
 
@@ -27,6 +28,7 @@ export function useDashboardData(range: DateRange) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    await bookDueRecurring(); // automatisch gebuchte Serien-Zahlungen zuerst anlegen
     setError(null);
     const cols = 'status, due_date, total, subtotal, paid_at';
     const [open, paid, inc, exp] = await Promise.all([

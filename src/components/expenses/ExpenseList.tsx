@@ -5,6 +5,7 @@ import { formatEuro } from '@/lib/money';
 import { sumDeductibleExpenses } from '@/lib/profit';
 import { getReceiptUrl } from '@/lib/receipts';
 import { ExpenseCategoryIcon } from './CategoryIcon';
+import { RecurringTag } from './Recurring';
 import type { Expense } from '@/types';
 
 export function ExpenseList({
@@ -14,11 +15,13 @@ export function ExpenseList({
   counts,
   selected,
   onToggle,
+  intervalOf,
 }: {
   expenses: Expense[];
   selected?: ReadonlySet<string>; // Auswahl für Massenbearbeitung
   onToggle?: (id: string) => void;
   counts?: (e: Expense) => boolean; // Pauschalierung: zählt die Ausgabe zusätzlich?
+  intervalOf?: (e: Expense) => number | null; // wiederkehrend: Intervall in Monaten
   onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
 }) {
@@ -30,6 +33,7 @@ export function ExpenseList({
         ]);
         const partial = deductible !== Number(e.amount);
         const notCounted = counts ? !counts(e) : false;
+        const interval = intervalOf?.(e) ?? null;
         return (
           <li key={e.id} className={`flex items-center gap-3 py-3 pl-4 pr-2 sm:pl-5 ${selected?.has(e.id) ? 'bg-primary-50/60' : ''}`}>
             {onToggle && (
@@ -54,6 +58,12 @@ export function ExpenseList({
                 {e.trip_hours && ` · ${String(e.trip_hours).replace('.', ',')} Std.`}
                 {e.nights && ` · ${e.nights} ${e.nights === 1 ? 'Nacht' : 'Nächte'}`}
                 {e.reimbursed && ' · weiterverrechnet'}
+                {interval && (
+                  <>
+                    {' · '}
+                    <RecurringTag interval={interval} />
+                  </>
+                )}
               </p>
             </button>
             <div className="shrink-0 text-right">

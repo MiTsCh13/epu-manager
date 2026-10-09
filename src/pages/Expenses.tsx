@@ -1,15 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, Laptop, Plus, ReceiptEuro, ScanText } from 'lucide-react';
+import { ArrowRight, Laptop, Plus, ReceiptEuro, Repeat, ScanText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
+import { useRecurring } from '@/hooks/useRecurring';
 import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
 import { categoryContextFor, countsAlongsidePauschal, expenseTotals, pauschalExtrasFor } from '@/lib/expenses';
 import { calculateArbeitsplatzpauschale, calculatePauschaleExpenses, getPauschRate, otherIncomeAmount } from '@/lib/profit';
 import { sumDepreciation } from '@/lib/assets';
 import { formatEuro } from '@/lib/money';
 import { deleteReceipt } from '@/lib/receipts';
+import { supabase } from '@/lib/supabase';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AssetList } from '@/components/expenses/AssetList';
 import { ImportLink } from '@/components/import/ImportLink';
@@ -20,21 +22,23 @@ import { WindowReceiptDrop } from '@/components/expenses/ReceiptDrop';
 import { takePendingReceipt } from '@/lib/pendingReceipt';
 import { ExpenseBrowser } from '@/components/expenses/ExpenseBrowser';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
+import { RecurringDueList, RecurringSection } from '@/components/expenses/Recurring';
 import { ClientListSkeleton } from '@/components/clients/ClientList';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
-import type { IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import type { Expense, IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 
-type Tab = 'ausgaben' | 'anlagen';
+type Tab = 'ausgaben' | 'anlagen' | 'wiederkehrend';
 
 export default function Expenses() {
   const { profile } = useAuth();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const data = useExpensesData(year);
+  const recurring = useRecurring();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseEntry>(null);
   const [scan, setScan] = useState<ReceiptScan | null>(null);
@@ -43,15 +47,48 @@ export default function Expenses() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Vom Dashboard „Ausgabe erfassen“ → Formular direkt öffnen
+  const openEdit = (expense: Expense) => {
+    setScan(null);
+    setEditing({ kind: 'expense', expense });
+    setFormOpen(true);
+  };
+  // Gerade übernommene Zahlung einer Serie gleich bearbeiten (kann in einem anderen Jahr liegen → direkt laden)
+  const openExpenseById = async (id: string) => {
+    const { data: expense } = await supabase.from('expenses').select('*').eq('id', id).single();
+    if (expense) openEdit(expense);
+    else toast.error('Die Ausgabe konnte nicht geöffnet werden.');
+  };
+
+  // Vom Dashboard „Ausgabe erfassen“ → Formular direkt öffnen; „Anpassen“ einer Serien-Zahlung → diese bearbeiten
   useEffect(() => {
+    const editId = searchParams.get('bearbeiten');
     if (searchParams.get('neu') !== null) {
       setEditing(null);
       setScan(null);
       setFormOpen(true);
       setSearchParams({}, { replace: true });
+    } else if (editId) {
+      void openExpenseById(editId);
+      setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Sprungmarke #wiederkehrend aus der Übersicht erst nach dem Laden anspringen
+  const { hash } = useLocation();
+  // Bei Einnahmen-Ausgaben-Rechnung liegen die Serien im Reiter „Wiederkehrend“ → den zuerst öffnen
+  useEffect(() => {
+    if (hash === '#wiederkehrend' && profile?.profit_method !== 'pauschal') setTab('wiederkehrend');
+  }, [hash, profile?.profit_method]);
+  useEffect(() => {
+    if (!data.loading && !recurring.loading && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [data.loading, recurring.loading, hash, tab]);
+
+  const reloadAll = async () => {
+    await Promise.all([recurring.reload(), data.reload()]);
+  };
+  const { byId } = recurring;
+  const intervalOf = useCallback((e: Expense) => (e.recurring_id ? (byId.get(e.recurring_id)?.interval_months ?? null) : null), [byId]);
+  const editingSeries = editing?.kind === 'expense' && editing.expense.recurring_id ? (recurring.byId.get(editing.expense.recurring_id) ?? null) : null;
 
   const profitMethod = (profile?.profit_method ?? 'euer') as ProfitMethod;
   const pauschType = (profile?.pausch_type ?? null) as PauschType | null;
@@ -167,6 +204,8 @@ export default function Expenses() {
         </div>
       ) : (
         <div className="space-y-8">
+          <RecurringDueList due={recurring.due} onChanged={reloadAll} onAdjust={(id) => void openExpenseById(id)} />
+
           <section aria-label={`Summe Ausgaben ${year}`} className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:p-6">
             {/* Zahlen unten bündig: Kacheln strecken sich auf gleiche Höhe, die Zahl sitzt am unteren Rand.
                 Breiter Bildschirm: alle Kacheln gleich breit in einer Reihe; sonst je zwei, „Gesamt absetzbar“ füllt die
@@ -217,6 +256,7 @@ export default function Expenses() {
 
           {pauschal ? (
             <div className="space-y-6">
+              <RecurringSection series={recurring.series} onChanged={reloadAll} />
               <PauschalCard
                 year={year}
                 revenue={data.revenue}
@@ -239,11 +279,8 @@ export default function Expenses() {
                   expenses={data.expenses}
                   context={context}
                   counts={(e) => countsAlongsidePauschal(e, pauschType ?? 'ku')}
-                  onEdit={(expense) => {
-                    setScan(null);
-                    setEditing({ kind: 'expense', expense });
-                    setFormOpen(true);
-                  }}
+                  onEdit={openEdit}
+                  intervalOf={intervalOf}
                   onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
                   onRecategorize={data.recategorizeExpenses}
                   onDeleteMany={data.deleteExpenses}
@@ -264,26 +301,27 @@ export default function Expenses() {
             </div>
           ) : (
             <section className="space-y-3" aria-label={`Ausgaben und Anlagen ${year}`}>
-              <div role="tablist" aria-label="Ansicht" className="inline-flex rounded-lg bg-slate-100 p-1">
+              <div role="tablist" aria-label="Ansicht" className="flex max-w-full overflow-x-auto rounded-lg bg-slate-100 p-1 sm:inline-flex">
                 {(
                   [
-                    ['ausgaben', `Ausgaben (${data.expenses.length})`],
-                    ['anlagen', `Anlagen (${data.assets.length})`],
+                    ['ausgaben', 'Ausgaben', data.expenses.length],
+                    ['anlagen', 'Anlagen', data.assets.length],
+                    ['wiederkehrend', 'Wiederkehrend', recurring.series.length],
                   ] as const
-                ).map(([value, label]) => (
+                ).map(([value, label, count]) => (
                   <button
                     key={value}
                     type="button"
                     role="tab"
                     id={`tab-${value}`}
                     aria-selected={tab === value}
-                    aria-controls={`panel-${value}`}
+                    aria-controls={value === 'wiederkehrend' ? 'wiederkehrend' : `panel-${value}`}
                     onClick={() => setTab(value)}
-                    className={`min-h-[36px] rounded-md px-3 text-sm font-medium transition-colors ${
+                    className={`min-h-[36px] flex-1 whitespace-nowrap rounded-md px-2.5 text-sm font-medium transition-colors sm:flex-none sm:px-3 ${
                       tab === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    {label}
+                    {label} ({count})
                   </button>
                 ))}
               </div>
@@ -296,11 +334,8 @@ export default function Expenses() {
                   <ExpenseBrowser
                     expenses={data.expenses}
                     context={context}
-                    onEdit={(expense) => {
-                      setScan(null);
-                      setEditing({ kind: 'expense', expense });
-                      setFormOpen(true);
-                    }}
+                    onEdit={openEdit}
+                    intervalOf={intervalOf}
                     onDelete={(expense) => setDeleting({ kind: 'expense', expense })}
                     onRecategorize={data.recategorizeExpenses}
                     onDeleteMany={data.deleteExpenses}
@@ -317,6 +352,23 @@ export default function Expenses() {
                       />
                     }
                   />
+                </div>
+              ) : tab === 'wiederkehrend' ? (
+                <div role="tabpanel" id="wiederkehrend" aria-labelledby="tab-wiederkehrend" className="space-y-3">
+                  {recurring.series.length === 0 ? (
+                    <EmptyState
+                      icon={Repeat}
+                      title="Noch keine wiederkehrenden Ausgaben"
+                      description="Miete, Software-Abo, Versicherung? Hak beim Erfassen „Wiederkehrende Ausgabe“ an – dann erinnert Klaro dich an jede Zahlung oder bucht sie automatisch."
+                      action={
+                        <Button icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+                          Ausgabe erfassen
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <RecurringSection series={recurring.series} onChanged={reloadAll} inTab />
+                  )}
                 </div>
               ) : (
                 <div role="tabpanel" id="panel-anlagen" aria-labelledby="tab-anlagen" className="space-y-3">
@@ -361,6 +413,8 @@ export default function Expenses() {
         open={formOpen}
         entry={editing}
         scan={scan}
+        series={editingSeries}
+        onSeriesChanged={() => void recurring.reload()}
         onImportReceipt={importFromForm}
         onClose={() => setFormOpen(false)}
         onSaveExpense={data.saveExpense}
@@ -391,6 +445,7 @@ export default function Expenses() {
         <p className="text-sm text-slate-700">
           „{deletingRecord?.description}“ über {deletingRecord && formatEuro(Number(deletingRecord.amount))} wird gelöscht
           {deletingRecord?.receipt_url ? ' – inklusive Beleg' : ''}.
+          {deleting?.kind === 'expense' && deleting.expense.recurring_id && ' Sie gehört zu einer Serie – Klaro schlägt diese Zahlung nicht noch einmal vor.'}
         </p>
       </Modal>
     </PageWrapper>

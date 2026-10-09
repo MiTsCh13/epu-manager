@@ -65,7 +65,9 @@ export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
           ? `Bei der Pauschalierung gelten ${Math.round(model.pauschRate * 100)} % deines Umsatzes als Ausgaben. Einzelne Belege brauchst du dafür nicht. Enthalten ist auch, was neben der Pauschale zusätzlich zählt, z. B. die halbe Öffi-Karte.`
           : isYtd
             ? 'Deine erfassten absetzbaren Ausgaben bis heute (Geschäftsessen nur zur Hälfte).'
-            : 'Deine Ausgaben bis heute, aufs ganze Jahr hochgerechnet.',
+            : model.recurring.upcomingCount > 0
+              ? `Deine Ausgaben bis heute, aufs ganze Jahr hochgerechnet. Wiederkehrende Ausgaben zählt Klaro genau – inklusive ${model.recurring.upcomingCount} ${model.recurring.upcomingCount === 1 ? 'Zahlung' : 'Zahlungen'} über ${formatEuro(model.recurring.upcomingAmount)}, die bis Jahresende noch kommen.`
+              : 'Deine Ausgaben bis heute, aufs ganze Jahr hochgerechnet.',
       from: afterExpenses,
       width: c.expenses,
       color: COLORS.expenses,

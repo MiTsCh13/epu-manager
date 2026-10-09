@@ -21,6 +21,8 @@ import { kilometergeldRate } from '@/lib/profit';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
 import type { ReceiptPrefill } from '@/lib/receiptPrefill';
+import { buildSeries } from '@/lib/recurring';
+import { createSeries, deleteSeries } from '@/lib/recurringSync';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
@@ -29,7 +31,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import { CategoryGrid } from './CategoryGrid';
 import { ReceiptDropArea } from './ReceiptDrop';
-import type { Asset, AssetInsert, Expense, ExpenseInsert, VatRate, Vehicle } from '@/types';
+import { NO_RECURRING, RecurringFields, RecurringTag, validateRecurringChoice, type RecurringChoice } from './Recurring';
+import type { Asset, AssetInsert, Expense, ExpenseInsert, RecurringExpense, VatRate, Vehicle } from '@/types';
 
 /** Was gerade bearbeitet wird: eine Ausgabe, eine Anlage oder nichts (neu erfassen). */
 export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asset'; asset: Asset } | null;
@@ -110,6 +113,8 @@ export function ExpenseFormModal({
   open,
   entry,
   scan = null,
+  series = null,
+  onSeriesChanged,
   onImportReceipt,
   onClose,
   onSaveExpense,
@@ -120,6 +125,10 @@ export function ExpenseFormModal({
   open: boolean;
   entry: ExpenseEntry;
   scan?: ReceiptScan | null;
+  /** Serie, zu der die bearbeitete Ausgabe gehört */
+  series?: RecurringExpense | null;
+  /** Neue Serie angelegt (Liste der wiederkehrenden Ausgaben neu laden) */
+  onSeriesChanged?: () => void;
   /** Beleg importieren und auslesen (nur bei neuen Ausgaben ohne ausgelesenen Beleg) */
   onImportReceipt?: (file: File) => void;
   onClose: () => void;
@@ -142,6 +151,8 @@ export function ExpenseFormModal({
   const [file, setFile] = useState<File | null>(() => scan?.file ?? null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [removeReceipt, setRemoveReceipt] = useState(false);
+  const [recurring, setRecurring] = useState<RecurringChoice>(NO_RECURRING);
+  const [recurringError, setRecurringError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -153,6 +164,8 @@ export function ExpenseFormModal({
     setFile(scan?.file ?? null);
     setFileError(null);
     setRemoveReceipt(false);
+    setRecurring(NO_RECURRING);
+    setRecurringError(undefined);
   }, [open, entry, scan, isKU]);
 
   const set = (patch: Partial<ExpenseFormInput>) => {
@@ -184,12 +197,18 @@ export function ExpenseFormModal({
   const [firstYear, secondYear] = plan ?? [];
   const lastYear = plan?.at(-1);
   const lifeSelectValue = customLife ? CUSTOM_LIFE : form.usefulLife;
+  // Wiederkehrend nur für normale Ausgaben mit Betrag – nicht für Anlagen und berechnete Pauschalen
+  const existingSeriesId = entry?.kind === 'expense' ? entry.expense.recurring_id : null;
+  const canRecur = !!category && kind === 'expense' && !calculated && entry?.kind !== 'asset' && !existingSeriesId;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const errs = validateExpenseForm(form, today, isKU);
     setErrors(errs);
-    if (Object.keys(errs).length > 0 || fileError || !user) return;
+    const makeSeries = canRecur && recurring.on;
+    const recurringErr = makeSeries ? validateRecurringChoice(recurring, form.date) : null;
+    setRecurringError(recurringErr ?? undefined);
+    if (Object.keys(errs).length > 0 || recurringErr || fileError || !user) return;
 
     setSaving(true);
     let receiptPath = removeReceipt ? null : existingReceipt;
@@ -204,6 +223,7 @@ export function ExpenseFormModal({
     }
 
     const asAsset = entryKind(form, isKU) === 'asset';
+    let createdSeriesId: string | null = null;
     const sameKind = entry?.kind === (asAsset ? 'asset' : 'expense');
     let result: { error: string | null };
     if (asAsset) {
@@ -214,8 +234,29 @@ export function ExpenseFormModal({
       );
     } else {
       const values = computeExpenseValues(form, isKU);
+      const description = form.description.trim() || values.category_label;
+      // Neue Serie: zuerst anlegen, diese Ausgabe ist ihre erste Zahlung
+      if (makeSeries) {
+        const created = await createSeries(
+          buildSeries(values, {
+            description,
+            startDate: form.date,
+            intervalMonths: recurring.interval,
+            endDate: recurring.endDate || null,
+            autoBook: recurring.auto,
+          }),
+        );
+        if (created.error) {
+          setSaving(false);
+          toast.error(created.error);
+          if (file && receiptPath) await deleteReceipt(receiptPath);
+          return;
+        }
+        createdSeriesId = created.id;
+      }
       result = await onSaveExpense(
-        { ...values, expense_date: form.date, description: form.description.trim() || values.category_label, receipt_url: receiptPath },
+        // recurring_id nur bei neuer Serie setzen – sonst bleibt die bestehende Verbindung unangetastet
+        { ...values, expense_date: form.date, description, receipt_url: receiptPath, ...(createdSeriesId && { recurring_id: createdSeriesId }) },
         sameKind ? record?.id : undefined,
       );
     }
@@ -223,8 +264,10 @@ export function ExpenseFormModal({
       setSaving(false);
       toast.error(result.error);
       if (file && receiptPath) await deleteReceipt(receiptPath);
+      if (createdSeriesId) await deleteSeries(createdSeriesId, false);
       return;
     }
+    if (createdSeriesId) onSeriesChanged?.();
     // Art gewechselt: alten Eintrag entfernen (der Beleg gehört jetzt zum neuen)
     if (entry && !sameKind) {
       const removed = entry.kind === 'asset' ? await onDeleteAsset(entry.asset.id) : await onDeleteExpense(entry.expense.id);
@@ -236,9 +279,11 @@ export function ExpenseFormModal({
     toast.success(
       asAsset
         ? `${entry ? 'Gespeichert' : 'Erfasst'} – Klaro verteilt den Kaufpreis auf ${form.usefulLife.trim()} Jahre`
-        : entry
-          ? 'Ausgabe gespeichert'
-          : 'Ausgabe erfasst',
+        : createdSeriesId
+          ? 'Wiederkehrende Ausgabe angelegt'
+          : entry
+            ? 'Ausgabe gespeichert'
+            : 'Ausgabe erfasst',
     );
     onClose();
   }
@@ -464,6 +509,24 @@ export function ExpenseFormModal({
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="deductible-preview">
             Absetzbar: <strong className="tabular-nums">{formatEuro(preview.deductible_amount)}</strong>
             {preview.deductible_amount !== preview.amount && <span className="text-slate-500"> von {formatEuro(preview.amount)}</span>}
+          </p>
+        )}
+
+        {canRecur && (
+          <RecurringFields
+            value={recurring}
+            onChange={(v) => {
+              setRecurring(v);
+              setRecurringError(undefined);
+            }}
+            startDate={form.date}
+            error={recurringError}
+          />
+        )}
+        {existingSeriesId && (
+          <p className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="expense-series-note">
+            Teil einer Serie {series && <RecurringTag interval={series.interval_months} />}. Änderungen hier gelten nur für diese Zahlung –
+            die Serie selbst bearbeitest du unter „Wiederkehrende Ausgaben“.
           </p>
         )}
 

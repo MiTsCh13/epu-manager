@@ -128,6 +128,7 @@ export type Database = {
           km_driven: number | null
           nights: number | null
           receipt_url: string | null
+          recurring_id: string | null
           reimbursed: boolean
           trip_hours: number | null
           user_id: string
@@ -148,6 +149,7 @@ export type Database = {
           km_driven?: number | null
           nights?: number | null
           receipt_url?: string | null
+          recurring_id?: string | null
           reimbursed?: boolean
           trip_hours?: number | null
           user_id?: string
@@ -168,6 +170,7 @@ export type Database = {
           km_driven?: number | null
           nights?: number | null
           receipt_url?: string | null
+          recurring_id?: string | null
           reimbursed?: boolean
           trip_hours?: number | null
           user_id?: string
@@ -180,6 +183,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "imports"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_recurring_id_fkey"
+            columns: ["recurring_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_expenses"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -472,6 +482,66 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_expenses: {
+        Row: {
+          amount: number
+          amount_net: number | null
+          auto_book: boolean
+          category_label: string
+          created_at: string
+          deductible_amount: number
+          description: string
+          e1a_kz: string
+          end_date: string | null
+          id: string
+          interval_months: number
+          is_bewirtung: boolean
+          next_date: string
+          paused: boolean
+          reimbursed: boolean
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          amount_net?: number | null
+          auto_book?: boolean
+          category_label: string
+          created_at?: string
+          deductible_amount: number
+          description?: string
+          e1a_kz: string
+          end_date?: string | null
+          id?: string
+          interval_months: number
+          is_bewirtung?: boolean
+          next_date: string
+          paused?: boolean
+          reimbursed?: boolean
+          start_date: string
+          user_id?: string
+        }
+        Update: {
+          amount?: number
+          amount_net?: number | null
+          auto_book?: boolean
+          category_label?: string
+          created_at?: string
+          deductible_amount?: number
+          description?: string
+          e1a_kz?: string
+          end_date?: string | null
+          id?: string
+          interval_months?: number
+          is_bewirtung?: boolean
+          next_date?: string
+          paused?: boolean
+          reimbursed?: boolean
+          start_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       svs_payments: {
         Row: {
           amount: number
@@ -521,6 +591,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      book_recurring: {
+        Args: {
+          p_dates: string[]
+          p_expected: string
+          p_id: string
+          p_next: string
+        }
+        Returns: string
+      }
+      delete_recurring: {
+        Args: { p_id: string; p_with_bookings: boolean }
+        Returns: {
+          receipt_url: string
+        }[]
+      }
       delete_user_data: { Args: { p_user: string }; Returns: undefined }
       has_active_access: { Args: { p_user: string }; Returns: boolean }
     }

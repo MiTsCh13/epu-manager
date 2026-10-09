@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getAccessState } from '@/lib/subscription';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useSvsTracker } from '@/hooks/useSvsTracker';
+import { useRecurring } from '@/hooks/useRecurring';
 import { openInvoicesSummary, topCategories } from '@/lib/dashboard';
 import { toISODate } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
@@ -12,6 +13,7 @@ import { periodLabel, resolvePeriod, revenueBuckets, type DateRange, type Period
 import { setPendingReceipt } from '@/lib/pendingReceipt';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { WindowReceiptDrop } from '@/components/expenses/ReceiptDrop';
+import { RecurringDueList, RecurringOverviewCard } from '@/components/expenses/Recurring';
 import { ExpenseDonut } from '@/components/dashboard/ExpenseDonut';
 import { PeriodFilter } from '@/components/dashboard/PeriodFilter';
 import { RevenueChart } from '@/components/dashboard/RevenueChart';
@@ -27,6 +29,7 @@ const actionClass =
 export default function Dashboard() {
   const { profile } = useAuth();
   const svs = useSvsTracker();
+  const recurring = useRecurring();
   const navigate = useNavigate();
   const receiptInput = useRef<HTMLInputElement>(null);
   // Beleg importieren: zu den Ausgaben wechseln, dort liest Klaro ihn sofort aus
@@ -168,7 +171,17 @@ export default function Dashboard() {
             />
           </div>
 
+          <RecurringDueList
+            due={recurring.due}
+            onChanged={async () => {
+              await Promise.all([recurring.reload(), svs.reload(), dash.reload()]);
+            }}
+            onAdjust={(id) => navigate(`/ausgaben?bearbeiten=${id}`)}
+          />
+
           <SVSDashboardCard model={svs.model} />
+
+          <RecurringOverviewCard series={recurring.series} />
 
           <section aria-label="Auswertung nach Zeitraum" className="space-y-4">
             <PeriodFilter preset={preset} range={range} custom={custom} onPreset={setPreset} onCustom={setCustom} />

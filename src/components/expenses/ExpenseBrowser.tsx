@@ -12,6 +12,8 @@ import { Modal } from '@/components/ui/Modal';
 import { ExpenseList } from './ExpenseList';
 import type { Expense } from '@/types';
 
+const RECURRING = '__wiederkehrend';
+
 /** Ausgaben-Liste mit Suche, Kategorie-Filter, Sortierung und Massenbearbeitung (Kategorie ändern, löschen). */
 export function ExpenseBrowser({
   expenses,
@@ -22,6 +24,7 @@ export function ExpenseBrowser({
   onDelete,
   onRecategorize,
   onDeleteMany,
+  intervalOf,
 }: {
   expenses: Expense[];
   context: CategoryContext;
@@ -31,6 +34,7 @@ export function ExpenseBrowser({
   onDelete: (e: Expense) => void;
   onRecategorize: (ids: string[], categoryId: string) => Promise<{ changed: number; skipped: { description: string; reason: string }[]; error: string | null }>;
   onDeleteMany: (ids: string[]) => Promise<{ error: string | null }>;
+  intervalOf?: (e: Expense) => number | null;
 }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>('date-desc');
@@ -44,12 +48,12 @@ export function ExpenseBrowser({
   const visible = useMemo(
     () =>
       searchAndSort(
-        expenses.filter((e) => !category || e.category_label === category),
+        expenses.filter((e) => (category === RECURRING ? !!intervalOf?.(e) : !category || e.category_label === category)),
         query,
         sort,
         (e) => ({ date: e.expense_date, amount: Number(e.amount), texts: [e.description, e.category_label] }),
       ),
-    [expenses, category, query, sort],
+    [expenses, category, query, sort, intervalOf],
   );
   // Massenaktionen nur für ausgewählte UND sichtbare Einträge – nie für etwas, das ein Filter gerade ausblendet
   const chosen = visible.filter((e) => selected.has(e.id));
@@ -107,6 +111,7 @@ export function ExpenseBrowser({
       <ListControls query={query} onQuery={setQuery} sort={sort} onSort={setSort} placeholder="Beschreibung, Kategorie oder Betrag">
         <select aria-label="Kategorie filtern" value={category} onChange={(e) => setCategory(e.target.value)} className={filterSelectClass}>
           <option value="">Alle Kategorien</option>
+          {(category === RECURRING || expenses.some((e) => intervalOf?.(e))) && <option value={RECURRING}>Nur wiederkehrende</option>}
           {categories.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -136,7 +141,7 @@ export function ExpenseBrowser({
         )}
       </div>
       {visible.length > 0 ? (
-        <ExpenseList expenses={visible} counts={counts} selected={selected} onToggle={toggle} onEdit={onEdit} onDelete={onDelete} />
+        <ExpenseList expenses={visible} counts={counts} selected={selected} onToggle={toggle} onEdit={onEdit} onDelete={onDelete} intervalOf={intervalOf} />
       ) : (
         <p className="rounded-2xl bg-white py-10 text-center text-sm text-slate-500 ring-1 ring-slate-200">Nichts gefunden.</p>
       )}

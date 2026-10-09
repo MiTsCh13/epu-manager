@@ -139,6 +139,8 @@ function fileTransfer(page: Page) {
 
 /** Datei per Drag & Drop ins Fenster ziehen und loslassen (wie aus dem Finder/Explorer). */
 async function dragFileIntoWindow(page: Page, release = true) {
+  // Erst wenn die Seite gezeichnet ist, hört sie auf Drag & Drop
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   const dataTransfer = await fileTransfer(page);
   await page.dispatchEvent('main', 'dragenter', { dataTransfer });
   await expect(page.getByTestId('receipt-drop-overlay')).toBeVisible();
@@ -194,6 +196,7 @@ test('Drag & Drop: Hinausziehen blendet aus, bei offenem Dialog passiert nichts'
   const requests = await mockReadReceipt(page, maus);
   await login(page, email);
   await page.goto('/ausgaben');
+  await expect(page.getByRole('heading', { name: 'Ausgaben', level: 1 })).toBeVisible();
 
   // Hineinziehen und wieder hinaus (relatedTarget = null: Fenster verlassen)
   const dataTransfer = await fileTransfer(page);
