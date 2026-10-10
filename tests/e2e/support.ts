@@ -1,6 +1,6 @@
 // Hilfen für die E2E-Tests: eigene Testnutzer pro Test (über die Admin-API, ohne Mailversand),
 // Daten per API, Aufräumen über die Admin-API (wie „delete-account“). Der Service-Role-Key bleibt in .env.local (nie VITE_).
-import type { EmailOtpType } from '@supabase/supabase-js';
+import type { EmailOtpType, Session } from '@supabase/supabase-js';
 import { test as base, expect, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/types/database';
@@ -21,6 +21,10 @@ function adminClient(): Client {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY fehlt in .env.local');
   return createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 }
+
+// Sitzungen der Testnutzer: login() gibt sie an den Browser weiter, statt sich ein zweites Mal anzumelden.
+// Jede Passwort-Anmeldung zählt gegen das Auth-Limit von Supabase (150 pro 5 Minuten und IP).
+const sessions = new Map<string, Session>();
 
 export function uniqueEmail(tag: string): string {
   return `klaro-e2e-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -46,10 +50,25 @@ export async function createUser(
   if (error) throw new Error(`Testnutzer konnte nicht angelegt werden: ${error.message}`);
   const client = newClient();
   if (confirmed) {
-    const { error: loginError } = await client.auth.signInWithPassword({ email, password: PASSWORD });
-    if (loginError) throw new Error(`Testnutzer konnte sich nicht anmelden: ${loginError.message}`);
+    sessions.set(email, await signIn(client, email));
   }
   return { email, client };
+}
+
+/**
+ * Mit Passwort anmelden. Supabase erlaubt 30 Anmeldungen auf einmal, danach eine alle 2 Sekunden (pro IP) –
+ * läuft die Suite mehrmals hintereinander, wartet der Test kurz und versucht es erneut, statt fehlzuschlagen.
+ */
+async function signIn(client: Client, email: string): Promise<Session> {
+  const info = test.info();
+  for (let attempt = 0; ; attempt++) {
+    const { data, error } = await client.auth.signInWithPassword({ email, password: PASSWORD });
+    if (!error) return data.session;
+    if (error.status !== 429 || attempt >= 8) throw new Error(`Testnutzer konnte sich nicht anmelden: ${error.message}`);
+    const wait = 2_000 * 2 ** Math.min(attempt, 4) * (1 + Math.random()); // gestreut, damit nicht alle Worker gleichzeitig wiederkommen
+    info.setTimeout(info.timeout + wait);
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
 }
 
 /**
@@ -160,7 +179,17 @@ export const test = base.extend<{ cleanup: (email: string) => void }>({
 
 export { expect };
 
+/** Im Browser anmelden: mit der Sitzung aus createUser (ohne weitere Anmeldung), sonst über das Formular. */
 export async function login(page: Page, email: string) {
+  const session = sessions.get(email);
+  if (session) {
+    const ref = new URL(SUPABASE_URL).hostname.split('.')[0];
+    await page.goto('/login');
+    await page.evaluate(([key, value]) => localStorage.setItem(key!, value!), [`sb-${ref}-auth-token`, JSON.stringify(session)]);
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/$/);
+    return;
+  }
   await page.goto('/login');
   await page.getByLabel('E-Mail').fill(email);
   await page.getByLabel('Passwort').fill(PASSWORD);
