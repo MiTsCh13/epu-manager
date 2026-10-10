@@ -29,6 +29,8 @@ export interface TemplateSettings {
   footer: {
     style: 'lines' | 'columns'; // zentrierte Zeilen oder drei Spalten auf farbigem Grund
     contact: string; // dritte Spalte: Telefon, E-Mail, Website …
+    bankExtra: string; // weitere Bankangaben, z. B. „BIC: …“, „Steuernummer: …“ (eine pro Zeile)
+    tinted: boolean; // drei Spalten auf farbigem Grund (sonst mit Linie darüber)
     text: string; // freier Text (Vorschlag für jede neue Rechnung)
   };
   payment: {
@@ -48,7 +50,7 @@ export const DEFAULT_TEMPLATE: TemplateSettings = {
   intro: '',
   closing: { title: '', text: '', boxed: false },
   greeting: { text: '', signature: '' },
-  footer: { style: 'lines', contact: '', text: '' },
+  footer: { style: 'lines', contact: '', bankExtra: '', tinted: true, text: '' },
   payment: { days: 14, terms: '', box: true, qr: true },
   table: { priceFirst: false },
   kuNote: 'below',
@@ -162,7 +164,13 @@ export function normalizeTemplate(raw: unknown): TemplateSettings {
     intro: str(r.intro, ''),
     closing: { title: str(c.title, ''), text: str(c.text, ''), boxed: bool(c.boxed, false) },
     greeting: { text: str(g.text, ''), signature: str(g.signature, '') },
-    footer: { style: oneOf(f.style, ['lines', 'columns'] as const, 'lines'), contact: str(f.contact, ''), text: str(f.text, '') },
+    footer: {
+      style: oneOf(f.style, ['lines', 'columns'] as const, 'lines'),
+      contact: str(f.contact, ''),
+      bankExtra: str(f.bankExtra, ''),
+      tinted: bool(f.tinted, true),
+      text: str(f.text, ''),
+    },
     payment: {
       days: Number.isInteger(days) && days >= 0 && days <= 365 ? days : d.payment.days,
       terms: str(p.terms, ''),

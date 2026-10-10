@@ -15,7 +15,13 @@ async function prepare(file: File, kind: BrandingKind): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const ctx = canvas.getContext('2d')!;
+  // JPEG kennt keine Transparenz – sonst würden durchsichtige Stellen im Kopfbild schwarz
+  if (kind === 'header') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   const type = kind === 'logo' ? 'image/png' : 'image/jpeg';
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.85));
   if (!blob) throw new Error('Bild konnte nicht umgewandelt werden');

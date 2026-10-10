@@ -327,6 +327,11 @@ export default function TemplateEditor() {
               ]}
               onChange={(style) => set({ footer: { ...s.footer, style } })}
             />
+            {s.footer.style === 'columns' && (
+              <Toggle checked={s.footer.tinted} onChange={(tinted) => set({ footer: { ...s.footer, tinted } })} hint="Sonst mit einer feinen Linie darüber.">
+                Auf farbigem Grund
+              </Toggle>
+            )}
             <div>
               <label htmlFor="tpl-contact" className="mb-1 block text-sm font-medium text-slate-700">
                 Kontakt <span className="font-normal text-slate-400">(optional)</span>
@@ -340,6 +345,20 @@ export default function TemplateEditor() {
                 className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
               />
               <p className="mt-1 text-xs text-slate-500">Eine Angabe pro Zeile. Anschrift und Bank setzt Klaro selbst dazu.</p>
+            </div>
+            <div>
+              <label htmlFor="tpl-bank" className="mb-1 block text-sm font-medium text-slate-700">
+                Weitere Bankangaben <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <textarea
+                id="tpl-bank"
+                rows={2}
+                value={s.footer.bankExtra}
+                placeholder={'BIC: BKAUATWW\nSteuernummer: 12 345/6789'}
+                onChange={(e) => set({ footer: { ...s.footer, bankExtra: e.target.value } })}
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
+              />
+              <p className="mt-1 text-xs text-slate-500">Steht unter IBAN und Kontoinhaber, die Klaro aus deinen Einstellungen nimmt.</p>
             </div>
             <PlaceholderText
               id="tpl-footer"

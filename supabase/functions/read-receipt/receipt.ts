@@ -2,7 +2,6 @@
 
 export const MODEL = 'claude-sonnet-5-5';
 export const DAILY_LIMIT = 50; // Lesevorgänge pro Person in 24 Stunden
-export const GLOBAL_DAILY_LIMIT = 1000; // über alle Konten – Notbremse für die Kosten (≈ 20 $ pro Tag)
 export const MAX_BASE64_CHARS = 7_500_000; // ≈ 5,6 MB Datei – Belege sind auf 5 MB begrenzt
 export const MAX_IMAGE_BASE64_CHARS = 6_900_000; // Anthropic nimmt Bilder bis 5 MB
 export const MAX_BODY_BYTES = 8_000_000;

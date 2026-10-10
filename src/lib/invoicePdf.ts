@@ -63,6 +63,7 @@ export interface InvoicePdfData {
   footerLines: string[];
   /** Fußzeile in drei Spalten: Anschrift, Bank, Kontakt (nur bei footer.style = 'columns') */
   footerColumns: string[][] | null;
+  footerTinted: boolean;
   footerText: string | null;
 }
 
@@ -135,7 +136,12 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   const closingTitle = fill(template.closing.title) || null;
   // Höchstens 5 Kontaktzeilen – die Fußzeile soll nicht die halbe Seite füllen
   const contact = template.footer.contact.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 5);
-  const bankLines = issuer.iban ? [`Bank: ${accountHolder}`, `IBAN: ${issuer.iban}`] : [];
+  const bankExtra = template.footer.bankExtra.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 4);
+  // Steht schon „Bank: Erste Bank“ in den Zusatzzeilen, heißt der Kontoinhaber „Name: …“ (sonst zwei „Bank:“-Zeilen)
+  const isBankName = (l: string) => /^bank\s*:/i.test(l);
+  const bankNames = bankExtra.filter(isBankName);
+  const holderLines = bankNames.length ? [...bankNames, `Name: ${accountHolder}`] : [`Bank: ${accountHolder}`];
+  const bankLines = issuer.iban ? [...holderLines, `IBAN: ${issuer.iban}`, ...bankExtra.filter((l) => !isBankName(l))] : bankExtra;
 
   return {
     template,
@@ -189,7 +195,7 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
     qr: template.payment.qr,
     footerLines: [
       [issuerName, ...issuerAddress].join(' · '),
-      [issuer.uid_number && `UID ${issuer.uid_number}`, issuer.iban && `${accountHolder} · IBAN ${issuer.iban}`].filter(Boolean).join(' · '),
+      [issuer.uid_number && `UID ${issuer.uid_number}`, issuer.iban && `${accountHolder} · IBAN ${issuer.iban}`, ...bankExtra].filter(Boolean).join(' · '),
       contact.join(' · '),
     ].filter(Boolean),
     footerColumns:
@@ -200,6 +206,7 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
             contact,
           ]
         : null,
+    footerTinted: template.footer.tinted,
     footerText: fill(invoice.footer_text) || null,
   };
 }

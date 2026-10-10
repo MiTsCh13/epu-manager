@@ -4,13 +4,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, FileUp, Palette, Pencil, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useTemplates } from '@/hooks/useTemplates';
-import { DESIGNS, normalizeTemplate, type Design } from '@/lib/invoiceTemplates';
+import { DESIGNS, normalizeTemplate, type Design, type TemplateSettings } from '@/lib/invoiceTemplates';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { ColorField, DesignThumb, ImageField } from './TemplateFields';
+import { ImportTemplate } from './ImportTemplate';
 import type { InvoiceTemplate } from '@/types';
 
 export function TemplatesSection() {
@@ -146,16 +147,17 @@ function NewTemplateModal({
   onCreate: ReturnType<typeof useTemplates>['create'];
 }) {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'start' | 'design' | 'details'>('start');
+  const [step, setStep] = useState<'start' | 'import' | 'design' | 'details'>('start');
   const [design, setDesign] = useState<Design | null>(null);
   const [name, setName] = useState('');
   const [logoPath, setLogoPath] = useState<string | null>(null);
   const [color, setColor] = useState('');
   const [logoColor, setLogoColor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
 
   const close = () => {
-    if (busy) return;
+    if (busy || importBusy) return;
     onClose();
     setStep('start');
     setDesign(null);
@@ -176,8 +178,22 @@ function NewTemplateModal({
     navigate(`/vorlagen/${r.id}`);
   }
 
+  /** Vorlage aus einer Rechnung anlegen; `edit` → gleich im Editor weiter anpassen. */
+  async function createImported(templateName: string, settings: TemplateSettings, edit: boolean): Promise<boolean> {
+    const r = await onCreate(templateName, settings);
+    if (r.error || !r.id) {
+      toast.error(r.error ?? 'Die Vorlage konnte nicht angelegt werden.');
+      return false;
+    }
+    onClose();
+    setStep('start');
+    toast.success(`Vorlage „${templateName}“ angelegt`);
+    if (edit) navigate(`/vorlagen/${r.id}`);
+    return true;
+  }
+
   const back = (to: 'start' | 'design') => (
-    <Button variant="ghost" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => setStep(to)} disabled={busy}>
+    <Button variant="ghost" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => setStep(to)} disabled={busy || importBusy}>
       Zurück
     </Button>
   );
@@ -186,8 +202,8 @@ function NewTemplateModal({
     <Modal
       open={open}
       onClose={close}
-      size={step === 'design' ? 'xl' : 'md'}
-      title={step === 'start' ? 'Neue Vorlage' : step === 'design' ? 'Design wählen' : `Design „${design?.label}“`}
+      size={step === 'design' || step === 'import' ? 'xl' : 'md'}
+      title={step === 'start' ? 'Neue Vorlage' : step === 'import' ? 'Aus meiner Rechnung übernehmen' : step === 'design' ? 'Design wählen' : `Design „${design?.label}“`}
       footer={
         step === 'details' ? (
           <>
@@ -196,19 +212,23 @@ function NewTemplateModal({
               Vorlage anlegen
             </Button>
           </>
-        ) : step === 'design' ? (
+        ) : step === 'design' || step === 'import' ? (
           back('start')
         ) : undefined
       }
     >
       {step === 'start' && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="relative rounded-xl border border-slate-200 p-4 opacity-70" aria-disabled="true">
-            <Badge tone="info">Kommt bald</Badge>
-            <FileUp className="mt-3 h-6 w-6 text-primary" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setStep('import')}
+            className="rounded-xl border border-slate-300 p-4 text-left transition-colors hover:border-primary hover:bg-primary-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <FileUp className="mt-1 h-6 w-6 text-primary" aria-hidden="true" />
             <p className="mt-2 font-semibold text-slate-900">Aus meiner Rechnung übernehmen</p>
             <p className="mt-1 text-sm text-slate-600">PDF hineinziehen – Klaro übernimmt Logo, Farben, Texte und Aufbau.</p>
-          </div>
+            <Badge tone="success">Empfohlen, wenn du schon Rechnungen hast</Badge>
+          </button>
           <button
             type="button"
             onClick={() => setStep('design')}
@@ -220,6 +240,8 @@ function NewTemplateModal({
           </button>
         </div>
       )}
+
+      {step === 'import' && <ImportTemplate onCreate={createImported} onBusyChange={setImportBusy} />}
 
       {step === 'design' && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

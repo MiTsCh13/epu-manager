@@ -32,7 +32,7 @@ describe('normalizeTemplate', () => {
     expect(t.color).toBe('#1e4e8c');
     expect(t.font).toBe('helvetica');
     expect(t.header).toMatchObject({ style: 'image', logoPath: 'u/logo.png', imagePath: null, logoSize: 'm' });
-    expect(t.footer).toEqual({ style: 'lines', contact: '', text: 'Firmenbuch FN 123' });
+    expect(t.footer).toEqual({ style: 'lines', contact: '', bankExtra: '', tinted: true, text: 'Firmenbuch FN 123' });
     expect(t.payment).toEqual({ days: 30, terms: '', box: false, qr: true });
     expect(t.kuNote).toBe('below');
   });

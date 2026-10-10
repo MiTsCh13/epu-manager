@@ -173,6 +173,18 @@ function Header({ data, images }: { data: InvoicePdfData; images: PdfImages }) {
       </View>
     );
   }
+  // Klassisch mit Logo rechts: Logo über der Anschrift (links bleibt frei bzw. steht der Zusatz)
+  if (logo && header.logoPosition === 'right') {
+    return (
+      <View style={s.header}>
+        <View>{header.tagline && <Text style={s.tagline}>{header.tagline}</Text>}</View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Logo src={logo} size={header.logoSize} />
+          <View style={{ marginTop: 8 }}>{lines()}</View>
+        </View>
+      </View>
+    );
+  }
   // Klassisch: Logo bzw. Name auf der einen Seite, Anschrift auf der anderen
   const brand = logo ? <Logo src={logo} size={header.logoSize} /> : nameBlock();
   const address = <View>{lines(false, header.logoPosition === 'right' ? 'left' : 'right')}</View>;
@@ -337,7 +349,10 @@ export function InvoicePDF({ data, qrDataUrl, images = {} }: { data: InvoicePdfD
         {data.footerText && <Text style={[s.block, { color: MUTED }]}>{data.footerText}</Text>}
 
         {data.footerColumns ? (
-          <View style={[s.footerColumns, { backgroundColor: tint(color, 0.9), color }]} fixed>
+          <View
+            style={[s.footerColumns, data.footerTinted ? { backgroundColor: tint(color, 0.9), color } : { borderTopWidth: 0.5, borderTopColor: LINE, color: TEXT }]}
+            fixed
+          >
             {data.footerColumns.map((col, i) => (
               <View key={i} style={s.footerColumn}>
                 {col.map((l, j) => (

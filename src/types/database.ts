@@ -514,6 +514,7 @@ export type Database = {
           created_at: string
           id: string
           input_tokens: number
+          kind: string
           model: string
           output_tokens: number
           status: string
@@ -523,6 +524,7 @@ export type Database = {
           created_at?: string
           id?: string
           input_tokens?: number
+          kind?: string
           model: string
           output_tokens?: number
           status: string
@@ -532,6 +534,7 @@ export type Database = {
           created_at?: string
           id?: string
           input_tokens?: number
+          kind?: string
           model?: string
           output_tokens?: number
           status?: string

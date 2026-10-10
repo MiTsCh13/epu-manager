@@ -57,6 +57,8 @@ test('Vorlage anlegen, beim Kunden hinterlegen, Rechnung übernimmt Texte und Ge
   await page.getByLabel(/^Menge/).fill('4');
   await page.getByPlaceholder('0,00').fill('150');
   await expect(page.getByTestId('invoice-total')).toHaveText(/600,00/);
+  // Die fortlaufende Nummer wird asynchron vorgeschlagen
+  await expect(page.getByLabel(/Nummer$/)).toHaveValue(/^\d{4}-\d{3}$/);
   await page.getByRole('button', { name: 'Entwurf speichern' }).click();
   await expect(page).toHaveURL(/\/rechnungen\/[0-9a-f-]{36}$/, { timeout: 20_000 });
 

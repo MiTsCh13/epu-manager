@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildInvoicePdfData } from '@/lib/invoicePdf';
 import { loadTemplateImages, renderInvoicePdf } from '@/lib/renderInvoicePdf';
+import type { PdfImages } from '@/components/invoices/InvoicePDF';
 import { addDays, toISODate } from '@/lib/invoices';
 import type { TemplateSettings } from '@/lib/invoiceTemplates';
 import { Spinner } from '@/components/ui/Spinner';
@@ -111,11 +112,14 @@ export function TemplatePreview({
   settings,
   active,
   onSelect,
+  images: givenImages,
 }: {
   profile: Profile | null;
   settings: TemplateSettings;
   active: TemplatePart | null;
-  onSelect: (part: TemplatePart) => void;
+  onSelect?: (part: TemplatePart) => void;
+  /** Bilder direkt (z. B. vor dem Hochladen beim Übernehmen einer Rechnung) statt aus dem Speicher */
+  images?: PdfImages;
 }) {
   const canvasBox = useRef<HTMLDivElement>(null);
   const [bands, setBands] = useState<Band[]>([]);
@@ -131,7 +135,7 @@ export function TemplatePreview({
       setBusy(true);
       try {
         const invoice = sampleInvoice(profile, settings);
-        const images = await loadTemplateImages(settings);
+        const images = givenImages ?? (await loadTemplateImages(settings));
         const { blob } = await renderInvoicePdf(invoice, { images });
         const pdfjs = await import('pdfjs-dist');
         pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
@@ -169,13 +173,13 @@ export function TemplatePreview({
       clearTimeout(timer);
       void task?.destroy();
     };
-  }, [profile, settings]);
+  }, [profile, settings, givenImages]);
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200" data-testid="template-preview">
       <div ref={canvasBox} className="aspect-[210/297] w-full" />
       {/* Bereiche: Zahlung liegt über „Text unten“ und kommt deshalb zuletzt */}
-      {bands.map((b) => {
+      {onSelect && bands.map((b) => {
         const on = active === b.part;
         const hovered = hover === b.part;
         return (
