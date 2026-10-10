@@ -31,7 +31,9 @@ export function useExpensesData(year: number) {
     const [exp, svs, inv, inc, ast] = await Promise.all([
       fetchAll((a, b) => supabase.from('expenses').select('*').gte('expense_date', from).lte('expense_date', to)
         .order('expense_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
-      fetchAll((a, b) => supabase.from('svs_payments').select('*').eq('year', year).order('payment_date', { ascending: false }).order('id').range(a, b)),
+      // SVS zählt im Jahr der Zahlung (§ 19 EStG; Quartalsbeiträge sind nie um den Jahreswechsel fällig)
+      fetchAll((a, b) => supabase.from('svs_payments').select('*').gte('payment_date', from).lte('payment_date', to)
+        .order('payment_date', { ascending: false }).order('id').range(a, b)),
       // Zuflussprinzip: Einnahme zählt im Jahr der Zahlung; netto (ohne USt)
       fetchAll((a, b) => supabase.from('invoices').select('subtotal').eq('status', 'paid')
         .gte('paid_at', `${from}T00:00:00`).lt('paid_at', `${year + 1}-01-01T00:00:00`).order('id').range(a, b)),
@@ -169,7 +171,7 @@ export function useExpensesData(year: number) {
   );
 
   const updateSvsPayment = useCallback(
-    async (id: string, values: Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'payment_date' | 'notes'>): Promise<Result> => {
+    async (id: string, values: Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'year' | 'payment_date' | 'notes'>): Promise<Result> => {
       const { error: err } = await supabase.from('svs_payments').update(values).eq('id', id).select('id').single();
       if (err) return { error: 'Der SVS-Beitrag konnte nicht gespeichert werden.' };
       await load();

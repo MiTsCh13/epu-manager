@@ -12,9 +12,13 @@ import type { Quarter, SvsPayment, SvsPaymentInsert } from '@/types';
 
 const QUARTERS: Quarter[] = ['Q1', 'Q2', 'Q3', 'Q4'];
 
+/** Bezahlt in einem anderen Jahr → der Beitrag steht dort (SVS zählt im Jahr der Zahlung). */
+const savedMessage = (text: string, paymentDate: string, year: number) =>
+  Number(paymentDate.slice(0, 4)) === year ? text : `${text} – zählt für ${paymentDate.slice(0, 4)} und steht dort`;
+
 const label = (p: SvsPayment) => `${p.quarter ?? 'SVS'} ${p.year} über ${formatEuro(Number(p.amount))}`;
 
-type Values = Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'payment_date' | 'notes'>;
+type Values = Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'year' | 'payment_date' | 'notes'>;
 
 export function SvsPaymentsSection({
   year,
@@ -51,7 +55,10 @@ export function SvsPaymentsSection({
           </Button>
         )}
       </div>
-      <Alert type="info">SVS-Beiträge sind immer absetzbar – auch bei Pauschalierung.</Alert>
+      <Alert type="info">
+        SVS-Beiträge sind immer absetzbar – auch bei Pauschalierung. Sie zählen im Jahr, in dem du sie bezahlst: Q4 {year - 1}, bezahlt im Jänner {year},
+        mindert deinen Gewinn {year}.
+      </Alert>
 
       {editing === 'new' && (
         <SvsForm
@@ -60,9 +67,9 @@ export function SvsPaymentsSection({
           payment={null}
           onCancel={() => setEditing(null)}
           onSave={async (values) => {
-            const r = await onAdd({ ...values, year });
+            const r = await onAdd(values);
             if (r.error) return void toast.error(r.error);
-            toast.success('SVS-Beitrag erfasst');
+            toast.success(savedMessage('SVS-Beitrag erfasst', values.payment_date, year));
             setEditing(null);
           }}
         />
@@ -70,7 +77,7 @@ export function SvsPaymentsSection({
 
       {payments.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
-          Noch keine SVS-Beiträge für {year} erfasst.
+          Noch keine SVS-Beiträge {year} bezahlt.
         </p>
       ) : (
         <ul className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200" data-testid="svs-list">
@@ -85,7 +92,7 @@ export function SvsPaymentsSection({
                   onSave={async (values) => {
                     const r = await onUpdate(p.id, values);
                     if (r.error) return void toast.error(r.error);
-                    toast.success('SVS-Beitrag gespeichert');
+                    toast.success(savedMessage('SVS-Beitrag gespeichert', values.payment_date, year));
                     setEditing(null);
                   }}
                 />
@@ -104,6 +111,7 @@ export function SvsPaymentsSection({
                     </span>
                     <span className="block truncate text-xs text-slate-500">
                       bezahlt am {formatDate(p.payment_date)}
+                      {Number(p.payment_date.slice(0, 4)) !== p.year && ` · zählt für ${p.payment_date.slice(0, 4)}`}
                       {p.notes && ` · ${p.notes}`}
                     </span>
                   </span>
@@ -162,6 +170,15 @@ export function SvsPaymentsSection({
   );
 }
 
+/** Quartale des Vorjahres und des Jahres („Q4 2025“ kann im Jänner 2026 bezahlt werden), plus der bisherige Wert. */
+function periodOptions(year: number, payment: SvsPayment | null) {
+  const options = [year - 1, year].flatMap((y) => QUARTERS.map((q) => ({ value: `${q}|${y}`, label: `${q} ${y}` })));
+  if (payment && !options.some((o) => o.value === `${payment.quarter ?? ''}|${payment.year}`)) {
+    options.push({ value: `${payment.quarter ?? ''}|${payment.year}`, label: payment.quarter ? `${payment.quarter} ${payment.year}` : `${payment.year} (ohne Quartal)` });
+  }
+  return options;
+}
+
 /** Formular für einen neuen oder einen bestehenden SVS-Beitrag. */
 function SvsForm({
   year,
@@ -177,9 +194,10 @@ function SvsForm({
   const today = toISODate(new Date());
   const currentQuarter = QUARTERS[Math.floor(new Date().getMonth() / 3)]!;
   const [amount, setAmount] = useState(payment ? formatDecimalInput(Number(payment.amount)) : '');
-  // Bestehende Beiträge ohne Quartal (z. B. Nachzahlung aus dem Import) behalten „kein Quartal“
-  const [quarter, setQuarter] = useState<Quarter | ''>(payment ? ((payment.quarter as Quarter | null) ?? '') : currentQuarter);
-  const [date, setDate] = useState(payment?.payment_date ?? today);
+  // Wofür der Beitrag ist: Quartal + Jahr (gezählt wird nach dem Zahlungsdatum). Ohne Quartal z. B. Nachzahlung aus dem Import.
+  const [period, setPeriod] = useState(payment ? `${payment.quarter ?? ''}|${payment.year}` : `${currentQuarter}|${year}`);
+  // Neuer Beitrag in einem früheren Jahr: Datum selbst eingeben (heute läge im falschen Jahr)
+  const [date, setDate] = useState(payment?.payment_date ?? (today.startsWith(String(year)) ? today : ''));
   const [notes, setNotes] = useState(payment?.notes ?? '');
   const [errors, setErrors] = useState<{ amount?: string; date?: string }>({});
   const [saving, setSaving] = useState(false);
@@ -195,7 +213,8 @@ function SvsForm({
     setErrors(next);
     if (next.amount || next.date) return;
     setSaving(true);
-    await onSave({ amount: round2(value), quarter: quarter || null, payment_date: date, notes: notes.trim() || null });
+    const [quarter, periodYear] = period.split('|');
+    await onSave({ amount: round2(value), quarter: (quarter as Quarter) || null, year: Number(periodYear), payment_date: date, notes: notes.trim() || null });
     setSaving(false);
   }
 
@@ -207,11 +226,11 @@ function SvsForm({
       className="grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-3 sm:items-start"
     >
       <Field autoFocus label="Betrag (€)" inputMode="decimal" placeholder="z. B. 482,43" value={amount} error={errors.amount} onChange={(e) => setAmount(e.target.value)} />
-      <Select label="Quartal" value={quarter} options={[
-          ...QUARTERS.map((q) => ({ value: q, label: `${q} ${payment?.year ?? year}` })),
-          ...(payment && !payment.quarter ? [{ value: '', label: 'kein Quartal' }] : []),
-        ]}
-        onChange={(e) => setQuarter(e.target.value as Quarter | '')}
+      <Select
+        label="Beitrag für"
+        value={period}
+        options={periodOptions(year, payment)}
+        onChange={(e) => setPeriod(e.target.value)}
       />
       <Field label="Bezahlt am" type="date" max={date > today ? date : today} value={date} error={errors.date} onChange={(e) => setDate(e.target.value)} />
       <Field className="sm:col-span-2" label="Notiz" optional placeholder="z. B. Nachzahlung 2025" value={notes} onChange={(e) => setNotes(e.target.value)} />

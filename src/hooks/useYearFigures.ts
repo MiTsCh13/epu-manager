@@ -28,7 +28,8 @@ export function useYearFigures(year: number) {
       // Einnahmen ohne Klaro-Rechnung (z. B. importiert)
       fetchAll((a, b) => supabase.from('incomes').select('amount, amount_net, income_date').gte('income_date', from).order('id').range(a, b)),
       fetchAll((a, b) => supabase.from('expenses').select('category_label, amount, deductible_amount, is_bewirtung, reimbursed, expense_date, recurring_id').gte('expense_date', from).order('id').range(a, b)),
-      fetchAll((a, b) => supabase.from('svs_payments').select('amount, year').gte('year', year - 1).order('id').range(a, b)),
+      // SVS zählt im Jahr der Zahlung, nicht im Jahr des Beitragsquartals
+      fetchAll((a, b) => supabase.from('svs_payments').select('amount, payment_date').gte('payment_date', from).order('id').range(a, b)),
       // Anlagen aus früheren Jahren werden noch abgeschrieben → alle laden
       fetchAll((a, b) => supabase.from('assets').select('cost, purchase_date, useful_life_years').lte('purchase_date', `${year}-12-31`).order('id').range(a, b)),
       fetchAll((a, b) => supabase.from('recurring_expenses').select('*').order('id').range(a, b)),
@@ -42,7 +43,7 @@ export function useYearFigures(year: number) {
       const invoices = inv.data.filter((i) => i.paid_at && new Date(i.paid_at).getFullYear() === y);
       const incomes = inc.data.filter((i) => Number(i.income_date.slice(0, 4)) === y);
       const expenses = exp.data.filter((e) => Number(e.expense_date.slice(0, 4)) === y);
-      const payments = svs.data.filter((p) => p.year === y);
+      const payments = svs.data.filter((p) => Number(p.payment_date.slice(0, 4)) === y);
       const rows = expenses.map((e) => ({
         ...e,
         amount: Number(e.amount),
