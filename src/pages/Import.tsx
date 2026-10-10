@@ -27,12 +27,14 @@ import {
 } from '@/lib/importMapping';
 import type { Table } from '@/lib/importParse';
 import { toISODate } from '@/lib/invoices';
+import { inferNumberFormat } from '@/lib/invoiceNumbers';
 import { formatEuro } from '@/lib/money';
 import { categoryContextFor } from '@/lib/expenses';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { CategoriesStep } from '@/components/import/CategoriesStep';
 import { ColumnsStep, type ColumnSettings } from '@/components/import/ColumnsStep';
 import { describeCounts, ImportHistory } from '@/components/import/ImportHistory';
+import { NumberFormatSuggestion } from '@/components/import/NumberFormatSuggestion';
 import { ReviewStep } from '@/components/import/ReviewStep';
 import { SourceStep } from '@/components/import/SourceStep';
 import { Alert } from '@/components/ui/Alert';
@@ -74,6 +76,8 @@ export default function Import() {
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportSummary | null>(null);
+  // Format der übernommenen Rechnungsnummern – Klaro fragt nach dem Import, ob neue Rechnungen so weiterzählen
+  const [numberFormat, setNumberFormat] = useState<{ format: string; example: string } | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
   // Bisherige Ausgaben → bessere Kategorie-Vorschläge
   const [learned, setLearned] = useState<CategoryHistory | undefined>();
@@ -156,10 +160,12 @@ export default function Import() {
   async function runImport() {
     setBusy(true);
     const summary = summarize(reviewRows, isKU);
-    const { error } = await saveImport(sourceName, buildRecords(reviewRows, isKU), summary);
+    const records = buildRecords(reviewRows, isKU);
+    const { error } = await saveImport(sourceName, records, summary);
     setBusy(false);
     if (error) return void toast.error(error);
     setResult(summary);
+    setNumberFormat(inferNumberFormat(records.incomes.flatMap((i) => (i.reference ? [{ reference: i.reference, date: i.income_date }] : []))));
     setHistoryKey((k) => k + 1);
     setStep('done');
     window.scrollTo({ top: 0 });
@@ -170,6 +176,7 @@ export default function Import() {
     setSettings(null);
     setReviewRows([]);
     setResult(null);
+    setNumberFormat(null);
     setStep('source');
   }
 
@@ -266,6 +273,7 @@ export default function Import() {
                 Weitere Datei übernehmen
               </Button>
             </div>
+            {numberFormat && <NumberFormatSuggestion format={numberFormat.format} example={numberFormat.example} />}
             <p className="text-sm text-slate-600">Etwas passt nicht? Unten kannst du den Import mit einem Klick rückgängig machen.</p>
           </section>
         )}

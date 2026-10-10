@@ -40,7 +40,7 @@ export interface InvoicePdfData {
   title: string; // „Rechnung“ | „Honorarnote“
   fileName: string;
   issuerName: string;
-  issuerLines: string[]; // Anschrift (ohne Name)
+  issuerLines: string[]; // Zeilen im Kopf neben Name/Logo: Inhaber, wenn es einen Firmennamen gibt (Anschrift steht über dem Empfänger)
   senderLine: string; // Absenderzeile über dem Empfänger
   recipientLines: string[]; // inkl. Name
   meta: [string, string][];
@@ -100,10 +100,9 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   // Kontoinhaber exakt wie bei der Bank (Empfängerüberprüfung) – Fallback: Name des Unternehmens
   const accountHolder = issuer.account_holder || issuerName;
   const issuerAddress = addressLines(issuer);
-  const issuerLines = [
-    ...(issuer.business_name && issuer.full_name ? [issuer.full_name] : []),
-    ...issuerAddress,
-  ];
+  // Die Anschrift steht in der Absenderzeile über dem Empfänger und in der Fußzeile – im Kopf nicht noch einmal
+  const issuerLines = issuer.business_name && issuer.full_name && issuer.full_name !== issuer.business_name ? [issuer.full_name] : [];
+  const isCash = invoice.payment_method === 'cash';
 
   const service = invoice.service_date_to
     ? `${formatDate(invoice.service_date_from)} – ${formatDate(invoice.service_date_to)}`
@@ -114,7 +113,8 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
     [invoice.is_honorarnote ? 'Ausstellungsdatum' : 'Rechnungsdatum', formatDate(invoice.invoice_date)],
     [invoice.service_date_to ? 'Leistungszeitraum' : 'Leistungsdatum', service],
   ];
-  if (invoice.due_date) meta.push(['Zahlbar bis', formatDate(invoice.due_date)]);
+  if (isCash) meta.push(['Bezahlung', 'bar']);
+  else if (invoice.due_date) meta.push(['Zahlbar bis', formatDate(invoice.due_date)]);
   if (issuer.uid_number) meta.push(['UID-Nr.', issuer.uid_number]);
   if (recipient?.uid_number) meta.push(['UID-Nr. Kunde', recipient.uid_number]);
 
@@ -175,8 +175,9 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
     intro: parseRichText(fill(invoice.intro_text)),
     closing: closingBlocks.length || closingTitle ? { title: closingTitle, blocks: closingBlocks, boxed: template.closing.boxed } : null,
     greeting: template.greeting.text || template.greeting.signature ? { text: fill(template.greeting.text), signature: fill(template.greeting.signature) } : null,
-    paymentTerms: fill(template.payment.terms) || null,
-    payment: issuer.iban && template.payment.box
+    // Bar bezahlt: keine Zahlungsbedingungen, keine Zahlungsbox, kein QR-Code
+    paymentTerms: isCash ? null : fill(template.payment.terms) || null,
+    payment: !isCash && issuer.iban && template.payment.box
       ? {
           intro: `Bitte überweisen Sie ${formatEuro(Number(invoice.total))}${invoice.due_date ? ` bis ${formatDate(invoice.due_date)}` : ''} an:`,
           rows: [

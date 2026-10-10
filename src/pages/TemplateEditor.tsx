@@ -315,6 +315,14 @@ export default function TemplateEditor() {
                 QR-Code zum Bezahlen
               </Toggle>
             )}
+            <PlaceholderText
+              id="tpl-cash"
+              title="Text unten bei Barzahlung"
+              rows={2}
+              value={s.payment.cashText}
+              onChange={(cashText) => set({ payment: { ...s.payment, cashText } })}
+              hint="Wählst du in der Rechnung „Bar bezahlt“, steht dieser Text statt des normalen Texts unten – ohne Zahlungsbox und QR-Code."
+            />
           </Panel>
 
           <Panel id="fuss" title="Fußzeile" summary={s.footer.style === 'columns' ? 'drei Spalten' : 'zentriert'} open={section === 'fuss'} onToggle={() => toggle('fuss')}>

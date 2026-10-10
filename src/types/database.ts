@@ -318,6 +318,7 @@ export type Database = {
           line_items: Json
           notes: string | null
           paid_at: string | null
+          payment_method: string
           service_date_from: string | null
           service_date_to: string | null
           status: string
@@ -344,6 +345,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          payment_method?: string
           service_date_from?: string | null
           service_date_to?: string | null
           status?: string
@@ -370,6 +372,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          payment_method?: string
           service_date_from?: string | null
           service_date_to?: string | null
           status?: string

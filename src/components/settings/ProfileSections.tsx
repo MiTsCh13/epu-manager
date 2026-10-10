@@ -10,7 +10,9 @@ import { Term } from '@/components/ui/Tooltip';
 import { useSettingsSection } from '@/hooks/useSettingsSection';
 import { describeSvsChange, describeTaxChange } from '@/lib/profileSettings';
 import { supabase } from '@/lib/supabase';
-import { generateInvoiceNumber } from '@/lib/tax';
+import { nextInvoiceNumber, validateNumberFormat } from '@/lib/invoiceNumbers';
+import { toISODate } from '@/lib/invoices';
+import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
 import { SettingsCard } from './SettingsCard';
 
 
@@ -93,25 +95,9 @@ export function AccountingSection() {
 export function InvoicingSection() {
   const state = useSettingsSection('invoicing');
   const { data, saved, errors, update } = state;
-  const year = new Date().getFullYear();
-  const [yearNumbers, setYearNumbers] = useState<string[] | null>(null);
   const formatChanged = data.invoice_number_format !== saved.invoice_number_format;
-
-  // Rechnungsnummern des Jahres erst laden, wenn das Format geändert wird
-  useEffect(() => {
-    if (!formatChanged || yearNumbers) return;
-    let cancelled = false;
-    // Wie im Rechnungseditor: Nummern aus übernommenen Einnahmen zählen mit
-    void Promise.all([
-      supabase.from('invoices').select('invoice_number').gte('invoice_date', `${year}-01-01`).lte('invoice_date', `${year}-12-31`),
-      supabase.from('incomes').select('reference').not('reference', 'is', null),
-    ]).then(([inv, inc]) => {
-      if (!cancelled) setYearNumbers([...(inv.data ?? []).map((r) => r.invoice_number), ...(inc.data ?? []).map((r) => r.reference ?? '')]);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [formatChanged, yearNumbers, year]);
+  // Vergebene Nummern erst laden, wenn das Format geändert wird
+  const used = useUsedInvoiceNumbers(formatChanged);
 
   return (
     <SettingsCard
@@ -123,10 +109,10 @@ export function InvoicingSection() {
     >
       <div className="space-y-5">
         <StepInvoicing data={data} errors={errors} update={update} />
-        {formatChanged && yearNumbers && (
+        {formatChanged && used && !validateNumberFormat(data.invoice_number_format) && (
           <Alert type="info">
             Deine nächste Rechnung bekommt die Nummer{' '}
-            <strong>{generateInvoiceNumber(data.invoice_number_format, year, yearNumbers)}</strong> – die Nummerierung
+            <strong>{nextInvoiceNumber(data.invoice_number_format, toISODate(new Date()), used.numbers, [...used.formats, saved.invoice_number_format])}</strong> – die Nummerierung
             läuft einfach weiter. Bereits vergebene Nummern bleiben unverändert.
           </Alert>
         )}

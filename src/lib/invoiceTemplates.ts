@@ -38,10 +38,13 @@ export interface TemplateSettings {
     terms: string; // z. B. „2 % Skonto bei Zahlung binnen 7 Tagen“
     box: boolean; // Zahlungsbox mit Empfänger, IBAN, Verwendungszweck
     qr: boolean; // QR-Code zum Bezahlen in der Box
+    cashText: string; // Text unten bei Barzahlung (statt des Schlusstexts)
   };
   table: { priceFirst: boolean }; // Spalten: Preis vor Menge
   kuNote: 'totals' | 'below'; // Kleinunternehmer-Hinweis als Zeile in der Summe oder darunter
 }
+
+export const CASH_TEXT = 'Der Rechnungsbetrag wurde bar bezahlt und dankend erhalten.';
 
 export const DEFAULT_TEMPLATE: TemplateSettings = {
   color: '#0f766e',
@@ -51,7 +54,7 @@ export const DEFAULT_TEMPLATE: TemplateSettings = {
   closing: { title: '', text: '', boxed: false },
   greeting: { text: '', signature: '' },
   footer: { style: 'lines', contact: '', bankExtra: '', tinted: true, text: '' },
-  payment: { days: 14, terms: '', box: true, qr: true },
+  payment: { days: 14, terms: '', box: true, qr: true, cashText: CASH_TEXT },
   table: { priceFirst: false },
   kuNote: 'below',
 };
@@ -176,6 +179,7 @@ export function normalizeTemplate(raw: unknown): TemplateSettings {
       terms: str(p.terms, ''),
       box: bool(p.box, true),
       qr: bool(p.qr, true),
+      cashText: str(p.cashText, CASH_TEXT),
     },
     table: { priceFirst: bool(t.priceFirst, false) },
     kuNote: oneOf(r.kuNote, ['totals', 'below'] as const, d.kuNote),
@@ -216,6 +220,9 @@ export const PLACEHOLDERS = [
 ] as const;
 
 export type PlaceholderValues = Partial<Record<(typeof PLACEHOLDERS)[number]['key'], string>>;
+
+/** Vorschlag für „Text unten“ je nach Zahlungsart. */
+export const closingTextFor = (s: TemplateSettings, method: 'transfer' | 'cash') => (method === 'cash' ? s.payment.cashText : s.closing.text);
 
 /** „{Rechnungsnummer}“ usw. ersetzen; Unbekanntes und Platzhalter ohne Wert bleiben stehen. */
 export function fillPlaceholders(text: string, values: PlaceholderValues): string {

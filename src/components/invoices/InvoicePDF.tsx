@@ -169,7 +169,7 @@ function Header({ data, images }: { data: InvoicePdfData; images: PdfImages }) {
       <View style={[s.centered, { borderBottomColor: color }]}>
         {logo ? <Logo src={logo} size={header.logoSize} /> : <Text style={[s.issuerName, { color, fontSize: 16 }]}>{data.issuerName}</Text>}
         {header.tagline && <Text style={[s.tagline, { textAlign: 'center' }]}>{header.tagline}</Text>}
-        <Text style={[s.issuerLines, { marginTop: 4, textAlign: 'center' }]}>{data.issuerLines.join(' · ')}</Text>
+        {data.issuerLines.length > 0 && <Text style={[s.issuerLines, { marginTop: 4, textAlign: 'center' }]}>{data.issuerLines.join(' · ')}</Text>}
       </View>
     );
   }
@@ -180,12 +180,12 @@ function Header({ data, images }: { data: InvoicePdfData; images: PdfImages }) {
         <View>{header.tagline && <Text style={s.tagline}>{header.tagline}</Text>}</View>
         <View style={{ alignItems: 'flex-end' }}>
           <Logo src={logo} size={header.logoSize} />
-          <View style={{ marginTop: 8 }}>{lines()}</View>
+          {data.issuerLines.length > 0 && <View style={{ marginTop: 8 }}>{lines()}</View>}
         </View>
       </View>
     );
   }
-  // Klassisch: Logo bzw. Name auf der einen Seite, Anschrift auf der anderen
+  // Klassisch: Logo bzw. Name auf der einen Seite, ggf. Inhaber auf der anderen
   const brand = logo ? <Logo src={logo} size={header.logoSize} /> : nameBlock();
   const address = <View>{lines(false, header.logoPosition === 'right' ? 'left' : 'right')}</View>;
   return (

@@ -29,7 +29,7 @@ const profile = {
   iban: 'AT61 1904 3002 3457 3201',
   account_holder: 'Max Mustermann',
   uid_number: null,
-  invoice_number_format: 'YYYY-NNN',
+  invoice_number_format: '{JJJJ}-{NNN}',
   invoice_footer_text: null,
   home_office: true,
   other_income_kind: 'employment',

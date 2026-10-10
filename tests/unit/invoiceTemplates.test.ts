@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CASH_TEXT,
+  closingTextFor,
   contrastOnWhite,
   DEFAULT_TEMPLATE,
   descriptionLines,
@@ -33,7 +35,7 @@ describe('normalizeTemplate', () => {
     expect(t.font).toBe('helvetica');
     expect(t.header).toMatchObject({ style: 'image', logoPath: 'u/logo.png', imagePath: null, logoSize: 'm' });
     expect(t.footer).toEqual({ style: 'lines', contact: '', bankExtra: '', tinted: true, text: 'Firmenbuch FN 123' });
-    expect(t.payment).toEqual({ days: 30, terms: '', box: false, qr: true });
+    expect(t.payment).toEqual({ days: 30, terms: '', box: false, qr: true, cashText: CASH_TEXT });
     expect(t.kuNote).toBe('below');
   });
 
@@ -115,5 +117,14 @@ describe('Positionen mit Einheit', () => {
       { description: 'DJ \n• Licht', quantity: 4, unit_price: 150, total: 600, unit: 'Std.' },
       { description: 'Fahrt', quantity: 60, unit_price: 0.5, total: 30 },
     ]);
+  });
+});
+
+describe('closingTextFor', () => {
+  it('Bar-Text aus der Vorlage, sonst der normale Text unten', () => {
+    const s = normalizeTemplate({ closing: { text: 'Bitte überweisen.' } });
+    expect(closingTextFor(s, 'transfer')).toBe('Bitte überweisen.');
+    expect(closingTextFor(s, 'cash')).toBe(CASH_TEXT);
+    expect(closingTextFor(normalizeTemplate({ payment: { cashText: 'Bar erhalten, danke!' } }), 'cash')).toBe('Bar erhalten, danke!');
   });
 });

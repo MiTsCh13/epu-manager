@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { formatIban, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
 import { toProfilePatch } from '@/lib/profileSettings';
+import { DEFAULT_NUMBER_FORMAT, formatInvoiceNumber } from '@/lib/invoiceNumbers';
+import { toISODate } from '@/lib/invoices';
 import { formatEuro, parseDecimal } from '@/lib/money';
 import { calculateArbeitsplatzpauschale, otherIncomeAmount } from '@/lib/profit';
 import { KlaroLogo } from '@/components/auth/AuthLayout';
@@ -42,7 +44,7 @@ function initialData(profile: Profile): OnboardingData {
     iban: profile.iban ?? '',
     account_holder: profile.account_holder ?? '',
     uid_number: profile.uid_number ?? '',
-    invoice_number_format: (profile.invoice_number_format as OnboardingData['invoice_number_format']) ?? 'YYYY-NNN',
+    invoice_number_format: profile.invoice_number_format ?? DEFAULT_NUMBER_FORMAT,
   };
 }
 
@@ -199,7 +201,7 @@ function Welcome({ data }: { data: OnboardingData }) {
         : 'keine',
     ],
     ['Konto', `${data.account_holder} · ${formatIban(data.iban)}`],
-    ['Rechnungsnummern', data.invoice_number_format === 'KL-YYYY-NNN' ? `KL-${year}-001` : `${year}-001`],
+    ['Rechnungsnummern', formatInvoiceNumber(data.invoice_number_format, toISODate(new Date()), 1)],
   ];
 
   return (

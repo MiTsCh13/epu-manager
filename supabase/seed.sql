@@ -43,7 +43,7 @@ UPDATE public.profiles SET
   business_type         = 'neue_selbstaendige',
   industry_code         = 'service',
   svs_registration_date = '2024-03-01',
-  invoice_number_format = 'YYYY-NNN',
+  invoice_number_format = '{JJJJ}-{NNN}',
   onboarding_completed  = true
 WHERE id = '11111111-1111-4111-8111-111111111111';
 

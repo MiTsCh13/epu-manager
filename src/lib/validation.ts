@@ -1,5 +1,6 @@
 // Eingabe-Validierung (IBAN, UID, PLZ, Onboarding-Schritte) mit deutschen Fehlermeldungen.
-import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import type { BusinessType, IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import { validateNumberFormat } from './invoiceNumbers';
 import { parseDecimal } from './money';
 
 const compact = (v: string) => v.replace(/\s+/g, '').toUpperCase();
@@ -67,7 +68,7 @@ export interface OnboardingData {
   iban: string;
   account_holder: string;
   uid_number: string;
-  invoice_number_format: InvoiceNumberFormat;
+  invoice_number_format: string;
 }
 
 export type OnboardingErrors = Partial<Record<keyof OnboardingData, string>>;
@@ -125,6 +126,8 @@ export function validateOnboardingStep(step: 1 | 2 | 3, data: OnboardingData, to
     if (!blank(data.uid_number) && !isValidUid(data.uid_number)) {
       e.uid_number = 'Diese UID-Nummer ist ungültig (Format: ATU12345678).';
     }
+    const formatError = validateNumberFormat(data.invoice_number_format);
+    if (formatError) e.invoice_number_format = formatError;
   }
 
   return e;

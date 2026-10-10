@@ -48,7 +48,8 @@ describe('buildInvoicePdfData – §11 UStG Pflichtangaben', () => {
 
   it('1. Name und Anschrift des Leistenden', () => {
     expect(d.issuerName).toBe('Klaro Test GmbH');
-    expect(d.issuerLines).toEqual(['Max Mustermann', 'Mariahilfer Straße 1', '1060 Wien']);
+    // Anschrift nicht im Kopf (steht in Absenderzeile und Fußzeile), nur der Inhaber neben dem Firmennamen
+    expect(d.issuerLines).toEqual(['Max Mustermann']);
     expect(d.senderLine).toBe('Klaro Test GmbH · Mariahilfer Straße 1 · 1060 Wien');
   });
   it('2. Name und Anschrift des Empfängers', () => {
@@ -147,7 +148,7 @@ describe('buildInvoicePdfData – Varianten', () => {
     expect(d.meta.map(([k]) => k)).not.toContain('Zahlbar bis');
     expect(d.recipientLines).toEqual(['Muster AG', '80331 München', 'Deutschland']);
     expect(d.issuerName).toBe('Nora Neu');
-    expect(d.issuerLines).toEqual(['Neubaugasse 7', '1070 Wien']);
+    expect(d.issuerLines).toEqual([]);
     expect(d.payment).toBeNull();
     // ohne is_kleinunternehmer im Snapshot: aus USt-Satz 0 abgeleitet
     expect(d.taxNote).toContain('§ 6 Abs. 1 Z 27');
@@ -246,5 +247,24 @@ describe('buildInvoicePdfData – Vorlage', () => {
       ['Tel. 0660 123', 'www.klaro.at'],
     ]);
     expect(d.template.font).toBe('times');
+  });
+});
+
+describe('buildInvoicePdfData – Barzahlung', () => {
+  const cash = build({ ...base, payment_method: 'cash', due_date: null, notes: 'Betrag von {Rechnungsbetrag} bar erhalten.' } as unknown as Invoice);
+
+  it('keine Zahlungsaufforderung: ohne Zahlbar bis, Zahlungsbox, QR-Code und Zahlungsbedingungen', () => {
+    expect(cash.meta).toContainEqual(['Bezahlung', 'bar']);
+    expect(cash.meta.map(([k]) => k)).not.toContain('Zahlbar bis');
+    expect(cash.payment).toBeNull();
+    expect(build({ ...base, payment_method: 'cash', template_snapshot: { payment: { terms: '2 % Skonto' } } } as unknown as Invoice).paymentTerms).toBeNull();
+  });
+  it('Text unten mit Platzhaltern', () => {
+    expect(cash.closing?.blocks).toEqual([{ kind: 'paragraph', segments: [{ text: 'Betrag von € 3.400,00 bar erhalten.' }] }]);
+  });
+  it('Überweisung bleibt wie bisher', () => {
+    const d = build({ ...base, payment_method: 'transfer' } as unknown as Invoice);
+    expect(d.payment).not.toBeNull();
+    expect(d.meta).toContainEqual(['Zahlbar bis', '24.04.2026']);
   });
 });

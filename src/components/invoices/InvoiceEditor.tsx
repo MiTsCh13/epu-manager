@@ -5,21 +5,22 @@ import { ArrowLeft, ExternalLink, Eye, Plus, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
 import { useTemplates } from '@/hooks/useTemplates';
-import { normalizeTemplate } from '@/lib/invoiceTemplates';
+import { closingTextFor, normalizeTemplate } from '@/lib/invoiceTemplates';
+import { DEFAULT_NUMBER_FORMAT, nextInvoiceNumber } from '@/lib/invoiceNumbers';
+import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { supabase } from '@/lib/supabase';
 import { getAccessState } from '@/lib/subscription';
 import {
   addDays,
   hasFormErrors,
-  invoiceYear,
   parseLineItems,
   toISODate,
   validateInvoiceForm,
   type InvoiceFormErrors,
 } from '@/lib/invoices';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
-import { calculateInvoiceTotals, generateInvoiceNumber, validateInvoiceUStG11 } from '@/lib/tax';
+import { calculateInvoiceTotals, validateInvoiceUStG11 } from '@/lib/tax';
 import type { ClientFormData } from '@/lib/validation';
 import { KLEINUNTERNEHMER_NOTE, VAT_RATES } from '@/constants/tax2026';
 import { countryName } from '@/constants/countries';
@@ -27,12 +28,13 @@ import { PageWrapper } from '@/components/layout/PageWrapper';
 import { ClientFormModal } from '@/components/clients/ClientForm';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Field, Select, TextArea } from '@/components/ui/Field';
+import { Field, Select } from '@/components/ui/Field';
+import { PlaceholderText } from '@/components/templates/TemplateFields';
 import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import { LineItemsEditor, newRow, type LineItemRow } from './LineItemsEditor';
 import { PdfPreviewModal } from './PdfPreviewModal';
-import type { Invoice, InvoiceNumberFormat, LineItem, VatRate } from '@/types';
+import type { Invoice, InvoicePaymentMethod, LineItem, VatRate } from '@/types';
 
 interface FormState {
   clientId: string;
@@ -41,6 +43,7 @@ interface FormState {
   invoiceDate: string;
   dueDate: string;
   dueTouched: boolean;
+  payment: InvoicePaymentMethod;
   serviceFrom: string;
   serviceTouched: boolean;
   serviceTo: string;
@@ -66,6 +69,7 @@ function initialState(invoice: Invoice | null, isKU: boolean): FormState {
       invoiceDate: today,
       dueDate: addDays(today, 14),
       dueTouched: false,
+      payment: 'transfer',
       serviceFrom: today,
       serviceTouched: false,
       serviceTo: '',
@@ -88,6 +92,7 @@ function initialState(invoice: Invoice | null, isKU: boolean): FormState {
     invoiceDate: invoice.invoice_date,
     dueDate: invoice.due_date ?? '',
     dueTouched: true,
+    payment: invoice.payment_method === 'cash' ? 'cash' : 'transfer',
     serviceFrom: invoice.service_date_from ?? invoice.invoice_date,
     serviceTouched: true,
     serviceTo: invoice.service_date_to ?? '',
@@ -131,36 +136,19 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [clientModal, setClientModal] = useState(false);
   const [preview, setPreview] = useState<Invoice | null>(null);
-  const [yearNumbers, setYearNumbers] = useState<{ year: number; numbers: string[] } | null>(null);
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
-  // Bestehende Nummern des Rechnungsjahres laden → nächste fortlaufende Nummer vorschlagen
-  const year = invoiceYear(form.invoiceDate || toISODate(new Date()));
+  // Vergebene Nummern laden → nächste fortlaufende Nummer im Format aus den Einstellungen vorschlagen
+  const used = useUsedInvoiceNumbers(!invoice);
+  const numberFormat = profile?.invoice_number_format ?? DEFAULT_NUMBER_FORMAT;
+  const numberDate = form.invoiceDate || toISODate(new Date());
   useEffect(() => {
-    if (invoice || yearNumbers?.year === year) return;
-    let cancelled = false;
-    // Auch Rechnungsnummern aus importierten Einnahmen zählen – sonst ginge die Nummerierung von vorne los
-    void Promise.all([
-      supabase.from('invoices').select('invoice_number').gte('invoice_date', `${year}-01-01`).lte('invoice_date', `${year}-12-31`),
-      supabase.from('incomes').select('reference').not('reference', 'is', null),
-    ]).then(([inv, inc]) => {
-      if (cancelled) return;
-      const numbers = [...(inv.data ?? []).map((d) => d.invoice_number), ...(inc.data ?? []).map((d) => d.reference ?? '')];
-      setYearNumbers({ year, numbers });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [invoice, year, yearNumbers?.year]);
-
-  useEffect(() => {
-    if (!yearNumbers || form.numberTouched) return;
-    const format = (profile?.invoice_number_format ?? 'YYYY-NNN') as InvoiceNumberFormat;
-    set({ invoiceNumber: generateInvoiceNumber(format, yearNumbers.year, yearNumbers.numbers) });
+    if (!used || form.numberTouched) return;
+    set({ invoiceNumber: nextInvoiceNumber(numberFormat, numberDate, used.numbers, used.formats) });
     // Wurde schon vor dem Laden der Nummer geprüft, die Fehlermeldung wieder ausblenden
     setErrors((e) => ({ ...e, invoiceNumber: undefined }));
-  }, [yearNumbers, form.numberTouched, profile?.invoice_number_format]);
+  }, [used, form.numberTouched, numberFormat, numberDate]);
 
   const lineItems = useMemo(() => parseLineItems(form.rows), [form.rows]);
   const totals = useMemo(
@@ -180,7 +168,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       templateId: id,
       templateTouched: touched,
       ...(!f.touched.intro && { intro: s.intro }),
-      ...(!f.touched.notes && { notes: s.closing.text }),
+      ...(!f.touched.notes && { notes: closingTextFor(s, f.payment) }),
       ...(!f.touched.footer && { footer: s.footer.text }),
       ...(!f.dueTouched && f.invoiceDate && { dueDate: addDays(f.invoiceDate, s.payment.days) }),
     };
@@ -204,6 +192,18 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     set({ clientId, ...(id && id !== form.templateId && applyTemplate(id, form)) });
   }
 
+  /** Überweisung ↔ bar: „Text unten“ wechselt mit, solange er noch der Vorschlag der Vorlage ist. */
+  function onPaymentChange(payment: InvoicePaymentMethod) {
+    if (payment === form.payment) return;
+    const s = normalizeTemplate(template?.settings);
+    const unchanged = !form.touched.notes || form.notes.trim() === closingTextFor(s, form.payment).trim();
+    set({
+      payment,
+      ...(unchanged && { notes: closingTextFor(s, payment), touched: { ...form.touched, notes: false } }),
+      ...(payment === 'transfer' && !form.dueDate && form.invoiceDate && { dueDate: addDays(form.invoiceDate, paymentDays), dueTouched: false }),
+    });
+  }
+
   function onInvoiceDateChange(date: string) {
     set({
       invoiceDate: date,
@@ -213,11 +213,13 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   }
 
   function payload(status: 'draft' | 'sent') {
+    const cash = form.payment === 'cash';
     return {
       client_id: form.clientId || null,
       invoice_number: form.invoiceNumber.trim(),
       invoice_date: form.invoiceDate,
-      due_date: form.dueDate || null,
+      due_date: cash ? null : form.dueDate || null,
+      payment_method: form.payment,
       service_date_from: form.serviceFrom || null,
       service_date_to: form.isPeriod && form.serviceTo ? form.serviceTo : null,
       is_honorarnote: isHonorarnote,
@@ -230,7 +232,9 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       intro_text: form.intro.trim() || null,
       notes: form.notes.trim() || null,
       footer_text: form.footer.trim() || null,
-      status,
+      // Bar bezahlt: mit dem Ausstellen gleich bezahlt, Zahlungseingang am Rechnungsdatum
+      status: status === 'sent' && cash ? 'paid' : status,
+      paid_at: status === 'sent' && cash ? form.invoiceDate : null,
     };
   }
 
@@ -238,7 +242,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
     const e = validateInvoiceForm({
       invoiceNumber: form.invoiceNumber,
       invoiceDate: form.invoiceDate,
-      dueDate: form.dueDate,
+      dueDate: form.payment === 'cash' ? '' : form.dueDate,
       serviceFrom: form.serviceFrom,
       serviceTo: form.isPeriod ? form.serviceTo : '',
       items: form.rows,
@@ -269,7 +273,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       toast.success('Entwurf gespeichert');
       if (!invoice) navigate(`/rechnungen/${saved.id}`, { replace: true });
     } else {
-      toast.success(`${form.invoiceNumber} ausgestellt`);
+      toast.success(form.payment === 'cash' ? `${form.invoiceNumber} ausgestellt und als bar bezahlt verbucht` : `${form.invoiceNumber} ausgestellt`);
       navigate(`/rechnungen/${saved.id}`, { replace: true, state: { refreshed: Date.now() } });
     }
   }
@@ -443,14 +447,43 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
             error={errors.invoiceDate}
             onChange={(e) => onInvoiceDateChange(e.target.value)}
           />
-          <Field
-            label="Zahlbar bis"
-            type="date"
-            value={form.dueDate}
-            error={errors.dueDate}
-            hint={`Laut Vorlage: ${paymentDays} Tage`}
-            onChange={(e) => set({ dueDate: e.target.value, dueTouched: true })}
-          />
+          <fieldset>
+            <legend className="mb-1 text-sm font-medium text-slate-700">Bezahlung</legend>
+            <div className="flex rounded-lg bg-slate-100 p-1" role="radiogroup" aria-label="Bezahlung">
+              {(
+                [
+                  ['transfer', 'Überweisung'],
+                  ['cash', 'Bar bezahlt'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.payment === value}
+                  onClick={() => onPaymentChange(value)}
+                  className={`min-h-[36px] flex-1 rounded-md px-3 text-sm font-medium ${
+                    form.payment === value ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {form.payment === 'cash' && (
+              <p className="mt-1 text-xs text-slate-500">Gilt beim Ausstellen als bezahlt am Rechnungsdatum – ohne Zahlungsaufforderung auf der Rechnung.</p>
+            )}
+          </fieldset>
+          {form.payment === 'transfer' && (
+            <Field
+              label="Zahlbar bis"
+              type="date"
+              value={form.dueDate}
+              error={errors.dueDate}
+              hint={`Laut Vorlage: ${paymentDays} Tage`}
+              onChange={(e) => set({ dueDate: e.target.value, dueTouched: true })}
+            />
+          )}
           <div className="sm:col-span-2 lg:col-span-3">
             <div className="mb-2 flex items-center gap-2">
               <span className="text-sm font-medium text-slate-700">Leistungsdatum</span>
@@ -561,33 +594,37 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
             )}
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <TextArea
-              label="Text oben"
-              optional
+            <PlaceholderText
+              id="inv-intro"
+              title="Text oben"
               rows={3}
               placeholder="z. B. Hiermit stelle ich folgende Leistungen in Rechnung:"
               hint="Steht über den Positionen."
               value={form.intro}
-              onChange={(e) => set({ intro: e.target.value, touched: { ...form.touched, intro: true } })}
+              onChange={(intro) => set({ intro, touched: { ...form.touched, intro: true } })}
             />
-            <TextArea
-              label="Text unten"
-              optional
+            <PlaceholderText
+              id="inv-notes"
+              title="Text unten"
               rows={3}
-              placeholder="z. B. Vielen Dank für Ihren Auftrag!"
-              hint="Steht unter den Positionen. Platzhalter wie {Rechnungsnummer} setzt Klaro ein."
+              placeholder={form.payment === 'cash' ? 'z. B. Der Rechnungsbetrag wurde bar bezahlt und dankend erhalten.' : 'z. B. Vielen Dank für Ihren Auftrag!'}
+              hint={
+                form.payment === 'cash'
+                  ? 'Steht unter den Positionen – bei Barzahlung der Bar-Text aus der Vorlage.'
+                  : 'Steht unter den Positionen. Die Platzhalter setzt Klaro beim Erstellen der PDF ein.'
+              }
               value={form.notes}
-              onChange={(e) => set({ notes: e.target.value, touched: { ...form.touched, notes: true } })}
+              onChange={(notes) => set({ notes, touched: { ...form.touched, notes: true } })}
             />
           </div>
-          <TextArea
-            label="Fußzeile"
-            optional
+          <PlaceholderText
+            id="inv-footer"
+            title="Fußzeile"
             rows={2}
             placeholder="z. B. Firmenbuch, Gerichtsstand"
             hint="Erscheint ganz unten auf der Rechnung."
             value={form.footer}
-            onChange={(e) => set({ footer: e.target.value, touched: { ...form.touched, footer: true } })}
+            onChange={(footer) => set({ footer, touched: { ...form.touched, footer: true } })}
           />
         </section>
 
@@ -657,7 +694,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
         <div className="space-y-3 text-sm text-slate-700">
           <p>
             <strong>{form.invoiceNumber}</strong> an <strong>{client?.name ?? 'ohne Kunde'}</strong> über{' '}
-            <strong>{formatEuro(totals.total)}</strong>.
+            <strong>{formatEuro(totals.total)}</strong>
+            {form.payment === 'cash' ? ', bar bezahlt – wird gleich als bezahlt verbucht.' : '.'}
           </p>
           <p>
             Nach dem Ausstellen ist die {docLabel} unveränderbar – so verlangt es das Gesetz. Fehler korrigierst du später

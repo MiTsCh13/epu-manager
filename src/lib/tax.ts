@@ -6,7 +6,7 @@ import {
   VAT_RATES,
 } from '@/constants/tax2026';
 import { SVS_2026 } from '@/constants/svs2026';
-import type { InvoiceNumberFormat, LineItem, VatRate } from '@/types';
+import type { LineItem, VatRate } from '@/types';
 import { round2 } from './money';
 
 // ─── Einkommensteuer ────────────────────────────────────────
@@ -69,27 +69,6 @@ export function getKleinunternehmerStatus(annualRevenue: number): Kleinunternehm
   if (annualRevenue > SVS_2026.kleinunternehmerThreshold) return 'exceeded';
   if (annualRevenue > SVS_2026.kleinunternehmerWarningThreshold) return 'approaching';
   return 'ok';
-}
-
-// ─── Rechnungsnummern ───────────────────────────────────────
-
-/**
- * Nächste fortlaufende Nummer im Jahr, z. B. 2026-001 bzw. KL-2026-001.
- * Die Zählung läuft über beide Formate weiter (2026-007 → KL-2026-008), damit ein
- * Formatwechsel mitten im Jahr keine Lücken oder doppelten Nummern erzeugt.
- */
-export function generateInvoiceNumber(
-  format: InvoiceNumberFormat,
-  year: number,
-  existingNumbers: readonly string[],
-): string {
-  const prefix = format === 'KL-YYYY-NNN' ? `KL-${year}-` : `${year}-`;
-  const pattern = new RegExp(`^(?:KL-)?${year}-(\\d+)$`);
-  const max = existingNumbers.reduce((acc, n) => {
-    const match = pattern.exec(n);
-    return match ? Math.max(acc, Number(match[1])) : acc;
-  }, 0);
-  return `${prefix}${String(max + 1).padStart(3, '0')}`;
 }
 
 // ─── § 11 UStG Pflichtangaben ───────────────────────────────

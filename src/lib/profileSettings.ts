@@ -1,8 +1,9 @@
 // Einstellungen: Profil ↔ Formular, Speicher-Patch je Abschnitt und Hinweise bei folgenreichen Änderungen.
 import { SVS_2026 } from '@/constants/svs2026';
 import { PHASE_INFO } from '@/constants/svsPhases';
-import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, Profile, ProfileUpdate, ProfitMethod } from '@/types';
+import type { BusinessType, IndustryType, OtherIncomeKind, PauschType, Profile, ProfileUpdate, ProfitMethod } from '@/types';
 import { formatDecimalInput, formatEuro, parseDecimal, round2 } from './money';
+import { canonicalNumberFormat } from './invoiceNumbers';
 import { getPauschRate } from './profit';
 import { getSVSPhase, getSVSYear } from './svs';
 import { formatIban, normalizeUid, validateOnboardingStep, type OnboardingData, type OnboardingErrors } from './validation';
@@ -34,7 +35,7 @@ export function profileToSettingsData(p: Profile): SettingsData {
     iban: p.iban ?? '',
     account_holder: p.account_holder ?? '',
     uid_number: p.uid_number ?? '',
-    invoice_number_format: p.invoice_number_format as InvoiceNumberFormat,
+    invoice_number_format: p.invoice_number_format,
     svs_exempt: p.svs_exempt,
     invoice_footer_text: p.invoice_footer_text ?? '',
   };
@@ -64,7 +65,7 @@ export function toProfilePatch(d: OnboardingData) {
     iban: formatIban(d.iban),
     account_holder: d.account_holder.trim(),
     uid_number: d.uid_number.trim() ? normalizeUid(d.uid_number) : null,
-    invoice_number_format: d.invoice_number_format,
+    invoice_number_format: canonicalNumberFormat(d.invoice_number_format),
   } satisfies ProfileUpdate;
 }
 

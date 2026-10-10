@@ -6,6 +6,7 @@ import { buildInvoicePdfData } from '@/lib/invoicePdf';
 import { loadTemplateImages, renderInvoicePdf } from '@/lib/renderInvoicePdf';
 import type { PdfImages } from '@/components/invoices/InvoicePDF';
 import { addDays, toISODate } from '@/lib/invoices';
+import { DEFAULT_NUMBER_FORMAT, formatInvoiceNumber } from '@/lib/invoiceNumbers';
 import type { TemplateSettings } from '@/lib/invoiceTemplates';
 import { Spinner } from '@/components/ui/Spinner';
 import type { Invoice, Profile } from '@/types';
@@ -37,7 +38,8 @@ export function sampleInvoice(profile: Profile | null, settings: TemplateSetting
     user_id: profile?.id ?? '',
     client_id: null,
     template_id: null,
-    invoice_number: `${today.slice(0, 4)}-001`,
+    invoice_number: formatInvoiceNumber(profile?.invoice_number_format ?? DEFAULT_NUMBER_FORMAT, today, 1),
+    payment_method: 'transfer',
     invoice_date: today,
     due_date: addDays(today, settings.payment.days),
     service_date_from: today,

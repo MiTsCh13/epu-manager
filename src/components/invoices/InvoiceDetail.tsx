@@ -120,7 +120,7 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
                 ? `${formatDate(invoice.service_date_from)} – ${formatDate(invoice.service_date_to)}`
                 : formatDate(invoice.service_date_from ?? invoice.invoice_date),
             ],
-            ['Zahlbar bis', formatDate(invoice.due_date) || '–'],
+            invoice.payment_method === 'cash' ? ['Bezahlung', 'bar'] : ['Zahlbar bis', formatDate(invoice.due_date) || '–'],
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="text-xs text-slate-500">{label}</dt>
@@ -169,7 +169,7 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
 
         {isKU && <p className="text-sm text-slate-600">{KLEINUNTERNEHMER_NOTE}</p>}
         {invoice.notes && <p className="whitespace-pre-line text-sm text-slate-700">{invoice.notes}</p>}
-        {issuer?.iban && <p className="text-sm text-slate-600">Bitte überweise den Betrag auf: {issuer.iban}</p>}
+        {issuer?.iban && invoice.payment_method !== 'cash' && <p className="text-sm text-slate-600">Bitte überweise den Betrag auf: {issuer.iban}</p>}
         {invoice.footer_text && <p className="whitespace-pre-line border-t border-slate-100 pt-4 text-xs text-slate-500">{invoice.footer_text}</p>}
       </article>
 

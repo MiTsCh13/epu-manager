@@ -2,10 +2,11 @@ import { Term } from '@/components/ui/Tooltip';
 import { Alert } from '@/components/ui/Alert';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field } from '@/components/ui/Field';
+import { NumberFormatField } from '@/components/invoices/NumberFormatField';
 import { formatEuro, parseDecimal } from '@/lib/money';
 import { calculateArbeitsplatzpauschale } from '@/lib/profit';
 import { formatIban, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
-import type { BusinessType, IndustryType, InvoiceNumberFormat, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
+import type { BusinessType, IndustryType, OtherIncomeKind, PauschType, ProfitMethod } from '@/types';
 
 interface StepProps {
   data: OnboardingData;
@@ -294,7 +295,6 @@ function HomeOfficeAndOtherIncome({ data, errors, update }: StepProps) {
 // ─── Schritt 3: Bankdaten & Rechnungsformat ─────────────────
 
 export function StepInvoicing({ data, errors, update }: StepProps) {
-  const year = new Date().getFullYear();
   return (
     <div className="space-y-5">
       <p className="text-sm text-slate-600">
@@ -350,16 +350,10 @@ export function StepInvoicing({ data, errors, update }: StepProps) {
         error={errors.uid_number}
         onChange={(e) => update({ uid_number: e.target.value })}
       />
-      <ChoiceCards<InvoiceNumberFormat>
-        legend="Format deiner Rechnungsnummern"
-        name="invoice_number_format"
+      <NumberFormatField
         value={data.invoice_number_format}
-        columns={2}
+        error={errors.invoice_number_format}
         onChange={(invoice_number_format) => update({ invoice_number_format })}
-        options={[
-          { value: 'YYYY-NNN', title: `${year}-001`, description: 'Jahr + laufende Nummer' },
-          { value: 'KL-YYYY-NNN', title: `KL-${year}-001`, description: 'Mit Kürzel davor' },
-        ]}
       />
     </div>
   );
