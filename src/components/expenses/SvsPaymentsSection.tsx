@@ -1,51 +1,40 @@
 import { useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { formatDate, toISODate } from '@/lib/invoices';
-import { formatEuro, parseDecimal, round2 } from '@/lib/money';
+import { formatDecimalInput, formatEuro, parseDecimal, round2 } from '@/lib/money';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field, Select } from '@/components/ui/Field';
+import { Modal } from '@/components/ui/Modal';
 import { Term } from '@/components/ui/Tooltip';
 import type { Quarter, SvsPayment, SvsPaymentInsert } from '@/types';
 
 const QUARTERS: Quarter[] = ['Q1', 'Q2', 'Q3', 'Q4'];
 
+const label = (p: SvsPayment) => `${p.quarter ?? 'SVS'} ${p.year} über ${formatEuro(Number(p.amount))}`;
+
+type Values = Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'payment_date' | 'notes'>;
+
 export function SvsPaymentsSection({
   year,
   payments,
   onAdd,
+  onUpdate,
   onDelete,
 }: {
   year: number;
   payments: SvsPayment[];
   onAdd: (p: SvsPaymentInsert) => Promise<{ error: string | null }>;
+  onUpdate: (id: string, p: Values) => Promise<{ error: string | null }>;
   onDelete: (id: string) => Promise<{ error: string | null }>;
 }) {
-  const today = toISODate(new Date());
-  const currentQuarter = QUARTERS[Math.floor(new Date().getMonth() / 3)]!;
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [quarter, setQuarter] = useState<Quarter>(currentQuarter);
-  const [date, setDate] = useState(today);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  // 'new' = neuer Beitrag, sonst der Beitrag, der gerade bearbeitet wird
+  const [editing, setEditing] = useState<SvsPayment | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<SvsPayment | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const total = payments.reduce((s, p) => s + Number(p.amount), 0);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const value = parseDecimal(amount);
-    if (Number.isNaN(value) || value <= 0) return setError('Bitte gib einen Betrag größer 0 ein.');
-    setSaving(true);
-    const result = await onAdd({ amount: round2(value), quarter, year, payment_date: date });
-    setSaving(false);
-    if (result.error) return void toast.error(result.error);
-    toast.success('SVS-Beitrag erfasst');
-    setAmount('');
-    setError(null);
-    setOpen(false);
-  }
 
   return (
     <section className="space-y-3" aria-labelledby="svs-heading">
@@ -56,28 +45,27 @@ export function SvsPaymentsSection({
           </h2>
           <p className="text-sm text-slate-600">Bezahlt: {formatEuro(total)}</p>
         </div>
-        {!open && (
-          <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
+        {editing !== 'new' && (
+          <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing('new')}>
             SVS-Beitrag erfassen
           </Button>
         )}
       </div>
       <Alert type="info">SVS-Beiträge sind immer absetzbar – auch bei Pauschalierung.</Alert>
 
-      {open && (
-        <form onSubmit={handleSubmit} noValidate className="grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-4 sm:items-start">
-          <Field label="Betrag (€)" inputMode="decimal" placeholder="z. B. 482,43" value={amount} error={error ?? undefined} onChange={(e) => setAmount(e.target.value)} />
-          <Select label="Quartal" value={quarter} options={QUARTERS.map((q) => ({ value: q, label: `${q} ${year}` }))} onChange={(e) => setQuarter(e.target.value as Quarter)} />
-          <Field label="Bezahlt am" type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} />
-          <div className="flex gap-2 sm:pt-6">
-            <Button type="submit" loading={saving} className="flex-1">
-              Speichern
-            </Button>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
-              Abbrechen
-            </Button>
-          </div>
-        </form>
+      {editing === 'new' && (
+        <SvsForm
+          key="new"
+          year={year}
+          payment={null}
+          onCancel={() => setEditing(null)}
+          onSave={async (values) => {
+            const r = await onAdd({ ...values, year });
+            if (r.error) return void toast.error(r.error);
+            toast.success('SVS-Beitrag erfasst');
+            setEditing(null);
+          }}
+        />
       )}
 
       {payments.length === 0 ? (
@@ -85,32 +73,156 @@ export function SvsPaymentsSection({
           Noch keine SVS-Beiträge für {year} erfasst.
         </p>
       ) : (
-        <ul className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
-          {payments.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 py-3 pl-4 pr-2 sm:pl-5">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-slate-900">
-                  {p.quarter ?? 'SVS'} {p.year}
-                </p>
-                <p className="text-xs text-slate-500">bezahlt am {formatDate(p.payment_date)}</p>
-              </div>
-              <span className="font-semibold tabular-nums text-slate-900">{formatEuro(Number(p.amount))}</span>
-              <button
-                type="button"
-                aria-label={`SVS-Beitrag ${p.quarter ?? ''} löschen`}
-                onClick={async () => {
-                  const r = await onDelete(p.id);
-                  if (r.error) toast.error(r.error);
-                  else toast.success('SVS-Beitrag gelöscht');
-                }}
-                className="flex h-10 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </li>
-          ))}
+        <ul className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200" data-testid="svs-list">
+          {payments.map((p) =>
+            editing !== 'new' && editing?.id === p.id ? (
+              <li key={p.id} className="p-2">
+                <SvsForm
+                  key={p.id}
+                  year={year}
+                  payment={p}
+                  onCancel={() => setEditing(null)}
+                  onSave={async (values) => {
+                    const r = await onUpdate(p.id, values);
+                    if (r.error) return void toast.error(r.error);
+                    toast.success('SVS-Beitrag gespeichert');
+                    setEditing(null);
+                  }}
+                />
+              </li>
+            ) : (
+              <li key={p.id} className="flex items-center gap-1 py-1 pl-1 pr-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(p)}
+                  aria-label={`SVS-Beitrag ${label(p)} bearbeiten`}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50 sm:px-4"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-900">
+                      {p.quarter ?? 'SVS'} {p.year}
+                    </span>
+                    <span className="block truncate text-xs text-slate-500">
+                      bezahlt am {formatDate(p.payment_date)}
+                      {p.notes && ` · ${p.notes}`}
+                    </span>
+                  </span>
+                  <span className="font-semibold tabular-nums text-slate-900">{formatEuro(Number(p.amount))}</span>
+                  <Pencil className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`SVS-Beitrag ${label(p)} löschen`}
+                  onClick={() => setDeleting(p)}
+                  className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </li>
+            ),
+          )}
         </ul>
       )}
+
+      <Modal
+        open={!!deleting}
+        onClose={() => !busy && setDeleting(null)}
+        size="sm"
+        title="SVS-Beitrag löschen?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleting(null)} disabled={busy}>
+              Abbrechen
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy}
+              onClick={async () => {
+                if (!deleting) return;
+                setBusy(true);
+                const r = await onDelete(deleting.id);
+                setBusy(false);
+                if (r.error) return void toast.error(r.error);
+                toast.success('SVS-Beitrag gelöscht');
+                setDeleting(null);
+              }}
+            >
+              Löschen
+            </Button>
+          </>
+        }
+      >
+        {deleting && (
+          <p className="text-sm text-slate-700">
+            {deleting.quarter ?? 'SVS'} {deleting.year} über {formatEuro(Number(deleting.amount))}, bezahlt am {formatDate(deleting.payment_date)}.
+          </p>
+        )}
+      </Modal>
     </section>
+  );
+}
+
+/** Formular für einen neuen oder einen bestehenden SVS-Beitrag. */
+function SvsForm({
+  year,
+  payment,
+  onSave,
+  onCancel,
+}: {
+  year: number;
+  payment: SvsPayment | null;
+  onSave: (v: Values) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const today = toISODate(new Date());
+  const currentQuarter = QUARTERS[Math.floor(new Date().getMonth() / 3)]!;
+  const [amount, setAmount] = useState(payment ? formatDecimalInput(Number(payment.amount)) : '');
+  // Bestehende Beiträge ohne Quartal (z. B. Nachzahlung aus dem Import) behalten „kein Quartal“
+  const [quarter, setQuarter] = useState<Quarter | ''>(payment ? ((payment.quarter as Quarter | null) ?? '') : currentQuarter);
+  const [date, setDate] = useState(payment?.payment_date ?? today);
+  const [notes, setNotes] = useState(payment?.notes ?? '');
+  const [errors, setErrors] = useState<{ amount?: string; date?: string }>({});
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const value = parseDecimal(amount);
+    const next = {
+      amount: Number.isNaN(value) || value <= 0 ? 'Bitte gib einen Betrag größer 0 ein.' : value >= 1_000_000 ? 'Der Betrag ist zu hoch.' : undefined,
+      // Ein schon gespeichertes Datum in der Zukunft (z. B. aus dem Import) blockiert andere Änderungen nicht
+      date: !date ? 'Bitte gib das Zahlungsdatum ein.' : date > today && date !== payment?.payment_date ? 'Das Datum liegt in der Zukunft.' : undefined,
+    };
+    setErrors(next);
+    if (next.amount || next.date) return;
+    setSaving(true);
+    await onSave({ amount: round2(value), quarter: quarter || null, payment_date: date, notes: notes.trim() || null });
+    setSaving(false);
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      aria-label={payment ? 'SVS-Beitrag bearbeiten' : 'SVS-Beitrag erfassen'}
+      className="grid gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-3 sm:items-start"
+    >
+      <Field autoFocus label="Betrag (€)" inputMode="decimal" placeholder="z. B. 482,43" value={amount} error={errors.amount} onChange={(e) => setAmount(e.target.value)} />
+      <Select label="Quartal" value={quarter} options={[
+          ...QUARTERS.map((q) => ({ value: q, label: `${q} ${payment?.year ?? year}` })),
+          ...(payment && !payment.quarter ? [{ value: '', label: 'kein Quartal' }] : []),
+        ]}
+        onChange={(e) => setQuarter(e.target.value as Quarter | '')}
+      />
+      <Field label="Bezahlt am" type="date" max={date > today ? date : today} value={date} error={errors.date} onChange={(e) => setDate(e.target.value)} />
+      <Field className="sm:col-span-2" label="Notiz" optional placeholder="z. B. Nachzahlung 2025" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <div className="flex gap-2 sm:pt-6">
+        <Button type="submit" loading={saving} className="flex-1">
+          Speichern
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>
+          Abbrechen
+        </Button>
+      </div>
+    </form>
   );
 }

@@ -404,7 +404,13 @@ export default function Expenses() {
             </section>
           )}
 
-          <SvsPaymentsSection year={year} payments={data.svsPayments} onAdd={data.addSvsPayment} onDelete={data.deleteSvsPayment} />
+          <SvsPaymentsSection
+            year={year}
+            payments={data.svsPayments}
+            onAdd={data.addSvsPayment}
+            onUpdate={data.updateSvsPayment}
+            onDelete={data.deleteSvsPayment}
+          />
         </div>
       )}
 

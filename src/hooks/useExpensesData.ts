@@ -168,6 +168,16 @@ export function useExpensesData(year: number) {
     [load],
   );
 
+  const updateSvsPayment = useCallback(
+    async (id: string, values: Pick<SvsPaymentInsert, 'amount' | 'quarter' | 'payment_date' | 'notes'>): Promise<Result> => {
+      const { error: err } = await supabase.from('svs_payments').update(values).eq('id', id).select('id').single();
+      if (err) return { error: 'Der SVS-Beitrag konnte nicht gespeichert werden.' };
+      await load();
+      return { error: null };
+    },
+    [load],
+  );
+
   const deleteSvsPayment = useCallback(async (id: string): Promise<Result> => {
     const { error: err } = await supabase.from('svs_payments').delete().eq('id', id);
     if (err) return { error: 'Der SVS-Beitrag konnte nicht gelöscht werden.' };
@@ -191,6 +201,7 @@ export function useExpensesData(year: number) {
     saveAsset,
     deleteAsset,
     addSvsPayment,
+    updateSvsPayment,
     deleteSvsPayment,
   };
 }
