@@ -101,9 +101,11 @@ const fmt = (d: Date) => d.toLocaleDateString('de-AT');
 
 /** Anteil des Jahres in Monaten (z. B. 3. Oktober ≈ 9,07). */
 export function monthsElapsedInYear(today: Date): number {
-  const start = new Date(today.getFullYear(), 0, 1);
-  const end = new Date(today.getFullYear() + 1, 0, 1);
-  return ((today.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 12;
+  // Mit der Uhrzeit laut Kalender rechnen (als wäre sie UTC) – sonst kürzt die Sommerzeit das Jahr je nach
+  // Zeitzone um eine Stunde und das Ergebnis hinge davon ab, wo der Code läuft (Browser in Wien vs. Server in UTC)
+  const y = today.getFullYear();
+  const now = Date.UTC(y, today.getMonth(), today.getDate(), today.getHours(), today.getMinutes(), today.getSeconds(), today.getMilliseconds());
+  return ((now - Date.UTC(y, 0, 1)) / (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1))) * 12;
 }
 
 /** Versicherte Monate im Kalenderjahr (Anmeldemonat zählt voll). */

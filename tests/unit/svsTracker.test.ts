@@ -40,7 +40,7 @@ describe('Hilfsfunktionen', () => {
 
 describe('buildSvsTracker – Lena', () => {
   const m = buildSvsTracker(base);
-  // Ausgaben bis heute (4.900 €) aufs Jahr hochgerechnet: 6.481,05 € (die Sommerzeit kürzt das Jahr bis 4.10. um eine Stunde)
+  // Ausgaben bis heute (4.900 €) aufs Jahr hochgerechnet: 6.480,07 € (in Kalendertagen, unabhängig von Zeitzone und Sommerzeit)
   const expenses = Math.round(((4900 * 12) / monthsElapsedInYear(base.today)) * 100) / 100;
 
   it('Jahr und Umsatz-Erwartung', () => {
@@ -51,36 +51,36 @@ describe('buildSvsTracker – Lena', () => {
   it('1 Jahresrechnung ganzes Jahr: Umsatz − Ausgaben − SVS − Grundfreibetrag = Einkünfte, darauf ESt', () => {
     expect(m.full).toEqual({
       revenue: 42000,
-      expenses: 6481.05,
+      expenses: 6480.07,
       depreciation: 0,
       arbeitsplatzpauschale: 0,
       svs: 1929.72, // 4 Quartale à 482,43 €
-      gewinn: 33589.23,
+      gewinn: 33590.21,
       grundfreibetrag: 4950,
-      einkuenfte: 28639.23,
-      incomeTax: 3684.77, // 1.690,60 + (28.639,23 − 21.992) × 30 %
+      einkuenfte: 28640.21,
+      incomeTax: 3685.06, // 1.690,60 + (28.640,21 − 21.992) × 30 %
     });
     expect(m.full.expenses).toBe(expenses);
   });
 
   it('1 Jahresrechnung bis heute: ESt anteilig mit dem Jahres-Durchschnittssteuersatz', () => {
     expect(m.ytd).toMatchObject({ revenue: 31800, expenses: 4900, svs: 1447.29, grundfreibetrag: 3817.91, einkuenfte: 21634.8 });
-    expect(m.ytd.incomeTax).toBeCloseTo(21634.8 * (3684.77 / 28639.23), 0);
+    expect(m.ytd.incomeTax).toBeCloseTo(21634.8 * (3685.06 / 28640.21), 0);
   });
 
   it('2 SVS: Basis = Einkünfte + PV/KV, KV und Selbständigenvorsorge bleiben vorläufig (Jahr 2)', () => {
     expect(m.svs.provisionalReason).toBe('minimum');
     expect(m.svs.quarterlyAmount).toBe(482.43);
     expect(m.svs.hinzurechnung).toBe(1673.14);
-    expect(m.svs.basis).toBe(30312.37);
-    expect(m.svs.final.total).toBe(6314.07); // PV 18,5 % von 30.312,37 + KV/SV vorläufig + UV
+    expect(m.svs.basis).toBe(30313.35);
+    expect(m.svs.final.total).toBe(6314.25); // PV 18,5 % von 30.313,35 + KV/SV vorläufig + UV
     expect(m.svs.provisional.total).toBe(1929.72);
-    expect(m.svs.difference).toBe(4384.35);
+    expect(m.svs.difference).toBe(4384.53);
     expect(m.svs.unrecorded).toBe(0);
   });
 
   it('3 Einkommensteuer ohne Vorauszahlungen: alles noch offen', () => {
-    expect(m.incomeTax).toEqual({ total: 3684.77, prepaymentQuarterly: 0, prepaymentTotal: 0, prepaymentPaid: 0, open: 3684.77 });
+    expect(m.incomeTax).toEqual({ total: 3685.06, prepaymentQuarterly: 0, prepaymentTotal: 0, prepaymentPaid: 0, open: 3685.06 });
   });
 
   it('Vorjahr 2025 noch offen: SVS-Nachzahlung (10 Monate, Mindestbasis vorläufig), keine ESt unter der Grenze', () => {
@@ -98,12 +98,12 @@ describe('buildSvsTracker – Lena', () => {
       ['est-current', 'finanzamt'],
     ]);
     expect(m.reserve.items[0]).toMatchObject({ label: '4. Quartal 2026', amount: 482.43 });
-    expect(m.reserve.finanzamt).toBe(3684.77);
-    expect(m.reserve.total).toBeCloseTo(482.43 + m.previous!.svs!.difference + 4384.35 + 3684.77, 2);
+    expect(m.reserve.finanzamt).toBe(3685.06);
+    expect(m.reserve.total).toBeCloseTo(482.43 + m.previous!.svs!.difference + 4384.53 + 3685.06, 2);
   });
 
   it('was bleibt: Umsatz − Ausgaben − SVS endgültig − ESt', () => {
-    expect(m.remaining).toBe(Math.round((42000 - 6481.05 - 6314.07 - 3684.77) * 100) / 100);
+    expect(m.remaining).toBe(Math.round((42000 - 6480.07 - 6314.25 - 3685.06) * 100) / 100);
   });
 
   it('5 Zeitplan: Quartale, nächster Termin, Vorjahr, Folgejahr', () => {
@@ -155,7 +155,7 @@ describe('buildSvsTracker – Varianten', () => {
 
   it('Vorauszahlungen: bezahlte, offene und Rest-Steuer; Termine nach Datum sortiert', () => {
     const m = buildSvsTracker({ ...base, estPrepaymentQuarterly: 800 });
-    expect(m.incomeTax).toMatchObject({ prepaymentTotal: 3200, prepaymentPaid: 2400, open: 484.77 });
+    expect(m.incomeTax).toMatchObject({ prepaymentTotal: 3200, prepaymentPaid: 2400, open: 485.06 });
     expect(m.reserve.items.find((i) => i.id === 'est-prepayments')?.amount).toBe(800);
     expect(m.previous?.incomeTax).toBeNull();
     // 15.11. (Vorauszahlung) kommt vor 30.11. (SVS)
@@ -172,7 +172,7 @@ describe('buildSvsTracker – Varianten', () => {
     const m = buildSvsTracker({ ...base, arbeitsplatzpauschale: 1200, otherIncome: 18000 });
     expect(m.full.arbeitsplatzpauschale).toBe(1200);
     // Gewinn 32.389,23 € liegt jetzt unter 33.000 € → Grundfreibetrag 15 % = 4.858,38 €
-    expect(m.full.einkuenfte).toBe(27530.85);
+    expect(m.full.einkuenfte).toBe(27531.68);
     expect(m.incomeTax.total).toBeGreaterThan(buildSvsTracker(base).incomeTax.total);
     expect(m.ytd.arbeitsplatzpauschale).toBeCloseTo((1200 * monthsElapsedInYear(base.today)) / 12, 1);
   });
@@ -181,8 +181,8 @@ describe('buildSvsTracker – Varianten', () => {
     const withAsset = { ...base, current: { ...base.current, depreciation: 500 } };
     const m = buildSvsTracker(withAsset);
     expect(m.full.depreciation).toBe(500);
-    // Gewinn 33.589,23 − 500 = 33.089,23 € → Grundfreibetrag bleibt 4.950 €
-    expect(m.full.einkuenfte).toBe(28139.23);
+    // Gewinn 33.590,21 − 500 = 33.090,21 € → Grundfreibetrag bleibt 4.950 €
+    expect(m.full.einkuenfte).toBe(28140.21);
     expect(m.ytd.depreciation).toBeCloseTo((500 * monthsElapsedInYear(base.today)) / 12, 1);
     // Vorjahr: Abschreibung senkt die offenen Vorjahresbeträge
     const prev = buildSvsTracker({ ...base, previous: { ...base.previous!, depreciation: 1000 } });
