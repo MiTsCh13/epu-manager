@@ -15,7 +15,8 @@
     "test:watch": "./node_modules/.bin/vitest",
     "test:coverage": "./node_modules/.bin/vitest run --coverage",
     "test:e2e": "./node_modules/.bin/playwright test",
-    "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts"
+    "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",
