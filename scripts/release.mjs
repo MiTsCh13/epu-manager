@@ -58,9 +58,16 @@ run('Unit-Tests', 'npm', ['run', 'test']);
 run('Typen + Build', 'npm', ['run', 'build']);
 
 // 3. Migrationen
-run('Migrationen auf Produktion (Dry-Run)', 'npx', ['supabase', 'db', 'push', '--dry-run', '--db-url', dbUrl]);
-await confirm('Diese Migrationen auf Produktion einspielen?');
-run('Migrationen einspielen', 'npx', ['supabase', 'db', 'push', '--db-url', dbUrl, '--yes']);
+console.log('\n▶ Migrationen auf Produktion (Dry-Run)');
+const dry = spawnSync('npx', ['supabase', 'db', 'push', '--dry-run', '--db-url', dbUrl], { encoding: 'utf8', env });
+console.log(dry.stdout + dry.stderr);
+if (dry.status !== 0) process.exit(1);
+if (dry.stdout.includes('"upToDate":true')) {
+  console.log('Keine neuen Migrationen.');
+} else {
+  await confirm('Diese Migrationen auf Produktion einspielen?');
+  run('Migrationen einspielen', 'npx', ['supabase', 'db', 'push', '--db-url', dbUrl, '--yes']);
+}
 
 // 4. Edge Functions
 run('Edge Functions hochladen', 'npx', ['supabase', 'functions', 'deploy', '--project-ref', PROD_REF, '--use-api']);
