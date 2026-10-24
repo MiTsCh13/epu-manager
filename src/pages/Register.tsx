@@ -96,6 +96,14 @@ export default function Register() {
         <Button type="submit" fullWidth loading={loading}>
           Kostenlos starten
         </Button>
+        <p className="text-xs leading-relaxed text-slate-500">
+          Klaro ist in der Testphase (Beta). Alle Berechnungen sind Schätzungen und ersetzen keine Steuerberatung. Wie Klaro
+          mit deinen Daten umgeht, steht in der{' '}
+          <Link to="/datenschutz" target="_blank" rel="noopener" className="font-medium text-primary hover:underline">
+            Datenschutzerklärung
+          </Link>
+          .
+        </p>
       </form>
       <p className="mt-6 text-center text-sm text-slate-600">
         Schon registriert?{' '}

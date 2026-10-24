@@ -1,20 +1,18 @@
 // Gemeinsame Helfer für die Lese-Functions mit Claude (read-receipt, read-invoice-design):
 // Anmeldung, Antworten, Tageslimit und Protokoll in receipt_scans (je Art getrennt gezählt).
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { parseAllowedOrigins } from './cors.ts';
 
 /** Service-Role-Client: umgeht RLS – nur serverseitig verwenden. */
 export const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
 });
 
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+/** Origins, die die Functions aus dem Browser aufrufen dürfen (siehe cors.ts). */
+export const ALLOWED_ORIGINS = parseAllowedOrigins(Deno.env.get('APP_URL'), Deno.env.get('ALLOWED_ORIGINS'));
 
 export function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
 export async function getUserId(req: Request): Promise<string | null> {

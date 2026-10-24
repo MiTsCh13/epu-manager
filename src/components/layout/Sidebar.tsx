@@ -3,6 +3,7 @@ import { KlaroLogo } from '@/components/auth/AuthLayout';
 import { NAV_ITEMS } from './navigation';
 import { TrialBadge } from './TrialBadge';
 import { UserMenu } from './UserMenu';
+import { LegalLinks } from '@/components/legal/LegalLinks';
 
 export function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -41,6 +42,7 @@ export function Sidebar() {
       <div className="space-y-3 border-t border-slate-200 p-4">
         <TrialBadge />
         <UserMenu />
+        <LegalLinks />
       </div>
     </aside>
   );

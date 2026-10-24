@@ -24,6 +24,8 @@ const SVSTracker = lazy(() => import('@/pages/SVSTracker'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Import = lazy(() => import('@/pages/Import'));
 const TemplateEditor = lazy(() => import('@/pages/TemplateEditor'));
+const Impressum = lazy(() => import('@/pages/Impressum'));
+const Datenschutz = lazy(() => import('@/pages/Datenschutz'));
 
 export default function App() {
   return (
@@ -37,6 +39,9 @@ export default function App() {
           {/* Links aus den Auth-Mails – bewusst ohne Weiterleitung, auch wer schon angemeldet ist, löst den Link ein */}
           <Route path="/auth/bestaetigen" element={<AuthConfirm />} />
           <Route path="/passwort-neu" element={<RequireAuth allowIncompleteOnboarding><ResetPassword /></RequireAuth>} />
+          {/* Rechtstexte – öffentlich, egal ob angemeldet */}
+          <Route path="/impressum" element={<Impressum />} />
+          <Route path="/datenschutz" element={<Datenschutz />} />
           <Route path="/onboarding" element={<RequireAuth allowIncompleteOnboarding><Onboarding /></RequireAuth>} />
 
           <Route element={<RequireAuth><AppLayout /></RequireAuth>}>

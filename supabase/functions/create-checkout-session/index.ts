@@ -1,8 +1,8 @@
 // Startet Stripe Checkout für „Klaro Pro“ (19 €/Monat) und liefert die Checkout-URL.
-import { admin, appOrigin, corsHeaders, getUser, json, stripe } from '../_shared/stripe.ts';
+import { admin, ALLOWED_ORIGINS, appOrigin, getUser, json, stripe } from '../_shared/stripe.ts';
+import { withCors } from '../_shared/cors.ts';
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+Deno.serve(withCors(ALLOWED_ORIGINS, async (req) => {
   try {
     const user = await getUser(req);
     if (!user) return json({ error: 'Nicht angemeldet.' }, 401);
@@ -47,4 +47,4 @@ Deno.serve(async (req) => {
     console.error('checkout', e);
     return json({ error: 'Der Bezahlvorgang konnte nicht gestartet werden.' }, 500);
   }
-});
+}));

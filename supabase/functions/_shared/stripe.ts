@@ -1,6 +1,7 @@
 // Gemeinsame Helfer für die Stripe-Edge-Functions (Deno)
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { parseAllowedOrigins } from './cors.ts';
 
 export const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2025-02-24.acacia',
@@ -20,14 +21,11 @@ export function appOrigin(req: Request): string {
   return origin === APP_URL || /^http:\/\/localhost:\d+$/.test(origin) ? origin : APP_URL;
 }
 
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+/** Origins, die die Functions aus dem Browser aufrufen dürfen (siehe cors.ts). */
+export const ALLOWED_ORIGINS = parseAllowedOrigins(APP_URL, Deno.env.get('ALLOWED_ORIGINS'));
 
 export function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
 /** Eingeloggten Nutzer aus dem Authorization-Header ermitteln. */

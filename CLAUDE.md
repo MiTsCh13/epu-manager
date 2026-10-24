@@ -35,8 +35,11 @@
 - Mandatory invoice details (§ 11 UStG) are always set by Klaro itself, never by a template.
 
 ## Before launch (checklist)
-- [ ] Impressum
-- [ ] Privacy policy (Anthropic incl. customer data in invoice import, Supabase Ireland, Vercel)
-- [ ] Beta notice "keine Steuerberatung"
-- [ ] DPA with Anthropic
-- [ ] Restrict CORS of the Edge Functions to `APP_URL` (currently `*`)
+- [x] Impressum (`/impressum`)
+- [x] Privacy policy (`/datenschutz`: Supabase Ireland, Vercel, Anthropic, Hostinger mail)
+- [x] Beta notice "keine Steuerberatung" (registration, Impressum, Beta badge)
+- [x] DPA with Anthropic – part of Anthropic's Commercial Terms (accepted with the API account)
+- [x] Restrict CORS of the Edge Functions to `APP_URL` (+ `ALLOWED_ORIGINS` secret on the test project)
+- [ ] Have Impressum + privacy policy checked (e.g. WKO template / lawyer) before a wider launch
+- [ ] Before enabling billing: add Stripe to the privacy policy, update Impressum ("kostenlos, nicht gewerblich"), Gewerbe/GISA
+- [ ] Before a wider launch: terms of use incl. processing agreement (Art. 28 DSGVO) for users' customer data

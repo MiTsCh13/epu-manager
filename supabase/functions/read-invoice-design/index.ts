@@ -2,7 +2,8 @@
 // Die Rechnung wird hier nicht gespeichert. Bilder (Logo, Kopfbild) schneidet der Browser selbst aus dem PDF.
 // Jeder Vorgang landet in receipt_scans (kind „invoice_design“) – für das Tageslimit und die Kostenkontrolle.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.131.0';
-import { corsHeaders, finishScan, getUserId, isBillingError, json, releaseScan, reserveScan, UNAVAILABLE } from '../_shared/scans.ts';
+import { ALLOWED_ORIGINS, finishScan, getUserId, isBillingError, json, releaseScan, reserveScan, UNAVAILABLE } from '../_shared/scans.ts';
+import { withCors } from '../_shared/cors.ts';
 import { buildSchema, buildUserText, DAILY_LIMIT, MAX_BODY_BYTES, MODEL, normalizeResult, parseRequest, SYSTEM_PROMPT } from './design.ts';
 
 // Eine Rechnung dauert 10–30 s – ohne Wiederholung bleibt der Aufruf sicher unter dem Zeitlimit der Edge Function (150 s)
@@ -16,9 +17,7 @@ const LIMITS = {
   globalLimit: 'Das Übernehmen von Rechnungen ist heute ausgelastet. Bitte starte mit einem Design oder versuche es morgen wieder.',
 };
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-
+Deno.serve(withCors(ALLOWED_ORIGINS, async (req) => {
   const userId = await getUserId(req);
   if (!userId) return json({ error: 'Nicht angemeldet.' }, 401);
 
@@ -98,4 +97,4 @@ Deno.serve(async (req) => {
     console.error('read-invoice-design', e);
     return json({ error: BUSY }, 500);
   }
-});
+}));

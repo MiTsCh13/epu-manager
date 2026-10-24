@@ -2,7 +2,8 @@
 // Der Beleg wird hier nicht gespeichert (das passiert erst beim Speichern der Ausgabe im Bucket „receipts“).
 // Jeder Lesevorgang landet in receipt_scans – für das Tageslimit und die Kostenkontrolle.
 import Anthropic from 'npm:@anthropic-ai/sdk@0.131.0';
-import { corsHeaders, finishScan, getUserId, isBillingError, json, releaseScan, reserveScan, UNAVAILABLE } from '../_shared/scans.ts';
+import { ALLOWED_ORIGINS, finishScan, getUserId, isBillingError, json, releaseScan, reserveScan, UNAVAILABLE } from '../_shared/scans.ts';
+import { withCors } from '../_shared/cors.ts';
 import {
   buildSchema,
   buildUserText,
@@ -25,9 +26,7 @@ const LIMITS = {
   globalLimit: 'Das Auslesen von Belegen ist heute ausgelastet. Bitte trag den Beleg selbst ein oder versuche es morgen wieder.',
 };
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-
+Deno.serve(withCors(ALLOWED_ORIGINS, async (req) => {
   const userId = await getUserId(req);
   if (!userId) return json({ error: 'Nicht angemeldet.' }, 401);
 
@@ -101,4 +100,4 @@ Deno.serve(async (req) => {
     console.error('read-receipt', e);
     return json({ error: 'Klaro kann den Beleg gerade nicht lesen. Bitte versuche es später erneut.' }, 500);
   }
-});
+}));

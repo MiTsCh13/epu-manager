@@ -1,6 +1,7 @@
 // Konto löschen (DSGVO Art. 17): Abo beenden, Belegfotos, Logos und alle Daten löschen, Auth-Nutzer entfernen.
 // Der Stripe-Kunde bleibt bestehen – Zahlungsbelege des Abos unterliegen der Aufbewahrungspflicht (§ 132 BAO).
-import { admin, corsHeaders, getUser, json, stripe } from '../_shared/stripe.ts';
+import { admin, ALLOWED_ORIGINS, getUser, json, stripe } from '../_shared/stripe.ts';
+import { withCors } from '../_shared/cors.ts';
 
 // Belege sowie Logos und Kopfbilder der Rechnungs-Vorlagen
 const BUCKETS = ['receipts', 'branding'];
@@ -27,8 +28,7 @@ async function deleteFiles(bucket: string, userId: string) {
   throw new Error(`Dateien in ${bucket} konnten nicht vollständig gelöscht werden`);
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+Deno.serve(withCors(ALLOWED_ORIGINS, async (req) => {
   try {
     const user = await getUser(req);
     if (!user) return json({ error: 'Nicht angemeldet.' }, 401);
@@ -51,4 +51,4 @@ Deno.serve(async (req) => {
     console.error('delete-account', e);
     return json({ error: 'Dein Konto konnte nicht gelöscht werden. Bitte versuche es erneut oder schreib uns.' }, 500);
   }
-});
+}));

@@ -6,6 +6,7 @@ import { NAV_ITEMS } from './navigation';
 import { NavList } from './Sidebar';
 import { TrialBadge } from './TrialBadge';
 import { UserMenu } from './UserMenu';
+import { LegalLinks } from '@/components/legal/LegalLinks';
 
 /** Mobile TopBar: Logo + Menü-Button. */
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
@@ -112,6 +113,7 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
         <div className="space-y-3 border-t border-slate-200 p-4">
           <TrialBadge onNavigate={onClose} />
           <UserMenu />
+          <LegalLinks onNavigate={onClose} />
         </div>
       </div>
     </div>

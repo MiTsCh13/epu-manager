@@ -49,6 +49,9 @@ Secrets liegen nur in Supabase (`supabase secrets list`): `STRIPE_SECRET_KEY`, `
 supabase functions deploy create-checkout-session create-portal-session stripe-webhook delete-account --use-api
 ```
 
+**CORS:** Die Functions antworten Browsern nur von `APP_URL` aus. Weitere Adressen über das Secret `ALLOWED_ORIGINS`
+(kommagetrennt, `*` = ein Teil des Hostnamens) – im Test-Projekt `https://*.vercel.app` für die Vercel-Vorschauen.
+
 Der Webhook (`/functions/v1/stripe-webhook`) aktualisiert `profiles.subscription_status`. Nach Ablauf der Testphase
 ohne Abo verhindert die Datenbank neue bzw. ausgestellte Rechnungen (weicher Paywall).
 Testkarte: `4242 4242 4242 4242`, beliebiges Datum in der Zukunft, beliebige CVC.
