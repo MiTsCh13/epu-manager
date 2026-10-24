@@ -20,6 +20,7 @@ const NewInvoice = lazy(() => import('@/pages/NewInvoice'));
 const InvoiceView = lazy(() => import('@/pages/InvoiceView'));
 const Expenses = lazy(() => import('@/pages/Expenses'));
 const Clients = lazy(() => import('@/pages/Clients'));
+const Products = lazy(() => import('@/pages/Products'));
 const SVSTracker = lazy(() => import('@/pages/SVSTracker'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Import = lazy(() => import('@/pages/Import'));
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="rechnungen/:id" element={<InvoiceView />} />
             <Route path="ausgaben" element={<Expenses />} />
             <Route path="kunden" element={<Clients />} />
+            <Route path="produkte" element={<Products />} />
             <Route path="gewinn" element={<SVSTracker />} />
             <Route path="svs" element={<Navigate to="/gewinn" replace />} />
             <Route path="einstellungen" element={<Settings />} />

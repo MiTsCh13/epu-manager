@@ -10,6 +10,7 @@ export type Expense = Tables['expenses']['Row'];
 export type SvsPayment = Tables['svs_payments']['Row'];
 export type Asset = Tables['assets']['Row'];
 export type Income = Tables['incomes']['Row'];
+export type Product = Tables['products']['Row'];
 export type ImportRecord = Tables['imports']['Row'];
 export type RecurringExpense = Tables['recurring_expenses']['Row'];
 export type InvoiceTemplate = Tables['invoice_templates']['Row'];

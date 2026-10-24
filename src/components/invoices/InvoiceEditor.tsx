@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, ExternalLink, Eye, Plus, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
+import { useProducts } from '@/hooks/useProducts';
 import { useTemplates } from '@/hooks/useTemplates';
 import { closingTextFor, normalizeTemplate } from '@/lib/invoiceTemplates';
 import { DEFAULT_NUMBER_FORMAT, nextInvoiceNumber } from '@/lib/invoiceNumbers';
@@ -22,10 +23,12 @@ import {
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { calculateInvoiceTotals, validateInvoiceUStG11 } from '@/lib/tax';
 import type { ClientFormData } from '@/lib/validation';
+import { lineToProductForm, type ProductFormData } from '@/lib/products';
 import { KLEINUNTERNEHMER_NOTE, VAT_RATES } from '@/constants/tax2026';
 import { countryName } from '@/constants/countries';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { ClientFormModal } from '@/components/clients/ClientForm';
+import { ProductFormModal } from '@/components/products/ProductForm';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field, Select } from '@/components/ui/Field';
@@ -126,6 +129,9 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const expired = !!profile && getAccessState(profile).kind === 'expired';
   const { clients, loading: clientsLoading, create: createClient } = useClients();
 
+  const { products, create: createProduct, markUsed } = useProducts();
+  // „Als Produkt speichern“: welche Position, vorbefüllt mit ihren Werten
+  const [productDraft, setProductDraft] = useState<{ rowKey: string; form: ProductFormData } | null>(null);
   const { templates, defaultTemplate } = useTemplates();
   const [form, setForm] = useState<FormState>(() => initialState(invoice, isKU));
   const [errors, setErrors] = useState<InvoiceFormErrors>({});
@@ -261,6 +267,7 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
       toast.error(invoiceErrorMessage(error, 'Die Rechnung konnte nicht gespeichert werden.'));
       return null;
     }
+    void markUsed(form.rows.flatMap((r) => (r.productId ? [r.productId] : [])));
     return saved;
   }
 
@@ -526,6 +533,8 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
             onChange={(rows) => set({ rows })}
             errors={errors.itemErrors}
             listError={errors.items}
+            products={products}
+            onSaveProduct={(row) => setProductDraft({ rowKey: row.key, form: lineToProductForm(row) })}
           />
 
           <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:items-start sm:justify-between">
@@ -708,6 +717,27 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
           ))}
         </div>
       </Modal>
+
+      <ProductFormModal
+        key={productDraft?.rowKey ?? 'none'}
+        open={!!productDraft}
+        product={null}
+        initial={productDraft?.form}
+        others={products}
+        onClose={() => setProductDraft(null)}
+        onSubmit={async (data) => {
+          const result = await createProduct(data);
+          if (result.error !== null) {
+            toast.error(result.error);
+            return false;
+          }
+          // Position mit dem neuen Produkt verbinden (Text bleibt, wie er ist)
+          const rowKey = productDraft?.rowKey;
+          setForm((f) => ({ ...f, rows: f.rows.map((r) => (r.key === rowKey ? { ...r, productId: result.data.id } : r)) }));
+          toast.success(`${result.data.name} gespeichert – beim nächsten Mal einfach auswählen`);
+          return true;
+        }}
+      />
 
       <Modal
         open={confirmDelete}

@@ -401,6 +401,39 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          created_at: string
+          details: string
+          id: string
+          last_used_at: string | null
+          name: string
+          unit: string | null
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string
+          id?: string
+          last_used_at?: string | null
+          name: string
+          unit?: string | null
+          unit_price: number
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          unit?: string | null
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           account_holder: string | null
