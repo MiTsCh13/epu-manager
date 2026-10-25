@@ -64,7 +64,9 @@ export function SvsSection({ model }: { model: SvsTrackerModel }) {
       Pensionsversicherung 18,5 % von {formatEuro(svs.basis, true)}: {formatEuro(svs.final.pv)}
       <br />
       Krankenversicherung 6,8 %: {formatEuro(svs.final.kv)}
-      {model.svsYear <= 2 && ' (in Jahr 1 und 2 bleibt es beim Mindestbeitrag)'}
+      {svs.kvFixed
+        ? ' (als Gewerbetreibende:r bleibt es in Jahr 1 und 2 beim Mindestbeitrag)'
+        : model.svsYear <= 2 && ' (als Neue:r Selbständige:r wird sie schon ab dem 1. Jahr nachberechnet)'}
       <br />
       Selbständigenvorsorge 1,53 %: {formatEuro(svs.final.sv)} (wird nie nachverrechnet)
       <br />

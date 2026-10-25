@@ -4,7 +4,7 @@ import type { SVSPhase } from '@/lib/svs';
 export const PHASE_INFO: Record<SVSPhase, { title: string; text: string; tone: string }> = {
   year1_2: {
     title: 'Gründungsphase',
-    text: 'Du zahlst vorläufig nur Mindestbeiträge. Die Pensionsversicherung wird später auf Basis deines echten Gewinns nachberechnet – dieses Geld solltest du jetzt schon zur Seite legen.',
+    text: 'Du zahlst vorläufig nur Mindestbeiträge. Später rechnet die SVS die Pensionsversicherung (bei Neuen Selbständigen auch die Krankenversicherung) mit deinem echten Gewinn nach. Dieses Geld solltest du jetzt schon zur Seite legen.',
     tone: 'bg-primary-50 text-primary-900 ring-primary-100',
   },
   year3: {

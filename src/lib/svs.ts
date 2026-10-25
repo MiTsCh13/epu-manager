@@ -3,8 +3,9 @@
 // Grundprinzip: Die SVS schreibt zunächst vorläufige Beiträge vor. Sobald der
 // Einkommensteuerbescheid vorliegt, wird nachbemessen – die Differenz wird nachverrechnet.
 // Neugründer zahlen in den ersten 3 Jahren vorläufig nur auf Basis der Mindestbeitragsgrundlage.
-// In den ersten 2 Jahren ist die Krankenversicherung endgültig auf Mindestbasis
-// (keine KV-Nachbemessung). Die Selbständigenvorsorge wird nie nachbemessen (WKO).
+// Gewerbetreibende (WKO-Mitglieder): In den ersten 2 Jahren ist die Krankenversicherung endgültig
+// auf Mindestbasis (keine KV-Nachbemessung). Bei Neuen Selbständigen wird die KV ab Jahr 1
+// nachbemessen (SVS). Die Selbständigenvorsorge wird nie nachbemessen (WKO).
 // Endgültige Basis = Einkünfte laut Steuerbescheid (nach Grundfreibetrag)
 //                    + im Jahr vorgeschriebene PV- und KV-Beiträge (Hinzurechnung).
 import { SVS_2026 } from '@/constants/svs2026';
@@ -33,10 +34,22 @@ export function getSVSYear(registrationDate: Date, today: Date = new Date()): nu
 }
 
 export function getSVSPhase(registrationDate: Date, today: Date = new Date()): SVSPhase {
-  const year = getSVSYear(registrationDate, today);
-  if (year <= 2) return 'year1_2'; // Mindestbeiträge, keine KV-Nachbemessung
+  return phaseOfYear(getSVSYear(registrationDate, today));
+}
+
+/** Phase eines Versicherungsjahres (Anmeldejahr = 1). */
+export function phaseOfYear(year: number): SVSPhase {
+  if (year <= 2) return 'year1_2'; // Mindestbeiträge, KV-Nachbemessung nur bei Neuen Selbständigen
   if (year === 3) return 'year3'; // Erste Nachbemessung (für Jahr 1) trifft ein
   return 'year4plus'; // Volle Nachbemessung KV + PV
+}
+
+/**
+ * Bleibt die KV endgültig beim Mindestbeitrag?
+ * Nur für Gewerbetreibende (WKO-Mitglieder) in Jahr 1–2 – Neue Selbständige werden ab Jahr 1 nachbemessen.
+ */
+export function isKvFixed(phase: SVSPhase, businessType?: BusinessType): boolean {
+  return phase === 'year1_2' && businessType !== 'neue_selbstaendige';
 }
 
 // ─── Beiträge ───────────────────────────────────────────────
@@ -179,6 +192,7 @@ export function getNachzahlungsWarning(params: {
   projectedProfit: number;
   previousYearProfit?: number; // Gewinn aus Vorjahr (für Nachbemessungs-Schätzung)
   provisionalBasis?: number; // bekannte vorläufige Basis (z. B. aus der Vorschreibung) – hat Vorrang
+  businessType?: BusinessType;
 }): {
   hasWarning: boolean;
   estimatedNachzahlung: number;
@@ -188,8 +202,8 @@ export function getNachzahlungsWarning(params: {
   const { phase, projectedProfit } = params;
   const finalBasis = clampBasis(projectedProfit);
   const provisionalBasis = params.provisionalBasis ?? getVorlaeufigeBeitragsgrundlage(phase, params.previousYearProfit);
-  // Selbständigenvorsorge wird nie nachbemessen; Jahr 1–2: auch KV bleibt auf Mindestbasis
-  const rate = phase === 'year1_2' ? pension : pension + health;
+  // Selbständigenvorsorge wird nie nachbemessen; Gewerbetreibende Jahr 1–2: auch KV bleibt auf Mindestbasis
+  const rate = isKvFixed(phase, params.businessType) ? pension : pension + health;
   const estimatedNachzahlung = round2(Math.max(0, finalBasis - provisionalBasis) * rate);
 
   if (estimatedNachzahlung === 0) {
@@ -236,6 +250,7 @@ export interface SvsYearResult {
   maxBasis: number;
   difference: number; // > 0 Nachzahlung, < 0 Gutschrift
   notInsured: boolean; // Neue Selbständige unter der Versicherungsgrenze bzw. Ausnahme
+  kvFixed: boolean; // KV bleibt beim Mindestbeitrag (Gewerbetreibende Jahr 1–2)
 }
 
 const amounts = (pv: number, kv: number, sv: number, uv: number): SvsAmounts => ({
@@ -252,7 +267,7 @@ const amounts = (pv: number, kv: number, sv: number, uv: number): SvsAmounts => 
  * - `provisionalBasis`: vorläufige Beitragsgrundlage fürs ganze Jahr (bzw. die versicherten Monate)
  * - `extraPrescribed`: im Jahr zusätzlich vorgeschriebene Nachzahlungen für Vorjahre (zählen zur Hinzurechnung)
  * - `months`: versicherte Monate im Jahr (Anmeldejahr anteilig)
- * - `svsYear`: Kalenderjahr der Versicherung (Anmeldejahr = 1) – in Jahr 1–2 bleibt die KV beim Mindestbeitrag
+ * - `svsYear`: Kalenderjahr der Versicherung (Anmeldejahr = 1) – Gewerbetreibende: in Jahr 1–2 bleibt die KV beim Mindestbeitrag
  */
 export function calculateSvsYear(params: {
   einkuenfte: number;
@@ -267,10 +282,11 @@ export function calculateSvsYear(params: {
   const maxBasis = round2(SVS_2026.maxBasisMonthly * months);
   const uv = (SVS_2026.accidentFixed * months) / 12;
   const B0 = Math.min(Math.max(params.provisionalBasis, minBasis), maxBasis);
+  const kvFixed = isKvFixed(phaseOfYear(params.svsYear), params.options?.businessType);
 
   if (params.options?.exempt) {
     const onlyUv = amounts(0, 0, 0, uv);
-    return { provisional: onlyUv, final: onlyUv, hinzurechnung: 0, basisRaw: 0, basis: 0, minBasis, maxBasis, difference: 0, notInsured: true };
+    return { provisional: onlyUv, final: onlyUv, hinzurechnung: 0, basisRaw: 0, basis: 0, minBasis, maxBasis, difference: 0, notInsured: true, kvFixed };
   }
 
   const provisional = amounts(B0 * pension, B0 * health, B0 * provision, uv);
@@ -281,7 +297,7 @@ export function calculateSvsYear(params: {
   const basis = round2(Math.min(Math.max(basisRaw, minBasis), maxBasis));
   const final = notInsured
     ? amounts(0, 0, 0, 0)
-    : amounts(basis * pension, params.svsYear <= 2 ? provisional.kv : basis * health, provisional.sv, uv);
+    : amounts(basis * pension, kvFixed ? provisional.kv : basis * health, provisional.sv, uv);
 
   return {
     provisional,
@@ -293,6 +309,7 @@ export function calculateSvsYear(params: {
     maxBasis,
     difference: round2(final.total - provisional.total),
     notInsured,
+    kvFixed,
   };
 }
 

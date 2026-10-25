@@ -220,6 +220,16 @@ describe('buildSvsTracker – Varianten', () => {
     expect(m.reserve.items.some((i) => i.id === 'svs-current')).toBe(false);
   });
 
+  it('Neue Selbständige Jahr 2 über der Grenze: KV wird nachbemessen', () => {
+    const gt = buildSvsTracker(base);
+    const ns = buildSvsTracker({ ...base, businessType: 'neue_selbstaendige' });
+    expect(gt.svs.kvFixed).toBe(true);
+    expect(ns.svs.kvFixed).toBe(false);
+    expect(ns.svs.final.kv).toBe(round2(ns.svs.basis * 0.068));
+    expect(ns.svs.difference).toBe(round2(gt.svs.difference + ns.svs.final.kv - gt.svs.final.kv));
+    expect(ns.svs.difference).toBeGreaterThan(gt.svs.difference);
+  });
+
   it('Kleinstunternehmer-Ausnahme: nur UV; fällt weg, wenn die Grenze überschritten wird', () => {
     const small = { revenueNet: 3000, revenueGross: 3000, deductibleExpenses: 0, pauschalExtras: { ku: 0, basis: 0 }, reimbursedTravel: 0, depreciation: 0, svsPaid: 0 };
     const exempt = buildSvsTracker({ ...base, exempt: true, revenueEstimate: 4000, current: small });

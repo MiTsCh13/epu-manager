@@ -13,6 +13,7 @@ import {
   getSVSPhase,
   getSVSYear,
   getVorlaeufigeBeitragsgrundlage,
+  isKvFixed,
   projectAnnualProfit,
 } from '@/lib/svs';
 
@@ -215,6 +216,12 @@ describe('getNachzahlungsWarning', () => {
     expect(w.message).toContain('Erwartete Nachzahlung');
   });
 
+  it('Neue Selbständige Jahr 1–2: auch die KV wird nachbemessen', () => {
+    const w = getNachzahlungsWarning({ phase: 'year1_2', projectedProfit: 20000, businessType: 'neue_selbstaendige' });
+    // (20.000 − 6.613,20) × (18,5 % + 6,8 %)
+    expect(w.estimatedNachzahlung).toBe(3386.86);
+  });
+
   it('Jahr 1–2: nur PV (KV bleibt Mindestbeitrag), Hinweis auf späteren Zeitpunkt', () => {
     const w = getNachzahlungsWarning({ phase: 'year1_2', projectedProfit: 20000 });
     // (20.000 − 6.613,20) × 18,5 %
@@ -250,6 +257,22 @@ describe('calculateSvsYear', () => {
     expect(r.difference).toBe(4384.53);
   });
 
+  it('Neue Selbständige: KV wird schon in Jahr 1–2 nachbemessen', () => {
+    const r = calculateSvsYear({ einkuenfte: 20000, provisionalBasis: 6613.2, svsYear: 1, options: { businessType: 'neue_selbstaendige' } });
+    expect(r.kvFixed).toBe(false);
+    expect(r.basis).toBe(21673.14);
+    expect(r.final).toEqual({ pv: 4009.53, kv: 1473.77, sv: 101.18, uv: 155.4, total: 5739.88 });
+    expect(r.difference).toBe(3810.16);
+    expect(calculateSvsYear({ einkuenfte: 20000, provisionalBasis: 6613.2, svsYear: 2, options: { businessType: 'neue_selbstaendige' } }).final.kv).toBe(1473.77);
+  });
+
+  it('Gewerbetreibende Jahr 1: KV bleibt beim Mindestbeitrag', () => {
+    const r = calculateSvsYear({ einkuenfte: 20000, provisionalBasis: 6613.2, svsYear: 1, options: { businessType: 'gewerbetreibend' } });
+    expect(r.kvFixed).toBe(true);
+    expect(r.final).toEqual({ pv: 4009.53, kv: 449.7, sv: 101.18, uv: 155.4, total: 4715.81 });
+    expect(r.difference).toBe(2786.09);
+  });
+
   it('ab Jahr 3 wird auch die KV nachbemessen', () => {
     const r = calculateSvsYear({ einkuenfte: 28640.23, provisionalBasis: 6613.2, svsYear: 3 });
     expect(r.final.kv).toBe(2061.31);
@@ -283,6 +306,15 @@ describe('calculateSvsYear', () => {
     const r = calculateSvsYear({ einkuenfte: 3000, provisionalBasis: 6613.2, svsYear: 2, options: { exempt: true } });
     expect(r.provisional.total).toBe(155.4);
     expect(r.difference).toBe(0);
+  });
+});
+
+describe('isKvFixed', () => {
+  it('nur Gewerbetreibende (bzw. ohne Angabe) in Jahr 1–2', () => {
+    expect(isKvFixed('year1_2', 'gewerbetreibend')).toBe(true);
+    expect(isKvFixed('year1_2')).toBe(true);
+    expect(isKvFixed('year3', 'gewerbetreibend')).toBe(false);
+    expect(isKvFixed('year1_2', 'neue_selbstaendige')).toBe(false);
   });
 });
 
