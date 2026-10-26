@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ExternalLink, Eye, Plus, Send, Trash2 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { DEFAULT_NUMBER_FORMAT, nextInvoiceNumber } from '@/lib/invoiceNumbers';
 import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { supabase } from '@/lib/supabase';
+import { yearOfDate } from '@/lib/taxYears';
 import { getAccessState } from '@/lib/subscription';
 import {
   addDays,
@@ -122,8 +123,14 @@ function initialState(invoice: Invoice | null, isKU: boolean): FormState {
 /** Neue Rechnung bzw. Entwurf bearbeiten. Ausgestellte Rechnungen zeigt InvoiceDetail. */
 export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const navigate = useNavigate();
-  const { profile } = useAuth();
-  const isKU = profile?.is_kleinunternehmer ?? true;
+  const { profile, profileFor } = useAuth();
+  // Kleinunternehmer-Status im Jahr der Leistung (UStR Rz 995: im Kalenderjahr ausgeführte Umsätze) – wie in der DB:
+  // Ende des Leistungszeitraums, sonst Leistungsdatum, sonst Rechnungsdatum
+  const kuIn = (date: string | null | undefined) => profileFor(yearOfDate(date))?.is_kleinunternehmer ?? true;
+  const [form, setForm] = useState<FormState>(() =>
+    initialState(invoice, kuIn(invoice?.service_date_to ?? invoice?.service_date_from ?? invoice?.invoice_date)),
+  );
+  const isKU = kuIn((form.isPeriod && form.serviceTo) || form.serviceFrom || form.invoiceDate);
   // Neue Selbständige stellen Honorarnoten aus, Gewerbetreibende Rechnungen. Entwürfe folgen dem aktuellen Profil.
   const isHonorarnote = profile?.business_type === 'neue_selbstaendige';
   const expired = !!profile && getAccessState(profile).kind === 'expired';
@@ -133,7 +140,6 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   // „Als Produkt speichern“: welche Position, vorbefüllt mit ihren Werten
   const [productDraft, setProductDraft] = useState<{ rowKey: string; form: ProductFormData } | null>(null);
   const { templates, defaultTemplate } = useTemplates();
-  const [form, setForm] = useState<FormState>(() => initialState(invoice, isKU));
   const [errors, setErrors] = useState<InvoiceFormErrors>({});
   const [ustErrors, setUstErrors] = useState<string[]>([]);
   const [ustWarnings, setUstWarnings] = useState<string[]>([]);
@@ -144,6 +150,15 @@ export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
   const [preview, setPreview] = useState<Invoice | null>(null);
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Leistung in ein Jahr mit anderem Kleinunternehmer-Status verschoben → passenden USt-Satz vorschlagen
+  const lastKU = useRef(isKU);
+  useEffect(() => {
+    if (lastKU.current === isKU) return;
+    lastKU.current = isKU;
+    // Kleinunternehmer rechnen ohne USt (Satz egal); zurück zur USt-Pflicht: 20 % nur statt 0 %, gewählte 10/13 % bleiben
+    if (!isKU) setForm((f) => (f.vatRate === 0 ? { ...f, vatRate: 20 } : f));
+  }, [isKU]);
 
   // Vergebene Nummern laden → nächste fortlaufende Nummer im Format aus den Einstellungen vorschlagen
   const used = useUsedInvoiceNumbers(!invoice);

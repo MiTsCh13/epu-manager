@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Check, FileUp, Info, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useProfileFor } from '@/contexts/AuthContext';
 import { analyzeInvoicePdf, finalizeImport, readInvoiceDesign, type ImportedDesign } from '@/lib/invoiceImport';
 import type { TemplateSettings } from '@/lib/invoiceTemplates';
 import { Alert } from '@/components/ui/Alert';
@@ -25,7 +25,8 @@ export function ImportTemplate({
   /** Solange Klaro liest bzw. anlegt, darf der Dialog nicht schließen (der Versuch zählt sonst trotzdem) */
   onBusyChange?: (busy: boolean) => void;
 }) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const profile = useProfileFor(new Date().getFullYear());
   const input = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
   const [progress, setProgress] = useState(0);

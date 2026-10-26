@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfileFor } from '@/contexts/AuthContext';
 import { INCOME_TAX_BRACKETS_2026 } from '@/constants/tax2026';
 import { useProfilePatch } from '@/hooks/useProfilePatch';
 import { formatEuro } from '@/lib/money';
@@ -11,10 +11,10 @@ import { AmountForm, Money, StepCard, SumLine } from './parts';
 
 /** 3 · Einkommensteuer: Steuer fürs Jahr − Vorauszahlungen = noch offen. Getrennt von der SVS. */
 export function IncomeTaxSection({ model }: { model: SvsTrackerModel }) {
-  const { profile } = useAuth();
   const patch = useProfilePatch();
   const [editing, setEditing] = useState(false);
   const { incomeTax: t, year, previous } = model;
+  const profile = useProfileFor(year);
   const hasPrepayments = t.prepaymentQuarterly > 0;
   const taxFree = formatEuro(INCOME_TAX_BRACKETS_2026[0].upTo, true);
   const otherKind = profile?.other_income_kind;

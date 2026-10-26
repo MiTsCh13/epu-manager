@@ -2,12 +2,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Session, User } from '@supabase/supabase-js';
 import { resetAutoBooking } from '@/lib/recurringSync';
 import { supabase } from '@/lib/supabase';
-import type { Profile } from '@/types';
+import { profileForYear } from '@/lib/taxYears';
+import type { Profile, TaxYear } from '@/types';
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  /** Steuer-Einstellungen pro Jahr (gelten ab ihrem Jahr) */
+  taxYears: TaxYear[];
+  /** Profil mit den Steuer-Einstellungen eines Kalenderjahres (Kleinunternehmer, Gewinnermittlung, …) */
+  profileFor: (year: number) => Profile | null;
   /** true, solange Session oder Profil initial geladen werden */
   loading: boolean;
   profileError: string | null;
@@ -21,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [taxYears, setTaxYears] = useState<TaxYear[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -43,11 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = useCallback(async (id: string) => {
     setProfileLoading(true);
     setProfileError(null);
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-    if (error) {
+    const [{ data, error }, years] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', id).single(),
+      supabase.from('tax_years').select('*').eq('user_id', id).order('year'),
+    ]);
+    if (error || years.error) {
       setProfileError('Dein Profil konnte nicht geladen werden.');
       setProfile(null);
+      setTaxYears([]);
     } else {
+      setTaxYears(years.data);
       setProfile(data);
     }
     setProfileLoading(false);
@@ -55,7 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (userId) void loadProfile(userId);
-    else setProfile(null);
+    else {
+      setProfile(null);
+      setTaxYears([]);
+    }
   }, [userId, loadProfile]);
 
   const refreshProfile = useCallback(async () => {
@@ -71,9 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading =
     sessionLoading || (!!userId && profile?.id !== userId && !profileError) || (profileLoading && !profile);
 
+  const profileFor = useCallback((year: number) => (profile ? profileForYear(profile, taxYears, year) : null), [profile, taxYears]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ session, user: session?.user ?? null, profile, loading, profileError, refreshProfile, signOut }),
-    [session, profile, loading, profileError, refreshProfile, signOut],
+    () => ({ session, user: session?.user ?? null, profile, taxYears, profileFor, loading, profileError, refreshProfile, signOut }),
+    [session, profile, taxYears, profileFor, loading, profileError, refreshProfile, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -83,4 +99,10 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth muss innerhalb von <AuthProvider> verwendet werden');
   return ctx;
+}
+
+/** Profil mit den Steuer-Einstellungen eines Jahres – stabil, solange sich Profil und Jahres-Einstellungen nicht ändern. */
+export function useProfileFor(year: number): Profile | null {
+  const { profileFor } = useAuth();
+  return useMemo(() => profileFor(year), [profileFor, year]);
 }

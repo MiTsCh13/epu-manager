@@ -27,7 +27,7 @@ const actionClass =
   'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2';
 
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, profileFor } = useAuth();
   const svs = useSvsTracker();
   const recurring = useRecurring();
   const navigate = useNavigate();
@@ -186,7 +186,7 @@ export default function Dashboard() {
           <section aria-label="Auswertung nach Zeitraum" className="space-y-4">
             <PeriodFilter preset={preset} range={range} custom={custom} onPreset={setPreset} onCustom={setCustom} />
             <div className={`grid gap-6 lg:grid-cols-2 ${dash.loading ? 'opacity-60 transition-opacity' : ''}`} aria-busy={dash.loading}>
-              <ExpenseDonut data={categories} periodText={periodText} pauschal={profile?.profit_method === 'pauschal'} />
+              <ExpenseDonut data={categories} periodText={periodText} pauschal={profileFor(svs.year)?.profit_method === 'pauschal'} />
               <RevenueChart data={revenue.buckets} granularity={revenue.granularity} periodText={periodText} />
             </div>
           </section>

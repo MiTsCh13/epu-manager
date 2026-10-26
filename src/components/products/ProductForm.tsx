@@ -34,7 +34,7 @@ export function ProductFormModal({
   onClose: () => void;
   onSubmit: (data: ProductFormData) => Promise<boolean>;
 }) {
-  const { profile } = useAuth();
+  const { profileFor } = useAuth();
   const start = product ? productToForm(product) : (initial ?? EMPTY_PRODUCT_FORM);
   const [form, setForm] = useState<ProductFormData>(start);
   const [errors, setErrors] = useState<ProductFormErrors>({});
@@ -68,7 +68,7 @@ export function ProductFormModal({
   }
 
   const formId = 'product-form';
-  const isKU = profile?.is_kleinunternehmer ?? false;
+  const isKU = profileFor(new Date().getFullYear())?.is_kleinunternehmer ?? false;
 
   return (
     <Modal

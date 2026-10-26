@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ChevronDown, Lock } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfileFor } from '@/contexts/AuthContext';
 import { saveTemplate } from '@/hooks/useTemplates';
 import { FONTS, normalizeTemplate, type HeaderStyle, type LogoPosition, type LogoSize, type TemplateSettings } from '@/lib/invoiceTemplates';
 import { supabase } from '@/lib/supabase';
@@ -81,7 +81,8 @@ const short = (t: string, n = 40) => (t.length > n ? `${t.slice(0, n - 1)}…` :
 
 export default function TemplateEditor() {
   const { id } = useParams<{ id: string }>();
-  const { profile } = useAuth();
+  // Steuer-Einstellungen des laufenden Jahres
+  const profile = useProfileFor(new Date().getFullYear());
   const [row, setRow] = useState<InvoiceTemplate | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [name, setName] = useState('');

@@ -14,6 +14,7 @@ import { nextInvoiceNumber, validateNumberFormat } from '@/lib/invoiceNumbers';
 import { toISODate } from '@/lib/invoices';
 import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
 import { SettingsCard } from './SettingsCard';
+import { TaxHistory } from './TaxYearParts';
 
 
 export function IdentitySection() {
@@ -86,6 +87,7 @@ export function AccountingSection() {
       description="Bestimmt, wie Klaro deine Rechnungen schreibt und deinen Gewinn berechnet."
       state={state}
       notices={describeTaxChange(state.saved, state.data, draftCount)}
+      after={<TaxHistory />}
     >
       <StepAccounting data={state.data} errors={state.errors} update={state.update} />
     </SettingsCard>

@@ -682,6 +682,48 @@ export type Database = {
           },
         ]
       }
+      tax_years: {
+        Row: {
+          home_office: boolean | null
+          industry_code: string | null
+          is_kleinunternehmer: boolean
+          other_income_amount: number | null
+          other_income_kind: string | null
+          pausch_type: string | null
+          profit_method: string
+          svs_exempt: boolean
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          home_office?: boolean | null
+          industry_code?: string | null
+          is_kleinunternehmer: boolean
+          other_income_amount?: number | null
+          other_income_kind?: string | null
+          pausch_type?: string | null
+          profit_method: string
+          svs_exempt?: boolean
+          updated_at?: string
+          user_id?: string
+          year: number
+        }
+        Update: {
+          home_office?: boolean | null
+          industry_code?: string | null
+          is_kleinunternehmer?: boolean
+          other_income_amount?: number | null
+          other_income_kind?: string | null
+          pausch_type?: string | null
+          profit_method?: string
+          svs_exempt?: boolean
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -704,6 +746,10 @@ export type Database = {
       }
       delete_user_data: { Args: { p_user: string }; Returns: undefined }
       has_active_access: { Args: { p_user: string }; Returns: boolean }
+      is_kleinunternehmer_on: {
+        Args: { p_date: string; p_user: string }
+        Returns: boolean
+      }
       set_default_template: { Args: { p_id: string }; Returns: undefined }
     }
     Enums: {

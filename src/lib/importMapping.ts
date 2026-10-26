@@ -550,9 +550,17 @@ export interface ReviewRow extends SourceRow {
 const NO_VAT_CATEGORIES = new Set(['versicherung', 'bankgebuehren', 'zinsen', 'wko', 'tagesgeld', 'naechtigung']);
 const HAS_VAT_WORDS = /beratung|steuerberat|buchhaltung|anwalt|notar|kanzlei/;
 
+/**
+ * Kleinunternehmer-Status: für alle Zeilen gleich oder je nach Datum der Zeile
+ * (Steuer-Einstellungen pro Jahr – alte Zeilen können aus einem Jahr mit Vorsteuer stammen).
+ */
+export type KuStatus = boolean | ((date: string | null) => boolean);
+
+export const kuAt = (ku: KuStatus, r: Pick<SourceRow, 'date'>): boolean => (typeof ku === 'boolean' ? ku : ku(r.date?.iso ?? null));
+
 /** USt-Satz der Zeile: laut Tabelle, sonst je nach Kategorie 0 % oder die Vorgabe. Kleinunternehmer: immer 0. */
-export function effectiveVat(r: Pick<ReviewRow, 'vatRate' | 'defaultVat' | 'target' | 'description'>, isKU: boolean): VatRate {
-  if (isKU) return 0;
+export function effectiveVat(r: Pick<ReviewRow, 'vatRate' | 'defaultVat' | 'target' | 'description' | 'date'>, ku: KuStatus): VatRate {
+  if (kuAt(ku, r)) return 0;
   if (r.vatRate !== null) return r.vatRate;
   const id = targetCategoryId(r.target);
   if (r.target === 'svs' || (id && NO_VAT_CATEGORIES.has(id) && !(id === 'versicherung' && HAS_VAT_WORDS.test(normalizeText(r.description))))) return 0;
@@ -576,7 +584,7 @@ export function buildReviewRows(
   rows: readonly SourceRow[],
   categoryMap: Readonly<Record<string, CategoryChoice>>,
   ctx: CategoryContext,
-  vat: { isKU: boolean; defaultVat: VatRate; amountsNet?: boolean },
+  vat: { isKU: KuStatus; defaultVat: VatRate; amountsNet?: boolean },
   history?: CategoryHistory,
 ): ReviewRow[] {
   return rows.map((r, id) => {
@@ -595,7 +603,7 @@ export function buildReviewRows(
       reimbursed: false,
       defaultVat: vat.defaultVat,
     };
-    if (vat.amountsNet && !vat.isKU) row.amount = round2(r.amount * (1 + effectiveVat(row, false) / 100));
+    if (vat.amountsNet && !kuAt(vat.isKU, row)) row.amount = round2(r.amount * (1 + effectiveVat(row, false) / 100));
     return row;
   });
 }
@@ -620,7 +628,7 @@ const dupKind = (k: EntryKind): ExistingEntry['kind'] | null => (k === 'asset' ?
  * Rechnungsnummer. Jeder Eintrag in Klaro zählt nur einmal: Gibt es ihn einmal in Klaro und zweimal in der Datei, ist
  * nur einer ein Duplikat.
  */
-export function markDuplicates(rows: ReviewRow[], existing: readonly ExistingEntry[], isKU: boolean): ReviewRow[] {
+export function markDuplicates(rows: ReviewRow[], existing: readonly ExistingEntry[], isKU: KuStatus): ReviewRow[] {
   const unused = existing.map((e) => ({ ...e, day: dayNumber(e.date) }));
   const take = (i: number) => (i >= 0 ? (unused.splice(i, 1), true) : false);
   return rows.map((r) => {
@@ -656,15 +664,15 @@ function expenseInput(r: ReviewRow, categoryId: string): ExpenseFormInput {
 }
 
 /** Wird die Zeile Einnahme, SVS-Beitrag, sofort absetzbare Ausgabe oder Anlage? */
-export function rowKind(r: ReviewRow, isKU: boolean): EntryKind {
+export function rowKind(r: ReviewRow, isKU: KuStatus): EntryKind {
   if (r.target === 'income' || r.target === 'svs' || r.target === 'skip') return r.target;
-  return entryKind(expenseInput(r, targetCategoryId(r.target)!), isKU) === 'asset' ? 'asset' : 'expense';
+  return entryKind(expenseInput(r, targetCategoryId(r.target)!), kuAt(isKU, r)) === 'asset' ? 'asset' : 'expense';
 }
 
 /** Kann der Nutzer bei dieser Zeile „auf mehrere Jahre verteilen“ wählen? (Büro & Software, Sonstiges über 1.000 €) */
-export function canSpread(r: ReviewRow, isKU: boolean): boolean {
+export function canSpread(r: ReviewRow, isKU: KuStatus): boolean {
   const cat = findCategoryById(targetCategoryId(r.target) ?? '');
-  return cat?.asset === 'ask' && entryKind({ ...expenseInput(r, cat.id), spread: null }, isKU) === 'ask';
+  return cat?.asset === 'ask' && entryKind({ ...expenseInput(r, cat.id), spread: null }, kuAt(isKU, r)) === 'ask';
 }
 
 export interface ImportRecords {
@@ -677,11 +685,12 @@ export interface ImportRecords {
 const quarterOf = (iso: string): Quarter => (['Q1', 'Q2', 'Q3', 'Q4'] as const)[Math.floor((Number(iso.slice(5, 7)) - 1) / 3)]!;
 
 /** Datensätze für alle ausgewählten Zeilen (aus buildReviewRows). */
-export function buildRecords(rows: readonly ReviewRow[], isKU: boolean): ImportRecords {
+export function buildRecords(rows: readonly ReviewRow[], ku: KuStatus): ImportRecords {
   const rec: ImportRecords = { incomes: [], expenses: [], assets: [], svs_payments: [] };
   for (const r of rows) {
     if (!r.include || r.problem || !r.date || r.target === 'skip') continue;
     const date = r.date.iso;
+    const isKU = kuAt(ku, r);
     const vatRate = effectiveVat(r, isKU);
     if (r.target === 'income') {
       const net = vatRate === 0 ? null : round2(r.amount / (1 + vatRate / 100));
@@ -718,7 +727,7 @@ export interface ImportSummary {
   skipped: number;
 }
 
-export function summarize(rows: readonly ReviewRow[], isKU: boolean): ImportSummary {
+export function summarize(rows: readonly ReviewRow[], isKU: KuStatus): ImportSummary {
   const s: ImportSummary = {
     incomes: { count: 0, total: 0 }, expenses: { count: 0, total: 0 }, assets: { count: 0, total: 0 }, svs_payments: { count: 0, total: 0 }, skipped: 0,
   };

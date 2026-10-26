@@ -57,6 +57,16 @@ export interface TrackerInput {
   assessedThroughYear?: number | null;
   current: YearFigures;
   previous: YearFigures | null;
+  /** Steuer-Einstellungen des Vorjahres, falls sie sich geändert haben (sonst gelten die oben) */
+  previousSettings?: PreviousYearSettings;
+}
+
+export interface PreviousYearSettings {
+  exempt: boolean;
+  profitMethod: ProfitMethod;
+  pauschType: PauschType | null;
+  industryType: IndustryType | null;
+  otherIncome?: number;
 }
 
 /** Eine Spalte der Jahresrechnung: Umsatz − Ausgaben − Abschreibung − Arbeitsplatzpauschale − SVS − Grundfreibetrag = Einkünfte. */
@@ -159,14 +169,31 @@ export function buildSvsTracker(input: TrackerInput) {
   const insured = insuredMonths(reg, year);
   const otherIncome = input.otherIncome ?? 0;
   const app = input.arbeitsplatzpauschale ?? 0;
-  const pauschRate = input.profitMethod === 'pauschal' ? getPauschRate(input.pauschType ?? 'ku', input.industryType ?? undefined) : null;
+  const prevSettings: PreviousYearSettings = input.previousSettings ?? {
+    exempt: input.exempt,
+    profitMethod: input.profitMethod,
+    pauschType: input.pauschType,
+    industryType: input.industryType,
+    otherIncome,
+  };
+  const rateOf = (s: Pick<PreviousYearSettings, 'profitMethod' | 'pauschType' | 'industryType'>) =>
+    s.profitMethod === 'pauschal' ? getPauschRate(s.pauschType ?? 'ku', s.industryType ?? undefined) : null;
+  const pauschRate = rateOf(input);
+  const prevPauschRate = rateOf(prevSettings);
   // Pauschalierung: Satz × Umsatz (ohne weiterverrechnete Reisekosten) + zusätzlich erlaubte Ausgaben
-  const expensesFor = (revenue: number, figures: Pick<YearFigures, 'deductibleExpenses' | 'pauschalExtras' | 'reimbursedTravel'>) =>
-    pauschRate !== null
-      ? round2(calculatePauschaleExpenses(revenue, pauschRate, figures.reimbursedTravel) + pauschalExtrasFor(figures, input.pauschType))
+  const expensesWith = (
+    rate: number | null,
+    pauschType: PauschType | null,
+    revenue: number,
+    figures: Pick<YearFigures, 'deductibleExpenses' | 'pauschalExtras' | 'reimbursedTravel'>,
+  ) =>
+    rate !== null
+      ? round2(calculatePauschaleExpenses(revenue, rate, figures.reimbursedTravel) + pauschalExtrasFor(figures, pauschType))
       : round2(figures.deductibleExpenses);
+  const expensesFor = (revenue: number, figures: Pick<YearFigures, 'deductibleExpenses' | 'pauschalExtras' | 'reimbursedTravel'>) =>
+    expensesWith(pauschRate, input.pauschType, revenue, figures);
   // Abschreibung steht fürs ganze Jahr fest (keine Hochrechnung); bei Pauschalierung im Pauschalsatz enthalten
-  const depreciationFor = (figures: YearFigures) => (pauschRate !== null ? 0 : figures.depreciation);
+  const depreciationFor = (figures: YearFigures, rate: number | null = pauschRate) => (rate !== null ? 0 : figures.depreciation);
   const depreciationFull = depreciationFor(current);
 
   // ─── Umsatz bis Jahresende ───
@@ -189,8 +216,8 @@ export function buildSvsTracker(input: TrackerInput) {
   const prevColumn = hasPrevious
     ? column(
         input.previous!.revenueNet,
-        expensesFor(input.previous!.revenueNet, input.previous!),
-        depreciationFor(input.previous!),
+        expensesWith(prevPauschRate, prevSettings.pauschType, input.previous!.revenueNet, input.previous!),
+        depreciationFor(input.previous!, prevPauschRate),
         input.arbeitsplatzpauschalePrevious ?? 0,
         input.previous!.svsPaid,
       )
@@ -281,11 +308,11 @@ export function buildSvsTracker(input: TrackerInput) {
                 provisionalBasis: SVS_2026.minBasisMonthly * prevMonths,
                 months: prevMonths,
                 svsYear: prevSvsYear,
-                options,
+                options: { businessType: options.businessType, exempt: prevSettings.exempt && input.businessType === 'gewerbetreibend' },
               })
             : null;
         // Wer Vorauszahlungen zahlt, hat die Vorjahressteuer meist schon großteils vorausbezahlt
-        const tax = prepaymentQuarterly > 0 ? null : calculateAdditionalIncomeTax(col.einkuenfte, otherIncome);
+        const tax = prepaymentQuarterly > 0 ? null : calculateAdditionalIncomeTax(col.einkuenfte, prevSettings.otherIncome ?? 0);
         return { year: prevYear, column: col, svs: svsResult, incomeTax: tax };
       })()
     : null;

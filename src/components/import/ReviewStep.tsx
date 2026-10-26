@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { findCategoryById, type CategoryContext } from '@/constants/expenseCategories';
 import { MAX_USEFUL_LIFE, MIN_USEFUL_LIFE } from '@/lib/assets';
-import { canSpread, effectiveVat, rowKind, summarize, targetCategoryId, type EntryKind, type ReviewRow, type Target } from '@/lib/importMapping';
+import { canSpread, effectiveVat, kuAt, rowKind, summarize, targetCategoryId, type EntryKind, type KuStatus, type ReviewRow, type Target } from '@/lib/importMapping';
 import { formatDate } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
 import { Alert } from '@/components/ui/Alert';
@@ -36,7 +36,7 @@ export function ReviewStep({
   onImport,
 }: {
   rows: ReviewRow[];
-  isKU: boolean;
+  isKU: KuStatus;
   context: CategoryContext;
   saving: boolean;
   onChange: (id: number, patch: Partial<ReviewRow>) => void;
@@ -209,7 +209,7 @@ function ReviewItem({
 }: {
   row: ReviewRow;
   kind: EntryKind;
-  isKU: boolean;
+  isKU: KuStatus;
   context: CategoryContext;
   onChange: (patch: Partial<ReviewRow>) => void;
 }) {
@@ -237,7 +237,7 @@ function ReviewItem({
         <p className="text-xs text-slate-500">
           {r.date ? formatDate(r.date.iso) : r.dateText || 'ohne Datum'} · Zeile {r.line}
           {r.category && ` · „${r.category}“`}
-          {!isKU && kind !== 'svs' && kind !== 'skip' && ` · ${effectiveVat(r, isKU)} % USt`}
+          {!kuAt(isKU, r) && kind !== 'svs' && kind !== 'skip' && ` · ${effectiveVat(r, isKU)} % USt`}
           {r.reference && ` · ${r.reference}`}
         </p>
         <div className="flex flex-wrap gap-1.5">

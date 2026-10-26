@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, Pause, Pencil, Play, Repeat, Trash2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfileFor } from '@/contexts/AuthContext';
 import { findCategoryByLabel, EXPENSE_CATEGORIES, isCategoryOffered } from '@/constants/expenseCategories';
 import { VAT_RATES } from '@/constants/tax2026';
 import { categoryContextFor, computeExpenseValues, entryKind, validateExpenseForm, type ExpenseFormInput } from '@/lib/expenses';
@@ -346,7 +346,8 @@ const KEEP = '';
 
 /** Serie bearbeiten: gilt nur für künftige Zahlungen – bisherige bleiben, wie sie sind. */
 function SeriesFormModal({ series, onClose, onSaved }: { series: RecurringExpense | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const { profile } = useAuth();
+  // Steuer-Einstellungen des laufenden Jahres
+  const profile = useProfileFor(new Date().getFullYear());
   const isKU = profile?.is_kleinunternehmer ?? true;
   const context = categoryContextFor(profile);
   const [form, setForm] = useState(() => ({

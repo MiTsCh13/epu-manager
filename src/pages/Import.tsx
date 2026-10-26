@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useProfileFor } from '@/contexts/AuthContext';
+import { yearOfDate } from '@/lib/taxYears';
 import { findCategoryById, isCategoryOffered } from '@/constants/expenseCategories';
 import { fetchExisting, fetchHistory, saveImport, type Sheet } from '@/lib/importData';
 import {
@@ -63,8 +64,13 @@ function guessSettings(sheets: Sheet[], sheet: number | 'all', headerRow?: numbe
 }
 
 export default function Import() {
-  const { profile } = useAuth();
-  const isKU = profile?.is_kleinunternehmer ?? true;
+  const { profile: baseProfile, taxYears, profileFor } = useAuth();
+  // Kategorien nach den Steuer-Einstellungen des laufenden Jahres
+  const profile = useProfileFor(new Date().getFullYear());
+  // Kleinunternehmer-Status je Zeile nach dem Jahr ihres Datums – alte Zeilen können aus einem Jahr mit Vorsteuer stammen
+  const isKU = useCallback((date: string | null) => profileFor(yearOfDate(date))?.is_kleinunternehmer ?? true, [profileFor]);
+  // USt-Fragen in Schritt 2 nur, wenn es irgendein Jahr ohne Kleinunternehmerregelung gibt
+  const alwaysKU = (baseProfile?.is_kleinunternehmer ?? true) && taxYears.every((t) => t.is_kleinunternehmer);
   const today = toISODate(new Date());
   const context = useMemo(() => categoryContextFor(profile), [profile]);
 
@@ -215,7 +221,7 @@ export default function Import() {
             table={table}
             settings={settings}
             rows={rows}
-            isKU={isKU}
+            isKU={alwaysKU}
             onChange={changeSettings}
             onBack={restart}
             onNext={goCategories}

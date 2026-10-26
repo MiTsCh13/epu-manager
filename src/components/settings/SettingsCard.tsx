@@ -4,6 +4,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import type { SettingsSectionState } from '@/hooks/useSettingsSection';
 import type { ChangeNotice } from '@/lib/profileSettings';
+import { TaxStartChoice } from './TaxYearParts';
 
 /** Karte für einen Einstellungs-Abschnitt mit eigenem Speichern/Verwerfen. */
 export function SettingsCard({
@@ -14,6 +15,7 @@ export function SettingsCard({
   state,
   notices = [],
   children,
+  after,
 }: {
   id: string;
   icon: LucideIcon;
@@ -22,6 +24,8 @@ export function SettingsCard({
   state: SettingsSectionState;
   notices?: ChangeNotice[];
   children: ReactNode;
+  /** Unter dem Formular (eigene Bedienelemente, z. B. Verlauf) */
+  after?: ReactNode;
 }) {
   return (
     <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-20 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:p-6">
@@ -40,6 +44,8 @@ export function SettingsCard({
         }}
       >
         {children}
+
+        {state.dirty && state.taxChanged && <TaxStartChoice id={`${state.section}-tax-start`} state={state} />}
 
         {state.dirty && notices.length > 0 && (
           <div className="mt-5 space-y-2" data-testid={`${id}-notices`}>
@@ -62,6 +68,7 @@ export function SettingsCard({
           </Button>
         </div>
       </form>
+      {after}
     </section>
   );
 }

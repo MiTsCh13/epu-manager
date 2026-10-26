@@ -14,6 +14,7 @@ export type Product = Tables['products']['Row'];
 export type ImportRecord = Tables['imports']['Row'];
 export type RecurringExpense = Tables['recurring_expenses']['Row'];
 export type InvoiceTemplate = Tables['invoice_templates']['Row'];
+export type TaxYear = Tables['tax_years']['Row'];
 
 export type ProfileUpdate = Tables['profiles']['Update'];
 export type ClientInsert = Tables['clients']['Insert'];
@@ -24,6 +25,7 @@ export type AssetInsert = Tables['assets']['Insert'];
 export type IncomeInsert = Tables['incomes']['Insert'];
 export type RecurringExpenseInsert = Tables['recurring_expenses']['Insert'];
 export type RecurringExpenseUpdate = Tables['recurring_expenses']['Update'];
+export type TaxYearInsert = Tables['tax_years']['Insert'];
 
 // Domänen-Enums (entsprechen den CHECK-Constraints in der DB)
 export type ProfitMethod = 'pauschal' | 'euer';

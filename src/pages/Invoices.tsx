@@ -39,7 +39,7 @@ export default function Invoices() {
   const loading = invoicesLoading || other.loading;
   const error = invoicesError ?? other.error;
   const reload = () => Promise.all([reloadInvoices(), other.reload()]);
-  const { profile } = useAuth();
+  const { profileFor } = useAuth();
   const [year, setYear] = useState(new Date().getFullYear());
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>('date-desc');
@@ -77,7 +77,7 @@ export default function Invoices() {
     paidThisYear.reduce((s, i) => s + Number(i.subtotal), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount_net ?? i.amount), 0);
   const earnedGross = paidThisYear.reduce((s, i) => s + Number(i.total), 0) + otherThisYear.reduce((s, i) => s + Number(i.amount), 0);
   const earnedSub = otherThisYear.length > 0 ? 'Rechnungen und weitere Einnahmen' : 'bezahlte Rechnungen';
-  const isKU = !!profile?.is_kleinunternehmer;
+  const isKU = !!profileFor(year)?.is_kleinunternehmer;
 
   const earnedCard = (
     <StatCard

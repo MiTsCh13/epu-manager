@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, Laptop, Plus, ReceiptEuro, Repeat, ScanText } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useProfileFor } from '@/contexts/AuthContext';
 import { useExpensesData } from '@/hooks/useExpensesData';
 import { useRecurring } from '@/hooks/useRecurring';
 import { countsUnder, EXPENSE_CATEGORIES } from '@/constants/expenseCategories';
@@ -37,6 +37,8 @@ export default function Expenses() {
   const { profile } = useAuth();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  // Steuer-Einstellungen des gewählten Jahres (Gewinnermittlung, Arbeitsplatz zu Hause, …)
+  const settings = useProfileFor(year);
   const data = useExpensesData(year);
   const recurring = useRecurring();
   const [formOpen, setFormOpen] = useState(false);
@@ -77,8 +79,8 @@ export default function Expenses() {
   const { hash } = useLocation();
   // Bei Einnahmen-Ausgaben-Rechnung liegen die Serien im Reiter „Wiederkehrend“ → den zuerst öffnen
   useEffect(() => {
-    if (hash === '#wiederkehrend' && profile?.profit_method !== 'pauschal') setTab('wiederkehrend');
-  }, [hash, profile?.profit_method]);
+    if (hash === '#wiederkehrend' && settings?.profit_method !== 'pauschal') setTab('wiederkehrend');
+  }, [hash, settings?.profit_method]);
   useEffect(() => {
     if (!data.loading && !recurring.loading && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
   }, [data.loading, recurring.loading, hash, tab]);
@@ -90,11 +92,11 @@ export default function Expenses() {
   const intervalOf = useCallback((e: Expense) => (e.recurring_id ? (byId.get(e.recurring_id)?.interval_months ?? null) : null), [byId]);
   const editingSeries = editing?.kind === 'expense' && editing.expense.recurring_id ? (recurring.byId.get(editing.expense.recurring_id) ?? null) : null;
 
-  const profitMethod = (profile?.profit_method ?? 'euer') as ProfitMethod;
-  const pauschType = (profile?.pausch_type ?? null) as PauschType | null;
-  const industryType = (profile?.industry_code ?? null) as IndustryType | null;
+  const profitMethod = (settings?.profit_method ?? 'euer') as ProfitMethod;
+  const pauschType = (settings?.pausch_type ?? null) as PauschType | null;
+  const industryType = (settings?.industry_code ?? null) as IndustryType | null;
   const pauschal = profitMethod === 'pauschal';
-  const context = categoryContextFor(profile);
+  const context = categoryContextFor(settings);
 
   const totals = expenseTotals(
     data.expenses.map((e) => ({ ...e, amount: Number(e.amount), deductible_amount: e.deductible_amount === null ? null : Number(e.deductible_amount) })),
@@ -109,11 +111,11 @@ export default function Expenses() {
     data.assets.map((a) => ({ cost: Number(a.cost ?? a.amount_net ?? a.amount), purchase_date: a.purchase_date, useful_life_years: a.useful_life_years })),
     year,
   );
-  const otherKind = (profile?.other_income_kind ?? null) as OtherIncomeKind | null;
+  const otherKind = (settings?.other_income_kind ?? null) as OtherIncomeKind | null;
   const app = calculateArbeitsplatzpauschale({
-    homeOffice: profile?.home_office ?? null,
+    homeOffice: settings?.home_office ?? null,
     otherIncomeKind: otherKind,
-    otherIncomeAmount: otherIncomeAmount(otherKind, profile?.other_income_amount == null ? null : Number(profile.other_income_amount)),
+    otherIncomeAmount: otherIncomeAmount(otherKind, settings?.other_income_amount == null ? null : Number(settings.other_income_amount)),
     year,
     registrationDate: profile?.svs_registration_date ? new Date(profile.svs_registration_date) : null,
   });
@@ -236,7 +238,7 @@ export default function Expenses() {
               />
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              {profile?.home_office === null ? (
+              {settings?.home_office === null ? (
                 <p className="text-sm text-slate-600 sm:max-w-md">
                   Arbeitest du von zu Hause?{' '}
                   <Link to="/einstellungen#steuer" className="font-semibold text-primary hover:underline">

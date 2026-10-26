@@ -253,3 +253,23 @@ describe('buildSvsTracker – Varianten', () => {
     expect(m.alerts.map((a) => a.id)).toContain('ku-approaching');
   });
 });
+
+describe('buildSvsTracker – Einstellungen pro Jahr', () => {
+  it('Vorjahr mit eigener Gewinnermittlung (Pauschalierung), laufendes Jahr EÜR', () => {
+    const m = buildSvsTracker({
+      ...base,
+      previous: { ...base.previous!, depreciation: 1000 },
+      previousSettings: { exempt: false, profitMethod: 'pauschal', pauschType: 'ku', industryType: 'service', otherIncome: 0 },
+    });
+    // Vorjahr: 20 % von 19.800 €, Abschreibung steckt im Pauschalsatz
+    expect(m.previous!.column.expenses).toBe(3960);
+    expect(m.previous!.column.depreciation).toBe(0);
+    // Laufendes Jahr bleibt bei den einzeln erfassten Ausgaben
+    expect(m.full.expenses).toBe(buildSvsTracker(base).full.expenses);
+  });
+
+  it('ohne previousSettings gelten die Einstellungen des laufenden Jahres auch fürs Vorjahr', () => {
+    const m = buildSvsTracker(base);
+    expect(m.previous!.column.expenses).toBe(3400);
+  });
+});

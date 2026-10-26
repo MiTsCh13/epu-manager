@@ -167,9 +167,9 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
     notices.push({
       id: 'ku-off',
       type: 'warning',
-      title: 'Du verrechnest ab jetzt Umsatzsteuer',
+      title: 'Du verrechnest dann Umsatzsteuer',
       text: [
-        'Diese Änderung beeinflusst deine Rechnungsstellung: Neue Rechnungen weisen Umsatzsteuer aus, der Kleinunternehmer-Hinweis entfällt. Bereits ausgestellte Rechnungen bleiben unverändert.',
+        'Diese Änderung beeinflusst deine Rechnungsstellung: Rechnungen für Leistungen ab dem gewählten Jahr weisen Umsatzsteuer aus, der Kleinunternehmer-Hinweis entfällt. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `Du hast ${drafts} – prüfe dort den USt-Satz.` : '',
         'Melde dich beim Finanzamt für die Umsatzsteuer an (UID-Nummer, Umsatzsteuervoranmeldung), am besten gemeinsam mit deiner Steuerberatung.',
         `Wichtig: Verzichtest du freiwillig auf die Kleinunternehmerregelung, obwohl dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} liegt, bist du fünf Jahre an diese Entscheidung gebunden.`,
@@ -184,7 +184,7 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
       type: 'warning',
       title: 'Du wirst Kleinunternehmer',
       text: [
-        'Diese Änderung beeinflusst deine Rechnungsstellung: Neue Rechnungen enthalten keine Umsatzsteuer mehr, dafür automatisch den Hinweis „§ 6 Abs. 1 Z 27 UStG“. Bereits ausgestellte Rechnungen bleiben unverändert.',
+        'Diese Änderung beeinflusst deine Rechnungsstellung: Rechnungen für Leistungen ab dem gewählten Jahr enthalten keine Umsatzsteuer mehr, dafür automatisch den Hinweis „§ 6 Abs. 1 Z 27 UStG“. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `${drafts} ${draftCount === 1 ? 'wird' : 'werden'} automatisch auf 0 % USt umgestellt.` : '',
         'Beachte: Als Kleinunternehmer kannst du dir keine Vorsteuer zurückholen.',
         `Das geht nur, wenn dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} brutto liegt und du nicht in den letzten fünf Jahren freiwillig auf die Kleinunternehmerregelung verzichtet hast.`,
@@ -199,14 +199,14 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
       id: 'pausch-to-euer',
       type: 'warning',
       title: 'Achtung: Bindungsfrist',
-      text: 'Wechselst du von der Pauschalierung zur Einnahmen-Ausgaben-Rechnung, kannst du frühestens nach fünf Jahren wieder pauschalieren (§ 17 Abs. 3 EStG). Die Gewinnermittlung gilt immer für das ganze Kalenderjahr – besprich den Wechsel am besten mit deiner Steuerberatung. Ab jetzt zählen deine einzeln erfassten Ausgaben.',
+      text: 'Wechselst du von der Pauschalierung zur Einnahmen-Ausgaben-Rechnung, kannst du frühestens nach fünf Jahren wieder pauschalieren (§ 17 Abs. 3 EStG). Die Gewinnermittlung gilt immer für das ganze Kalenderjahr – besprich den Wechsel am besten mit deiner Steuerberatung. Ab dem gewählten Jahr zählen deine einzeln erfassten Ausgaben.',
     });
   } else if (saved.profit_method === 'euer' && next.profit_method === 'pauschal') {
     notices.push({
       id: 'euer-to-pausch',
       type: 'info',
       title: 'Pauschalierung gilt fürs ganze Jahr',
-      text: 'Klaro rechnet dein ganzes Kalenderjahr ab sofort mit dem Pauschalsatz. Einzeln erfasste Ausgaben bleiben gespeichert, zählen aber nicht mehr zum Gewinn. Hast du in den letzten fünf Jahren von der Pauschalierung zur Einnahmen-Ausgaben-Rechnung gewechselt, ist eine erneute Pauschalierung noch nicht erlaubt (§ 17 Abs. 3 EStG).',
+      text: 'Klaro rechnet ab dem gewählten Jahr jedes ganze Kalenderjahr mit dem Pauschalsatz. Einzeln erfasste Ausgaben bleiben gespeichert, zählen aber nicht mehr zum Gewinn. Hast du in den letzten fünf Jahren von der Pauschalierung zur Einnahmen-Ausgaben-Rechnung gewechselt, ist eine erneute Pauschalierung noch nicht erlaubt (§ 17 Abs. 3 EStG).',
     });
   } else if (
     next.profit_method === 'pauschal' &&
@@ -218,7 +218,7 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
       id: 'pausch-rate',
       type: 'info',
       title: `Neuer Pauschalsatz: ${rate} %`,
-      text: `Klaro rechnet dein ganzes Kalenderjahr ab sofort mit ${rate} % pauschalen Ausgaben. Die Art der Pauschalierung gilt immer für das ganze Kalenderjahr.`,
+      text: `Klaro rechnet ab dem gewählten Jahr jedes ganze Kalenderjahr mit ${rate} % pauschalen Ausgaben. Die Art der Pauschalierung gilt immer für das ganze Kalenderjahr.`,
     });
   }
 

@@ -345,6 +345,27 @@ describe('Werte bauen', () => {
     expect(summarize(rows, true)).toMatchObject({ incomes: { count: 1, total: 1500 }, assets: { count: 1 }, skipped: 1 });
   });
 
+  it('Kleinunternehmer-Status je Jahr: 2025 mit Vorsteuer, 2026 als Kleinunternehmer', () => {
+    // 2025 USt-pflichtig, ab 2026 Kleinunternehmer (Steuer-Einstellungen pro Jahr)
+    const ku = (date: string | null) => (date ?? '2026').slice(0, 4) >= '2026';
+    const rows = buildReviewRows(
+      [
+        src({ description: 'Laptop', amount: 1200, date: { iso: '2025-12-10', yearMissing: false } }),
+        src({ description: 'Laptop', amount: 1200, date: { iso: '2026-01-10', yearMissing: false } }),
+        src({ direction: 'in', amount: 1200, date: { iso: '2025-11-03', yearMissing: false } }),
+      ],
+      {},
+      euer,
+      { isKU: ku, defaultVat: 20 },
+    );
+    const rec = buildRecords(rows, ku);
+    // 2025: 1.000 € netto → sofort absetzbar; 2026: 1.200 € brutto über der GWG-Grenze → Anlage
+    expect(rec.expenses.map((e) => [e.expense_date, e.amount_net, e.deductible_amount])).toEqual([['2025-12-10', 1000, 1000]]);
+    expect(rec.assets.map((a) => [a.purchase_date, a.amount_net])).toEqual([['2026-01-10', null]]);
+    expect(rec.incomes[0]!.amount_net).toBe(1000);
+    expect(summarize(rows, ku)).toMatchObject({ expenses: { count: 1 }, assets: { count: 1 }, incomes: { count: 1 } });
+  });
+
   it('USt-Pflichtig: Netto aus Satz der Tabelle oder Vorgabe; 1.200 € brutto = 1.000 € netto bleibt sofort absetzbar', () => {
     const rows = buildReviewRows(
       [src({ direction: 'in', amount: 1200 }), src({ description: 'Laptop', amount: 1200 }), src({ description: 'Fachbuch', amount: 110, vatRate: 10 })],

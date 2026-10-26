@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfileFor } from '@/contexts/AuthContext';
 import { useProfilePatch } from '@/hooks/useProfilePatch';
 import { formatEuro } from '@/lib/money';
 import type { SvsTrackerModel, YearColumn } from '@/lib/svsTracker';
@@ -28,7 +28,7 @@ const percent = (part: number, whole: number) => `${Math.round((part / whole) * 
 
 /** 1 · Jahresrechnung: Umsatz − Ausgaben − Abschreibung − SVS − Grundfreibetrag = Einkünfte. Die Steuer darauf steht in Schritt 3. */
 export function YearBreakdown({ model }: { model: SvsTrackerModel }) {
-  const { profile } = useAuth();
+  const profile = useProfileFor(model.year);
   const patch = useProfilePatch();
   const [view, setView] = useState<'ytd' | 'full'>('ytd');
   const [editRevenue, setEditRevenue] = useState(false);

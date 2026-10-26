@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { categoryContextFor, validateReceiptFile } from '@/lib/expenses';
 import { toISODate } from '@/lib/invoices';
+import { yearOfDate } from '@/lib/taxYears';
 import { formatDecimalInput, formatEuro, parseDecimal, round2 } from '@/lib/money';
 import { buildPrefill, type ScanResult } from '@/lib/receiptPrefill';
 import { loadHistory, scanReceipt } from '@/lib/receiptScan';
@@ -42,7 +43,7 @@ export function useReceiptScanner({
   onExpense: (scan: ReceiptScan) => void;
   onAddSvs: (p: SvsPaymentInsert) => Promise<{ error: string | null }>;
 }): ReceiptScanner {
-  const { profile } = useAuth();
+  const { profileFor } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ step: 'idle' });
   // Abbrechen während des Lesens: Ergebnis verwerfen (die Anfrage selbst läuft zu Ende)
@@ -70,9 +71,9 @@ export function useReceiptScanner({
 
     const id = ++runId.current;
     setPhase({ step: 'reading', file });
-    const isKU = profile?.is_kleinunternehmer ?? true;
-    const ctx = categoryContextFor(profile);
     const today = toISODate(new Date());
+    // Auslesen mit den Einstellungen von heuer; vorbefüllt wird nach dem Jahr des Belegs (siehe unten)
+    const ctx = categoryContextFor(profileFor(yearOfDate(today)));
     const [response, history] = await Promise.all([scanReceipt(file, ctx, today), loadHistory()]);
     if (id !== runId.current || !mounted.current) return;
 
@@ -93,7 +94,10 @@ export function useReceiptScanner({
       return setPhase({ step: 'other', file, title: 'Kein Beleg erkannt', message: 'Klaro hat darin keinen Beleg gefunden. Du kannst die Ausgabe trotzdem selbst eintragen.' });
     }
     close();
-    onExpense({ file, prefill: buildPrefill(result, { ctx, isKU, today, history }) });
+    // Kleinunternehmer-Status und Gewinnermittlung im Jahr des Belegs – ein alter Beleg kann aus einem Jahr mit Vorsteuer stammen
+    const atDate = profileFor(yearOfDate(result.date && result.date <= today ? result.date : today));
+    const prefill = buildPrefill(result, { ctx: categoryContextFor(atDate), isKU: atDate?.is_kleinunternehmer ?? true, today, history });
+    onExpense({ file, prefill });
   }
 
   const elements = (

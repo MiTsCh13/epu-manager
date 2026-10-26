@@ -17,6 +17,7 @@ import {
   type ExpenseFormInput,
 } from '@/lib/expenses';
 import { toISODate } from '@/lib/invoices';
+import { yearOfDate } from '@/lib/taxYears';
 import { kilometergeldRate } from '@/lib/profit';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/receipts';
@@ -137,15 +138,18 @@ export function ExpenseFormModal({
   onDeleteExpense: (id: string) => Result;
   onDeleteAsset: (id: string) => Result;
 }) {
-  const { user, profile } = useAuth();
-  const isKU = profile?.is_kleinunternehmer ?? true;
-  const context = categoryContextFor(profile);
-  const pauschal = context.profitMethod === 'pauschal';
+  const { user, profileFor } = useAuth();
+  // Steuer-Einstellungen im Jahr des Ausgaben-Datums – sie können sich von Jahr zu Jahr ändern
+  const kuIn = (date: string | null | undefined) => profileFor(yearOfDate(date))?.is_kleinunternehmer ?? true;
   const record = entry?.kind === 'asset' ? entry.asset : (entry?.expense ?? null);
   const existingReceipt = record?.receipt_url ?? null;
+  const startKU = kuIn(entry?.kind === 'asset' ? entry.asset.purchase_date : entry?.expense.expense_date);
   // Direkt mit den Werten initialisieren (Aufrufer setzt key je Eintrag) – kein leeres Aufblitzen
-  const initialForm = () => (scan && !entry ? { ...toForm(null, isKU), ...scan.prefill.form } : toForm(entry, isKU));
+  const initialForm = () => (scan && !entry ? { ...toForm(null, startKU), ...scan.prefill.form } : toForm(entry, startKU));
   const [form, setForm] = useState<ExpenseFormInput>(initialForm);
+  const isKU = kuIn(form.date);
+  const context = categoryContextFor(profileFor(yearOfDate(form.date)));
+  const pauschal = context.profitMethod === 'pauschal';
   const [customLife, setCustomLife] = useState(() => !!form.usefulLife && !USEFUL_LIFE_PRESETS.some((p) => String(p.years) === form.usefulLife));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
   const [file, setFile] = useState<File | null>(() => scan?.file ?? null);
@@ -166,7 +170,7 @@ export function ExpenseFormModal({
     setRemoveReceipt(false);
     setRecurring(NO_RECURRING);
     setRecurringError(undefined);
-  }, [open, entry, scan, isKU]);
+  }, [open, entry, scan, startKU]);
 
   const set = (patch: Partial<ExpenseFormInput>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -407,7 +411,12 @@ export function ExpenseFormModal({
             error={errors.amount}
             onChange={(e) => set({ amount: e.target.value })}
           />
-          <Field label="Datum" type="date" max={today} value={form.date} error={errors.date} onChange={(e) => set({ date: e.target.value })} />
+          <Field label="Datum" type="date" max={today} value={form.date} error={errors.date} onChange={(e) => {
+              const date = e.target.value;
+              // Datum in ein Jahr mit anderem Kleinunternehmer-Status verschoben → passenden USt-Satz vorschlagen
+              set({ date, ...(kuIn(date) !== isKU && { vatRate: kuIn(date) ? 0 : 20 }) });
+            }}
+          />
         </div>
 
         {!isKU && !calculated && (
