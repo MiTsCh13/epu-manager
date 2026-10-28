@@ -365,10 +365,24 @@ describe('getSVSAlerts', () => {
     expect(a[0]?.message).toContain('55.000');
   });
 
-  it('Umsatz > 55.000 €: kritisch', () => {
-    const a = getSVSAlerts({ ...base, annualRevenue: 55001, today: farFromDue });
+  it('Umsatz genau 55.000 €: noch Vorwarnung', () => {
+    expect(ids(getSVSAlerts({ ...base, annualRevenue: 55000, today: farFromDue }))).toEqual(['ku-approaching']);
+  });
+
+  it('Umsatz > 55.000 € bis 60.500 €: Toleranz, heuer noch Kleinunternehmer', () => {
+    for (const annualRevenue of [55001, 60500]) {
+      const a = getSVSAlerts({ ...base, annualRevenue, today: farFromDue });
+      expect(ids(a)).toEqual(['ku-tolerance']);
+      expect(a[0]?.urgency).toBe('warning');
+      expect(a[0]?.message).toContain('Ab nächstem Jahr');
+    }
+  });
+
+  it('Umsatz > 60.500 €: kritisch, Wechsel mitten im Jahr nicht abgebildet', () => {
+    const a = getSVSAlerts({ ...base, annualRevenue: 60501, today: farFromDue });
     expect(ids(a)).toEqual(['ku-exceeded']);
     expect(a[0]?.urgency).toBe('critical');
+    expect(a[0]?.message).toContain('bildet Klaro nicht ab');
   });
 
   it('Ausnahme verloren: kritischer Hinweis', () => {

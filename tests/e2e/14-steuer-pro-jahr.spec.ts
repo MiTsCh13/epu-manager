@@ -21,7 +21,7 @@ test('Kleinunternehmer ab nächstem Jahr beenden: heuer bleibt, Rechnung im neue
   // Formular zeigt wieder die Werte von heuer und gilt als gespeichert
   await expect(card.getByRole('button', { name: 'Gespeichert' })).toBeDisabled();
   await expect(card.getByTestId('accounting-tax-start')).toBeHidden();
-  await expect(card.getByRole('radio', { name: /Unter 55.000 € Umsatz/ })).toBeChecked();
+  await expect(card.getByRole('radio', { name: /Bis .*55\.000.* Umsatz/ })).toBeChecked();
 
   // Heuer bleibt Kleinunternehmer (Profil unverändert), ab nächstem Jahr eine eigene Einstellung
   const history = page.getByTestId('tax-history');

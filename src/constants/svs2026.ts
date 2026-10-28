@@ -27,6 +27,9 @@ export const SVS_2026 = {
   // Kleinunternehmer-Umsatzgrenze (USt, brutto)
   kleinunternehmerThreshold: 55000,
   kleinunternehmerWarningThreshold: 45000, // Ab hier Vorwarnung
+  // Toleranz 10 % (USP, Regelung seit 2025): bis hier bleibt die Befreiung bis Jahresende, darüber
+  // entfällt sie ab dem Umsatz, mit dem die Grenze überschritten wird. Im Folgejahr jedenfalls USt-pflichtig.
+  kleinunternehmerToleranceLimit: 60500,
 
   // Ausnahme von der Pflichtversicherung (Kleinstunternehmerregelung, nur GSVG, auf Antrag):
   // Umsatz höchstens 55.000 € und Gewinn höchstens registrationThreshold – sonst rückwirkend pflichtversichert

@@ -29,7 +29,7 @@ export const GLOSSARY = {
   },
   kleinunternehmer: {
     term: 'Kleinunternehmer',
-    text: 'Wenn dein Umsatz unter 55.000 € im Jahr liegt, musst du keine Umsatzsteuer verrechnen. Dafür darfst du dir auch keine Vorsteuer zurückholen.',
+    text: 'Liegt dein Umsatz bei höchstens 55.000 € im Jahr (und war er auch im Vorjahr nicht höher), musst du keine Umsatzsteuer verrechnen. Dafür darfst du dir auch keine Vorsteuer zurückholen. Überschreitest du die Grenze um höchstens 10 %, bleibst du heuer noch Kleinunternehmer, ab dem nächsten Jahr nicht mehr.',
   },
   uid: {
     term: 'UID-Nummer',

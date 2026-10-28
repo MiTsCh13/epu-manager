@@ -351,18 +351,23 @@ export function getSVSAlerts(params: {
   }
 
   if (params.isKleinunternehmer) {
-    if (params.annualRevenue > SVS_2026.kleinunternehmerThreshold) {
+    if (params.annualRevenue > SVS_2026.kleinunternehmerToleranceLimit) {
       alerts.push({
         id: 'ku-exceeded',
         urgency: 'critical',
-        message:
-          'Du hast die Umsatzgrenze überschritten — du musst dich für USt anmelden. Wende dich an deinen Steuerberater.',
+        message: `Dein Umsatz liegt über ${formatEuro(SVS_2026.kleinunternehmerToleranceLimit, true)} (Kleinunternehmergrenze plus 10 % Toleranz). Ab der Rechnung, mit der du diese Grenze überschritten hast, musst du Umsatzsteuer verrechnen – auch für den Rest des Jahres. Diesen Wechsel mitten im Jahr bildet Klaro nicht ab, es rechnet weiter das ganze Jahr als Kleinunternehmer. Wende dich bitte an deine Steuerberatung: Du brauchst eine UID-Nummer, gibst ab dann Umsatzsteuer-Voranmeldungen ab, und die Rechnung, mit der du die Grenze überschritten hast, muss eventuell korrigiert werden.`,
+      });
+    } else if (params.annualRevenue > SVS_2026.kleinunternehmerThreshold) {
+      alerts.push({
+        id: 'ku-tolerance',
+        urgency: 'warning',
+        message: `Du hast die Kleinunternehmergrenze (${formatEuro(SVS_2026.kleinunternehmerThreshold, true)}) überschritten, liegst aber noch in der Toleranz von 10 %. Heuer bleibst du Kleinunternehmer, solange dein Umsatz nicht über ${formatEuro(SVS_2026.kleinunternehmerToleranceLimit, true)} steigt. Ab nächstem Jahr musst du Umsatzsteuer verrechnen – stell das in den Einstellungen bei „Ab ${today.getFullYear() + 1}“ um.`,
       });
     } else if (params.annualRevenue > SVS_2026.kleinunternehmerWarningThreshold) {
       alerts.push({
         id: 'ku-approaching',
         urgency: 'warning',
-        message: `Du näherst dich der Kleinunternehmergrenze (${formatEuro(SVS_2026.kleinunternehmerThreshold, true)}). Prüfe ob eine USt-Anmeldung vorbereitet werden muss.`,
+        message: `Du näherst dich der Kleinunternehmergrenze (${formatEuro(SVS_2026.kleinunternehmerThreshold, true)}). Überschreitest du sie um höchstens 10 % (bis ${formatEuro(SVS_2026.kleinunternehmerToleranceLimit, true)}), bleibst du heuer noch Kleinunternehmer – ab nächstem Jahr müsstest du dann Umsatzsteuer verrechnen.`,
       });
     }
   }

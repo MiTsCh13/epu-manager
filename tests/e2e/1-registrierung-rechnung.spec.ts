@@ -49,7 +49,7 @@ test('neue:r Nutzer:in stellt die erste Rechnung aus und lädt das PDF herunter'
 
   // Schritt 2 – Wie rechnest du ab?
   await expect(page.getByRole('heading', { name: 'Wie rechnest du ab?' })).toBeVisible();
-  await page.getByText('Unter 55.000 € Umsatz, keine USt').click();
+  await page.getByText(/Bis .*55\.000.* Umsatz, keine USt/).click();
   await page.getByText('Du erfasst jede Ausgabe einzeln.').click();
   await page.getByText('Ich habe kein Büro, Atelier und keine Praxis außer Haus.').click();
   await page.getByText('Nur meine Selbständigkeit').click();

@@ -82,7 +82,9 @@ describe('getKleinunternehmerStatus', () => {
     [45000, 'ok'],
     [45001, 'approaching'],
     [55000, 'approaching'],
-    [55001, 'exceeded'],
+    [55001, 'tolerance'],
+    [60500, 'tolerance'],
+    [60501, 'exceeded'],
   ] as const)('%f € → %s', (revenue, status) => {
     expect(getKleinunternehmerStatus(revenue)).toBe(status);
   });

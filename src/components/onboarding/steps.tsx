@@ -3,6 +3,7 @@ import { Alert } from '@/components/ui/Alert';
 import { ChoiceCards } from '@/components/ui/ChoiceCards';
 import { Field } from '@/components/ui/Field';
 import { NumberFormatField } from '@/components/invoices/NumberFormatField';
+import { SVS_2026 } from '@/constants/svs2026';
 import { formatEuro, parseDecimal } from '@/lib/money';
 import { calculateArbeitsplatzpauschale } from '@/lib/profit';
 import { formatIban, type OnboardingData, type OnboardingErrors } from '@/lib/validation';
@@ -135,7 +136,7 @@ export function StepAccounting({ data, errors, update }: StepProps) {
             })
           }
           options={[
-            { value: true, title: 'Ja', description: 'Unter 55.000 € Umsatz, keine USt' },
+            { value: true, title: 'Ja', description: `Bis ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} Umsatz, keine USt` },
             { value: false, title: 'Nein', description: 'Ich verrechne Umsatzsteuer' },
           ]}
         />
@@ -143,6 +144,12 @@ export function StepAccounting({ data, errors, update }: StepProps) {
           <Alert type="info">
             Auf deinen Rechnungen muss der Hinweis <strong>„§ 6 Abs. 1 Z 27 UStG“</strong> stehen. Keine Sorge – Klaro
             fügt ihn automatisch ein.
+            <br />
+            <br />
+            Gut zu wissen: Klaro rechnet den Kleinunternehmer-Status immer für das ganze Kalenderjahr. Steigt dein
+            Umsatz über {formatEuro(SVS_2026.kleinunternehmerToleranceLimit, true)} (Grenze plus 10 % Toleranz), musst
+            du schon ab der Rechnung, mit der du darüber kommst, Umsatzsteuer verrechnen. Diesen Wechsel mitten im Jahr
+            bildet Klaro nicht ab – sprich dann mit deiner Steuerberatung.
           </Alert>
         )}
       </div>

@@ -63,10 +63,11 @@ export function calculateInvoiceTotals(params: {
 
 // ─── Kleinunternehmergrenze ─────────────────────────────────
 
-export type KleinunternehmerStatus = 'ok' | 'approaching' | 'exceeded';
+export type KleinunternehmerStatus = 'ok' | 'approaching' | 'tolerance' | 'exceeded';
 
 export function getKleinunternehmerStatus(annualRevenue: number): KleinunternehmerStatus {
-  if (annualRevenue > SVS_2026.kleinunternehmerThreshold) return 'exceeded';
+  if (annualRevenue > SVS_2026.kleinunternehmerToleranceLimit) return 'exceeded';
+  if (annualRevenue > SVS_2026.kleinunternehmerThreshold) return 'tolerance';
   if (annualRevenue > SVS_2026.kleinunternehmerWarningThreshold) return 'approaching';
   return 'ok';
 }

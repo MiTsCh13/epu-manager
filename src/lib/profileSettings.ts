@@ -172,7 +172,7 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
         'Diese Änderung beeinflusst deine Rechnungsstellung: Rechnungen für Leistungen ab dem gewählten Jahr weisen Umsatzsteuer aus, der Kleinunternehmer-Hinweis entfällt. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `Du hast ${drafts} – prüfe dort den USt-Satz.` : '',
         'Melde dich beim Finanzamt für die Umsatzsteuer an (UID-Nummer, Umsatzsteuervoranmeldung), am besten gemeinsam mit deiner Steuerberatung.',
-        `Wichtig: Verzichtest du freiwillig auf die Kleinunternehmerregelung, obwohl dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} liegt, bist du fünf Jahre an diese Entscheidung gebunden.`,
+        `Wichtig: Verzichtest du freiwillig auf die Kleinunternehmerregelung, obwohl dein Umsatz bei höchstens ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} liegt, bist du fünf Jahre an diese Entscheidung gebunden.`,
         next.uid_number.trim() ? '' : 'Trage danach deine UID-Nummer unter „Adresse, Bank & Rechnungen“ ein.',
       ]
         .filter(Boolean)
@@ -187,7 +187,7 @@ export function describeTaxChange(saved: SettingsData, next: SettingsData, draft
         'Diese Änderung beeinflusst deine Rechnungsstellung: Rechnungen für Leistungen ab dem gewählten Jahr enthalten keine Umsatzsteuer mehr, dafür automatisch den Hinweis „§ 6 Abs. 1 Z 27 UStG“. Bereits ausgestellte Rechnungen bleiben unverändert.',
         draftCount > 0 ? `${drafts} ${draftCount === 1 ? 'wird' : 'werden'} automatisch auf 0 % USt umgestellt.` : '',
         'Beachte: Als Kleinunternehmer kannst du dir keine Vorsteuer zurückholen.',
-        `Das geht nur, wenn dein Umsatz unter ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} brutto liegt und du nicht in den letzten fünf Jahren freiwillig auf die Kleinunternehmerregelung verzichtet hast.`,
+        `Das geht nur, wenn dein Umsatz höchstens ${formatEuro(SVS_2026.kleinunternehmerThreshold, true)} brutto beträgt und du nicht in den letzten fünf Jahren freiwillig auf die Kleinunternehmerregelung verzichtet hast.`,
       ]
         .filter(Boolean)
         .join(' '),
