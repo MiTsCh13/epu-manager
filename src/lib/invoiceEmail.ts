@@ -16,7 +16,8 @@ const plain = (s: string) => s.replace(/[\u00a0\u202f\u2009]/g, ' ');
 
 /** Vorschlag für die Mail zur Rechnung – an den Kunden gerichtet, daher in der Sie-Form. */
 export function buildInvoiceEmail(
-  invoice: Pick<Invoice, 'invoice_number' | 'is_honorarnote' | 'total' | 'due_date' | 'status' | 'payment_method' | 'client_snapshot' | 'issuer_snapshot'>,
+  invoice: Pick<Invoice, 'invoice_number' | 'is_honorarnote' | 'total' | 'due_date' | 'status' | 'payment_method' | 'client_snapshot' | 'issuer_snapshot'> &
+    Partial<Pick<Invoice, 'cancels_invoice_id' | 'cancels_invoice_number' | 'cancels_invoice_date'>>,
   today: Date = new Date(),
 ): InvoiceEmail {
   const client = (invoice.client_snapshot ?? null) as PartySnapshot | null;
@@ -35,14 +36,18 @@ export function buildInvoiceEmail(
         : `Bitte überweisen Sie den Betrag auf das in der ${doc} angegebene Konto.`;
 
   const greeting = client?.name ? `Guten Tag ${client.name},` : 'Guten Tag,';
+  // Stornorechnung: keine Zahlungsaufforderung, sondern Verweis auf die stornierte Rechnung
+  const message = invoice.cancels_invoice_id
+    ? `anbei erhalten Sie die Stornorechnung ${invoice.invoice_number} zu meiner ${doc} ${invoice.cancels_invoice_number ?? ''} vom ${formatDate(invoice.cancels_invoice_date)}. Die ${doc} ist damit storniert.`
+    : `anbei erhalten Sie meine ${doc} ${invoice.invoice_number} über ${amount}. ${payment}`;
   const signature = [issuer?.full_name, issuer?.business_name && issuer.business_name !== issuer.full_name ? issuer.business_name : null]
     .filter(Boolean)
     .join('\n');
 
   return {
     to: client?.email?.trim() ?? '',
-    subject: [`${doc} ${invoice.invoice_number}`, sender].filter(Boolean).join(' – '),
-    body: [greeting, '', `anbei erhalten Sie meine ${doc} ${invoice.invoice_number} über ${amount}. ${payment}`, '', 'Freundliche Grüße', signature]
+    subject: [`${invoice.cancels_invoice_id ? 'Stornorechnung' : doc} ${invoice.invoice_number}`, sender].filter(Boolean).join(' – '),
+    body: [greeting, '', message, '', 'Freundliche Grüße', signature]
       .join('\n')
       .trimEnd(),
   };

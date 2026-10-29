@@ -88,3 +88,20 @@ describe('isPlausibleEmail', () => {
     ['', false],
   ])('%s → %s', (v, ok) => expect(isPlausibleEmail(v)).toBe(ok));
 });
+
+describe('buildInvoiceEmail – Stornorechnung', () => {
+  it('Betreff und Text verweisen auf die stornierte Rechnung, keine Zahlungsaufforderung', () => {
+    const m = buildInvoiceEmail({
+      ...base,
+      invoice_number: '2026-009',
+      total: -1200,
+      status: 'paid',
+      cancels_invoice_id: 'o',
+      cancels_invoice_number: '2026-007',
+      cancels_invoice_date: '2026-10-01',
+    });
+    expect(m.subject).toBe('Stornorechnung 2026-009 – Berger Design');
+    expect(m.body).toContain('Stornorechnung 2026-009 zu meiner Rechnung 2026-007 vom 01.10.2026');
+    expect(m.body).not.toMatch(/überweisen|bezahlt/);
+  });
+});

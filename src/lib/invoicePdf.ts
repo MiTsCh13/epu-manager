@@ -37,7 +37,7 @@ export interface InvoicePdfItem {
 export interface InvoicePdfData {
   template: TemplateSettings; // Gestaltung (aus dem Snapshot der Rechnung)
   isDraft: boolean;
-  title: string; // „Rechnung“ | „Honorarnote“
+  title: string; // „Rechnung“ | „Honorarnote“ | „Stornorechnung“
   fileName: string;
   issuerName: string;
   issuerLines: string[]; // Zeilen im Kopf neben Name/Logo: Inhaber, wenn es einen Firmennamen gibt (Anschrift steht über dem Empfänger)
@@ -93,7 +93,12 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   const items = (invoice.line_items as unknown as LineItem[]) ?? [];
   const template = normalizeTemplate(invoice.template_snapshot);
   const isDraft = invoice.status === 'draft';
-  const title = invoice.is_honorarnote ? 'Honorarnote' : 'Rechnung';
+  const docLabel = invoice.is_honorarnote ? 'Honorarnote' : 'Rechnung';
+  // Stornorechnung: Verweis auf Nummer + Datum der Originalrechnung (WKO „Berichtigung von Rechnungen“), keine Zahlung
+  const storno = invoice.cancels_invoice_id
+    ? `${docLabel} ${invoice.cancels_invoice_number ?? ''} vom ${formatDate(invoice.cancels_invoice_date)}`
+    : null;
+  const title = storno ? 'Stornorechnung' : docLabel;
   const isKU = issuer.is_kleinunternehmer ?? Number(invoice.vat_rate) === 0;
 
   const issuerName = issuer.business_name || issuer.full_name || '';
@@ -103,18 +108,26 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   // Die Anschrift steht in der Absenderzeile über dem Empfänger und in der Fußzeile – im Kopf nicht noch einmal
   const issuerLines = issuer.business_name && issuer.full_name && issuer.full_name !== issuer.business_name ? [issuer.full_name] : [];
   const isCash = invoice.payment_method === 'cash';
+  const noPayment = isCash || !!storno;
 
   const service = invoice.service_date_to
     ? `${formatDate(invoice.service_date_from)} – ${formatDate(invoice.service_date_to)}`
     : formatDate(invoice.service_date_from ?? invoice.invoice_date);
 
-  const meta: [string, string][] = [
-    [invoice.is_honorarnote ? 'Honorarnoten-Nummer' : 'Rechnungsnummer', invoice.invoice_number],
-    [invoice.is_honorarnote ? 'Ausstellungsdatum' : 'Rechnungsdatum', formatDate(invoice.invoice_date)],
-    [invoice.service_date_to ? 'Leistungszeitraum' : 'Leistungsdatum', service],
-  ];
-  if (isCash) meta.push(['Bezahlung', 'bar']);
-  else if (invoice.due_date) meta.push(['Zahlbar bis', formatDate(invoice.due_date)]);
+  const meta: [string, string][] = storno
+    ? [
+        ['Nummer', invoice.invoice_number],
+        ['Datum', formatDate(invoice.invoice_date)],
+        ['Storno zu', storno],
+        [invoice.service_date_to ? 'Leistungszeitraum' : 'Leistungsdatum', service],
+      ]
+    : [
+        [invoice.is_honorarnote ? 'Honorarnoten-Nummer' : 'Rechnungsnummer', invoice.invoice_number],
+        [invoice.is_honorarnote ? 'Ausstellungsdatum' : 'Rechnungsdatum', formatDate(invoice.invoice_date)],
+        [invoice.service_date_to ? 'Leistungszeitraum' : 'Leistungsdatum', service],
+      ];
+  if (!storno && isCash) meta.push(['Bezahlung', 'bar']);
+  else if (!storno && invoice.due_date) meta.push(['Zahlbar bis', formatDate(invoice.due_date)]);
   if (issuer.uid_number) meta.push(['UID-Nr.', issuer.uid_number]);
   if (recipient?.uid_number) meta.push(['UID-Nr. Kunde', recipient.uid_number]);
 
@@ -172,12 +185,12 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
         ? 'Steuerfreie Leistung – keine Umsatzsteuer ausgewiesen.'
         : null,
     taxNoteInTotals: isKU && template.kuNote === 'totals',
-    intro: parseRichText(fill(invoice.intro_text)),
+    intro: storno ? parseRichText(`Hiermit wird die ${storno} vollständig storniert.`) : parseRichText(fill(invoice.intro_text)),
     closing: closingBlocks.length || closingTitle ? { title: closingTitle, blocks: closingBlocks, boxed: template.closing.boxed } : null,
     greeting: template.greeting.text || template.greeting.signature ? { text: fill(template.greeting.text), signature: fill(template.greeting.signature) } : null,
-    // Bar bezahlt: keine Zahlungsbedingungen, keine Zahlungsbox, kein QR-Code
-    paymentTerms: isCash ? null : fill(template.payment.terms) || null,
-    payment: !isCash && issuer.iban && template.payment.box
+    // Bar bezahlt oder Stornorechnung: keine Zahlungsbedingungen, keine Zahlungsbox, kein QR-Code
+    paymentTerms: noPayment ? null : fill(template.payment.terms) || null,
+    payment: !noPayment && issuer.iban && template.payment.box
       ? {
           intro: `Bitte überweisen Sie ${formatEuro(Number(invoice.total))}${invoice.due_date ? ` bis ${formatDate(invoice.due_date)}` : ''} an:`,
           rows: [

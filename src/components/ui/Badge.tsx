@@ -19,7 +19,14 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
   );
 }
 
-const STATUS_TONES: Record<DisplayStatus, Tone> = { draft: 'neutral', sent: 'info', paid: 'success', overdue: 'danger' };
+const STATUS_TONES: Record<DisplayStatus, Tone> = {
+  draft: 'neutral',
+  sent: 'info',
+  paid: 'success',
+  overdue: 'danger',
+  cancelled: 'neutral',
+  storno: 'warning',
+};
 
 export function StatusBadge({ status }: { status: DisplayStatus }) {
   return <Badge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</Badge>;

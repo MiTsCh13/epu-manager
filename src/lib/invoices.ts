@@ -1,8 +1,9 @@
 // Rechnungs-Hilfsfunktionen: Anzeige-Status, Filter, Datumslogik
-import type { InvoiceStatus, LineItem } from '@/types';
+import type { Invoice, InvoiceStatus, LineItem } from '@/types';
 import { formatDecimalInput, parseDecimal, round2 } from './money';
 
-export type DisplayStatus = InvoiceStatus; // 'draft' | 'sent' | 'paid' | 'overdue'
+// 'cancelled' = stornierte Rechnung (auch wenn sie vorher bezahlt war), 'storno' = die Stornorechnung selbst
+export type DisplayStatus = InvoiceStatus | 'storno';
 export type InvoiceFilter = 'all' | 'open' | 'paid' | 'overdue';
 
 export const STATUS_LABELS: Record<DisplayStatus, string> = {
@@ -10,6 +11,8 @@ export const STATUS_LABELS: Record<DisplayStatus, string> = {
   sent: 'Offen',
   paid: 'Bezahlt',
   overdue: 'Überfällig',
+  cancelled: 'Storniert',
+  storno: 'Stornorechnung',
 };
 
 export const FILTER_LABELS: Record<InvoiceFilter, string> = {
@@ -41,11 +44,17 @@ export function formatDate(isoDate: string | null | undefined): string {
   return `${d}.${m}.${y}`;
 }
 
-/** Gesendete Rechnungen nach Fälligkeit gelten als überfällig (unabhängig vom gespeicherten Status). */
+/**
+ * Gesendete Rechnungen nach Fälligkeit gelten als überfällig (unabhängig vom gespeicherten Status).
+ * Stornorechnungen und stornierte Rechnungen haben einen eigenen Status – auch eine bezahlte Rechnung bleibt in der
+ * Datenbank „paid“ (zählt in ihrem Jahr), wird aber als storniert angezeigt.
+ */
 export function getDisplayStatus(
-  invoice: { status: string; due_date: string | null },
+  invoice: { status: string; due_date: string | null; cancels_invoice_id?: string | null; cancelled_at?: string | null },
   today: string = toISODate(new Date()),
 ): DisplayStatus {
+  if (invoice.cancels_invoice_id) return 'storno';
+  if (invoice.cancelled_at) return 'cancelled';
   const status = invoice.status as InvoiceStatus;
   if (status === 'sent' || status === 'overdue') {
     return invoice.due_date && invoice.due_date < today ? 'overdue' : 'sent';
@@ -162,4 +171,46 @@ export function validateInvoiceForm(input: InvoiceFormInput): InvoiceFormErrors 
 
 export function hasFormErrors(e: InvoiceFormErrors): boolean {
   return Object.keys(e).length > 0;
+}
+
+// ─── Stornieren ─────────────────────────────────────────────
+
+/** Datum der Stornorechnung: heute – aber nie vor dem Datum der Originalrechnung. */
+export function stornoDate(invoiceDate: string, today: string = toISODate(new Date())): string {
+  return invoiceDate > today ? invoiceDate : today;
+}
+
+/**
+ * Korrigierte Rechnung als Entwurf: Inhalte der stornierten Rechnung, neue Nummer und heutiges Datum, gleiches
+ * Zahlungsziel. Beträge, USt und Absender rechnet die Datenbank beim Speichern bzw. Ausstellen neu.
+ */
+export function correctionDraftFrom(
+  original: Pick<
+    Invoice,
+    | 'client_id' | 'invoice_date' | 'due_date' | 'is_honorarnote' | 'line_items' | 'vat_rate' | 'service_date_from'
+    | 'service_date_to' | 'payment_method' | 'template_id' | 'intro_text' | 'notes' | 'footer_text'
+  >,
+  invoiceNumber: string,
+  today: string = toISODate(new Date()),
+) {
+  const days = original.due_date
+    ? Math.round((Date.parse(`${original.due_date}T00:00:00Z`) - Date.parse(`${original.invoice_date}T00:00:00Z`)) / 86_400_000)
+    : null;
+  return {
+    status: 'draft' as const,
+    invoice_number: invoiceNumber,
+    invoice_date: today,
+    due_date: days === null ? null : addDays(today, days),
+    client_id: original.client_id,
+    is_honorarnote: original.is_honorarnote,
+    line_items: original.line_items,
+    vat_rate: original.vat_rate,
+    service_date_from: original.service_date_from,
+    service_date_to: original.service_date_to,
+    payment_method: original.payment_method,
+    template_id: original.template_id,
+    intro_text: original.intro_text,
+    notes: original.notes,
+    footer_text: original.footer_text,
+  };
 }

@@ -31,9 +31,14 @@ export function InvoiceList({
                   {formatDate(inv.invoice_date)}
                   {status === 'paid' && inv.paid_at && ` · bezahlt am ${formatDate(inv.paid_at)}`}
                   {open && inv.due_date && ` · fällig ${formatDate(inv.due_date)}`}
+                  {inv.cancels_invoice_number && ` · Storno zu ${inv.cancels_invoice_number}`}
                 </p>
               </div>
-              <span className={`shrink-0 text-right font-semibold tabular-nums ${status === 'overdue' ? 'text-red-700' : 'text-slate-900'}`}>
+              <span
+                className={`shrink-0 text-right font-semibold tabular-nums ${
+                  status === 'overdue' ? 'text-red-700' : status === 'cancelled' ? 'text-slate-400 line-through' : 'text-slate-900'
+                }`}
+              >
                 {formatEuro(Number(inv.total))}
               </span>
               <ChevronRight className="hidden h-4 w-4 shrink-0 text-slate-400 sm:block" aria-hidden="true" />

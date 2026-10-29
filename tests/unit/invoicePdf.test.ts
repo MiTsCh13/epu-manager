@@ -268,3 +268,40 @@ describe('buildInvoicePdfData – Barzahlung', () => {
     expect(d.meta).toContainEqual(['Zahlbar bis', '24.04.2026']);
   });
 });
+
+describe('buildInvoicePdfData – Stornorechnung', () => {
+  const storno = build({
+    ...base,
+    invoice_number: '2026-009',
+    invoice_date: '2026-05-02',
+    due_date: null,
+    status: 'cancelled',
+    notes: null,
+    intro_text: null,
+    line_items: [{ description: 'Wartung & Support', quantity: 20, unit_price: -95, total: -1900 }],
+    subtotal: -1900,
+    total: -1900,
+    cancels_invoice_id: 'orig',
+    cancels_invoice_number: '2026-003',
+    cancels_invoice_date: '2026-04-10',
+  } as unknown as Invoice);
+
+  it('Titel, eigene Nummer und Verweis auf Nummer + Datum der Originalrechnung', () => {
+    expect(storno.title).toBe('Stornorechnung');
+    expect(storno.fileName).toBe('Stornorechnung_2026-009.pdf');
+    expect(storno.meta.slice(0, 3)).toEqual([
+      ['Nummer', '2026-009'],
+      ['Datum', '02.05.2026'],
+      ['Storno zu', 'Rechnung 2026-003 vom 10.04.2026'],
+    ]);
+    expect(JSON.stringify(storno.intro)).toContain('Rechnung 2026-003 vom 10.04.2026 vollständig storniert');
+  });
+
+  it('Minus-Beträge, keine Zahlungsaufforderung, kein QR-Code', () => {
+    expect(storno.grandTotal).toBe('-€ 1.900,00');
+    expect(storno.items[0]!.total).toMatch(/^-/);
+    expect(storno.payment).toBeNull();
+    expect(storno.paymentTerms).toBeNull();
+    expect(storno.meta.map(([k]) => k)).not.toContain('Zahlbar bis');
+  });
+});

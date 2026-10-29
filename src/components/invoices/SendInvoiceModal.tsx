@@ -135,7 +135,7 @@ export function SendInvoiceModal({
     }
   }
 
-  const docLabel = invoice?.is_honorarnote ? 'Honorarnote' : 'Rechnung';
+  const docLabel = invoice?.cancels_invoice_id ? 'Stornorechnung' : invoice?.is_honorarnote ? 'Honorarnote' : 'Rechnung';
 
   return (
     <Modal

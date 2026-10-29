@@ -304,6 +304,10 @@ export type Database = {
       }
       invoices: {
         Row: {
+          cancelled_at: string | null
+          cancels_invoice_date: string | null
+          cancels_invoice_id: string | null
+          cancels_invoice_number: string | null
           client_id: string | null
           client_snapshot: Json | null
           created_at: string
@@ -332,6 +336,10 @@ export type Database = {
           vat_rate: number
         }
         Insert: {
+          cancelled_at?: string | null
+          cancels_invoice_date?: string | null
+          cancels_invoice_id?: string | null
+          cancels_invoice_number?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
           created_at?: string
@@ -360,6 +368,10 @@ export type Database = {
           vat_rate?: number
         }
         Update: {
+          cancelled_at?: string | null
+          cancels_invoice_date?: string | null
+          cancels_invoice_id?: string | null
+          cancels_invoice_number?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
           created_at?: string
@@ -388,6 +400,13 @@ export type Database = {
           vat_rate?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_cancels_invoice_id_fkey"
+            columns: ["cancels_invoice_id"]
+            isOneToOne: true
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_client_id_fkey"
             columns: ["client_id"]
@@ -739,6 +758,10 @@ export type Database = {
           p_id: string
           p_next: string
         }
+        Returns: string
+      }
+      cancel_invoice: {
+        Args: { p_date: string; p_invoice: string; p_number: string }
         Returns: string
       }
       delete_recurring: {

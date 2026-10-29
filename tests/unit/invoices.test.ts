@@ -7,6 +7,8 @@ import {
   parseLineItems,
   validateInvoiceForm,
   stepQuantity,
+  stornoDate,
+  correctionDraftFrom,
   getDisplayStatus,
   invoiceYear,
   matchesFilter,
@@ -144,5 +146,45 @@ describe('stepQuantity', () => {
     ['1,2345', 1, '2,2345'],
   ] as const)('%s %i → %s', (value, delta, expected) => {
     expect(stepQuantity(value, delta)).toBe(expected);
+  });
+});
+
+describe('Stornieren', () => {
+  it('Anzeige-Status: Stornorechnung und stornierte (auch bezahlte) Rechnung', () => {
+    expect(getDisplayStatus({ status: 'paid', due_date: null, cancels_invoice_id: 'o' })).toBe('storno');
+    expect(getDisplayStatus({ status: 'cancelled', due_date: null, cancels_invoice_id: 'o' })).toBe('storno');
+    expect(getDisplayStatus({ status: 'paid', due_date: null, cancelled_at: '2026-10-29T10:00:00Z' })).toBe('cancelled');
+    expect(getDisplayStatus({ status: 'cancelled', due_date: '2000-01-01', cancelled_at: '2026-10-29T10:00:00Z' })).toBe('cancelled');
+    expect(matchesFilter('cancelled', 'open')).toBe(false);
+    expect(matchesFilter('storno', 'paid')).toBe(false);
+  });
+
+  it('stornoDate: heute, aber nie vor dem Rechnungsdatum', () => {
+    expect(stornoDate('2026-10-01', '2026-10-29')).toBe('2026-10-29');
+    expect(stornoDate('2026-11-05', '2026-10-29')).toBe('2026-11-05');
+  });
+
+  it('correctionDraftFrom: Entwurf mit neuer Nummer, heute, gleiches Zahlungsziel', () => {
+    const d = correctionDraftFrom(
+      {
+        client_id: 'c',
+        invoice_date: '2026-10-01',
+        due_date: '2026-10-15',
+        is_honorarnote: false,
+        line_items: [{ description: 'A', quantity: 1, unit_price: 10, total: 10 }],
+        vat_rate: 20,
+        service_date_from: '2026-09-30',
+        service_date_to: null,
+        payment_method: 'transfer',
+        template_id: 't',
+        intro_text: 'Hallo',
+        notes: null,
+        footer_text: null,
+      },
+      '2026-012',
+      '2026-10-29',
+    );
+    expect(d).toMatchObject({ status: 'draft', invoice_number: '2026-012', invoice_date: '2026-10-29', due_date: '2026-11-12', client_id: 'c', service_date_from: '2026-09-30' });
+    expect(correctionDraftFrom({ ...d, invoice_date: '2026-10-01', due_date: null } as never, 'x', '2026-10-29').due_date).toBeNull();
   });
 });

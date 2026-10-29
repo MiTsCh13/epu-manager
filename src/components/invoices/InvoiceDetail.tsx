@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Eye, FileDown, Lock, Mail, MailCheck } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Eye, FileDown, Lock, Mail, MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadBlob, renderInvoicePdf } from '@/lib/renderInvoicePdf';
 import { formatDate, getDisplayStatus } from '@/lib/invoices';
@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { MarkPaidModal } from './MarkPaidModal';
 import { PdfPreviewModal } from './PdfPreviewModal';
+import { CancelInvoiceModal } from './CancelInvoiceModal';
 import { SendInvoiceModal } from './SendInvoiceModal';
 import type { Invoice, LineItem } from '@/types';
 
@@ -57,6 +58,24 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
   const [previewing, setPreviewing] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const closeEmail = useCallback(() => setEmailing(false), []);
+  const [cancelling, setCancelling] = useState(false);
+  const closeCancel = useCallback(() => setCancelling(false), []);
+  // Stornierte Rechnung → zugehörige Stornorechnung verlinken
+  const [storno, setStorno] = useState<{ id: string; invoice_number: string } | null>(null);
+  useEffect(() => {
+    setStorno(null);
+    if (!invoice.cancelled_at) return;
+    let cancelled = false;
+    void supabase
+      .from('invoices')
+      .select('id, invoice_number')
+      .eq('cancels_invoice_id', invoice.id)
+      .maybeSingle()
+      .then(({ data }) => !cancelled && setStorno(data));
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice.id, invoice.cancelled_at]);
 
   async function handleDownload() {
     setDownloading(true);
@@ -73,16 +92,40 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
   const issuer = invoice.issuer_snapshot as PartySnapshot | null;
   const recipient = invoice.client_snapshot as PartySnapshot | null;
   const docLabel = invoice.is_honorarnote ? 'Honorarnote' : 'Rechnung';
+  const isStorno = status === 'storno';
+  const canCancel = status !== 'storno' && status !== 'cancelled';
   const isKU = issuer?.is_kleinunternehmer ?? Number(invoice.vat_rate) === 0;
 
   return (
     <PageWrapper
-      title={`${docLabel} ${invoice.invoice_number}`}
+      title={`${isStorno ? 'Stornorechnung' : docLabel} ${invoice.invoice_number}`}
       description={
         <span className="inline-flex flex-wrap items-center gap-2">
           <StatusBadge status={status} />
           {status === 'paid' && invoice.paid_at && <span>Bezahlt am {formatDate(invoice.paid_at)}</span>}
           {(status === 'sent' || status === 'overdue') && invoice.due_date && <span>Fällig am {formatDate(invoice.due_date)}</span>}
+          {status === 'cancelled' && invoice.cancelled_at && (
+            <span>
+              Storniert am {VIENNA_DATE.format(new Date(invoice.cancelled_at))}
+              {storno && (
+                <>
+                  {' · '}
+                  <Link to={`/rechnungen/${storno.id}`} className="font-medium text-primary hover:underline">
+                    Stornorechnung {storno.invoice_number}
+                  </Link>
+                </>
+              )}
+            </span>
+          )}
+          {isStorno && invoice.cancels_invoice_id && (
+            <span>
+              Storno zu{' '}
+              <Link to={`/rechnungen/${invoice.cancels_invoice_id}`} className="font-medium text-primary hover:underline">
+                {docLabel} {invoice.cancels_invoice_number}
+              </Link>{' '}
+              vom {formatDate(invoice.cancels_invoice_date)}
+            </span>
+          )}
           {invoice.emailed_at && (
             <span className="inline-flex items-center gap-1">
               <MailCheck className="h-4 w-4" aria-hidden="true" />
@@ -108,12 +151,19 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
           >
             PDF herunterladen
           </Button>
-          <Button variant="secondary" icon={<Mail className="h-4 w-4" />} onClick={() => setEmailing(true)}>
-            Per E-Mail senden
-          </Button>
+          {status !== 'cancelled' && (
+            <Button variant="secondary" icon={<Mail className="h-4 w-4" />} onClick={() => setEmailing(true)}>
+              Per E-Mail senden
+            </Button>
+          )}
           {(status === 'sent' || status === 'overdue') && (
             <Button icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => setPaying(true)}>
               Als bezahlt markieren
+            </Button>
+          )}
+          {canCancel && (
+            <Button variant="ghost" icon={<Ban className="h-4 w-4" />} onClick={() => setCancelling(true)}>
+              Stornieren
             </Button>
           )}
         </>
@@ -135,7 +185,11 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
                 ? `${formatDate(invoice.service_date_from)} – ${formatDate(invoice.service_date_to)}`
                 : formatDate(invoice.service_date_from ?? invoice.invoice_date),
             ],
-            invoice.payment_method === 'cash' ? ['Bezahlung', 'bar'] : ['Zahlbar bis', formatDate(invoice.due_date) || '–'],
+            isStorno
+              ? ['Storno zu', invoice.cancels_invoice_number ?? '–']
+              : invoice.payment_method === 'cash'
+                ? ['Bezahlung', 'bar']
+                : ['Zahlbar bis', formatDate(invoice.due_date) || '–'],
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="text-xs text-slate-500">{label}</dt>
@@ -184,7 +238,7 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
 
         {isKU && <p className="text-sm text-slate-600">{KLEINUNTERNEHMER_NOTE}</p>}
         {invoice.notes && <p className="whitespace-pre-line text-sm text-slate-700">{invoice.notes}</p>}
-        {issuer?.iban && invoice.payment_method !== 'cash' && <p className="text-sm text-slate-600">Bitte überweise den Betrag auf: {issuer.iban}</p>}
+        {issuer?.iban && invoice.payment_method !== 'cash' && !isStorno && <p className="text-sm text-slate-600">Bitte überweise den Betrag auf: {issuer.iban}</p>}
         {invoice.footer_text && <p className="whitespace-pre-line border-t border-slate-100 pt-4 text-xs text-slate-500">{invoice.footer_text}</p>}
       </article>
 
@@ -194,6 +248,8 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
       </p>
 
       <PdfPreviewModal invoice={previewing ? invoice : null} onClose={() => setPreviewing(false)} />
+
+      <CancelInvoiceModal invoice={cancelling ? invoice : null} onClose={closeCancel} />
 
       <SendInvoiceModal
         invoice={emailing ? invoice : null}
