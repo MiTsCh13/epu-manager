@@ -308,6 +308,7 @@ export type Database = {
           client_snapshot: Json | null
           created_at: string
           due_date: string | null
+          emailed_at: string | null
           footer_text: string | null
           id: string
           intro_text: string | null
@@ -335,6 +336,7 @@ export type Database = {
           client_snapshot?: Json | null
           created_at?: string
           due_date?: string | null
+          emailed_at?: string | null
           footer_text?: string | null
           id?: string
           intro_text?: string | null
@@ -362,6 +364,7 @@ export type Database = {
           client_snapshot?: Json | null
           created_at?: string
           due_date?: string | null
+          emailed_at?: string | null
           footer_text?: string | null
           id?: string
           intro_text?: string | null

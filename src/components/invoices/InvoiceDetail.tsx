@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, CheckCircle2, Eye, FileDown, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, FileDown, Lock, Mail, MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadBlob, renderInvoicePdf } from '@/lib/renderInvoicePdf';
 import { formatDate, getDisplayStatus } from '@/lib/invoices';
@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { MarkPaidModal } from './MarkPaidModal';
 import { PdfPreviewModal } from './PdfPreviewModal';
+import { SendInvoiceModal } from './SendInvoiceModal';
 import type { Invoice, LineItem } from '@/types';
 
 interface PartySnapshot {
@@ -46,11 +47,16 @@ function Party({ title, party }: { title: string; party: PartySnapshot | null })
   );
 }
 
+// Zeitpunkt (UTC) als Tag in Österreich – unabhängig von der Zeitzone des Geräts
+const VIENNA_DATE = new Intl.DateTimeFormat('de-AT', { timeZone: 'Europe/Vienna', day: '2-digit', month: '2-digit', year: 'numeric' });
+
 /** Ausgestellte Rechnung (unveränderbar): Ansicht + Status-Aktionen. */
 export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChanged: (inv: Invoice) => void }) {
   const [paying, setPaying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const closeEmail = useCallback(() => setEmailing(false), []);
 
   async function handleDownload() {
     setDownloading(true);
@@ -77,6 +83,12 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
           <StatusBadge status={status} />
           {status === 'paid' && invoice.paid_at && <span>Bezahlt am {formatDate(invoice.paid_at)}</span>}
           {(status === 'sent' || status === 'overdue') && invoice.due_date && <span>Fällig am {formatDate(invoice.due_date)}</span>}
+          {invoice.emailed_at && (
+            <span className="inline-flex items-center gap-1">
+              <MailCheck className="h-4 w-4" aria-hidden="true" />
+              Per E-Mail verschickt am {VIENNA_DATE.format(new Date(invoice.emailed_at))}
+            </span>
+          )}
         </span>
       }
       actions={
@@ -95,6 +107,9 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
             onClick={() => void handleDownload()}
           >
             PDF herunterladen
+          </Button>
+          <Button variant="secondary" icon={<Mail className="h-4 w-4" />} onClick={() => setEmailing(true)}>
+            Per E-Mail senden
           </Button>
           {(status === 'sent' || status === 'overdue') && (
             <Button icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => setPaying(true)}>
@@ -179,6 +194,25 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
       </p>
 
       <PdfPreviewModal invoice={previewing ? invoice : null} onClose={() => setPreviewing(false)} />
+
+      <SendInvoiceModal
+        invoice={emailing ? invoice : null}
+        onClose={closeEmail}
+        onSent={async () => {
+          const { data, error } = await supabase
+            .from('invoices')
+            .update({ emailed_at: new Date().toISOString() })
+            .eq('id', invoice.id)
+            .select()
+            .single();
+          if (error) toast.error('Konnte nicht als verschickt gemerkt werden.');
+          else {
+            toast.success(`${invoice.invoice_number} als verschickt gemerkt`);
+            onChanged(data);
+          }
+          setEmailing(false);
+        }}
+      />
 
       <MarkPaidModal
         invoice={paying ? { invoice_number: invoice.invoice_number, total: Number(invoice.total) } : null}
