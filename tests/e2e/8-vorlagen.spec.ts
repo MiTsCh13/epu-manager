@@ -54,7 +54,16 @@ test('Vorlage anlegen, beim Kunden hinterlegen, Rechnung übernimmt Texte und Ge
   await expect(page.getByLabel('Text unten')).toHaveValue('Danke für euer Vertrauen! Bitte zahlt binnen {Zahlungsziel}');
   await page.getByPlaceholder('z. B. Website-Gestaltung').fill('DJ-Set Hochzeit\n- Tonanlage\n- Lichtanlage');
   await page.getByPlaceholder('Std.').fill('Std.');
-  await page.getByLabel(/^Menge/).fill('4');
+  // Menge per Pfeil-Knöpfen und Pfeiltasten
+  const menge = page.getByLabel(/^Menge/);
+  await expect(page.getByRole('button', { name: /Minus 1.*Position 1/ })).toBeDisabled();
+  await page.getByRole('button', { name: /Plus 1.*Position 1/ }).click();
+  await page.getByRole('button', { name: /Plus 1.*Position 1/ }).click();
+  await expect(menge).toHaveValue('3');
+  await menge.press('ArrowUp');
+  await menge.press('ArrowUp');
+  await menge.press('ArrowDown');
+  await expect(menge).toHaveValue('4');
   await page.getByPlaceholder('0,00').fill('150');
   await expect(page.getByTestId('invoice-total')).toHaveText(/600,00/);
   // Die fortlaufende Nummer wird asynchron vorgeschlagen

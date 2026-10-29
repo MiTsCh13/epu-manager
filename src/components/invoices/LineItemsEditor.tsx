@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react';
-import { BookmarkPlus, ListPlus, Plus, Trash2 } from 'lucide-react';
-import type { LineItemInput, InvoiceFormErrors } from '@/lib/invoices';
+import { BookmarkPlus, ChevronDown, ChevronUp, ListPlus, Plus, Trash2 } from 'lucide-react';
+import { stepQuantity, type LineItemInput, type InvoiceFormErrors } from '@/lib/invoices';
 import { formatEuro, parseDecimal, round2 } from '@/lib/money';
 import { UNIT_SUGGESTIONS } from '@/lib/invoiceTemplates';
 import { canSaveAsProduct, productKey, productToLine, searchProducts, splitDescription } from '@/lib/products';
@@ -14,7 +14,7 @@ export type LineItemRow = LineItemInput & { key: string; productId?: string };
 const MAX_SUGGESTIONS = 6;
 
 const inputClass = (error?: string) =>
-  `block min-h-[44px] w-full rounded-lg border px-3 py-2 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 sm:text-sm ${
+  `block min-h-[48px] w-full rounded-lg border px-3 py-2 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 sm:min-h-[44px] sm:text-sm ${
     error ? 'border-red-400 focus:ring-red-200' : 'border-slate-300 focus:border-primary focus:ring-primary/20'
   }`;
 
@@ -78,7 +78,7 @@ export function LineItemsEditor({
           <option key={u} value={u} />
         ))}
       </datalist>
-      <div className="mb-1 hidden grid-cols-[1fr_5rem_6rem_7.5rem_6.5rem_2.5rem] gap-2 px-1 text-xs font-medium text-slate-500 sm:grid">
+      <div className="mb-1 hidden grid-cols-[1fr_6rem_6rem_7.5rem_6.5rem_5.25rem] gap-2 px-1 text-xs font-medium text-slate-500 sm:grid">
         <span>Bezeichnung</span>
         <span>Menge</span>
         <span>Einheit</span>
@@ -92,7 +92,7 @@ export function LineItemsEditor({
           return (
             <li
               key={row.key}
-              className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:grid-cols-[1fr_5rem_6rem_7.5rem_6.5rem_5.25rem] sm:items-start sm:bg-transparent sm:p-0 sm:ring-0"
+              className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:grid-cols-[1fr_6rem_6rem_7.5rem_6.5rem_5.25rem] sm:items-start sm:bg-transparent sm:p-0 sm:ring-0"
             >
               {/* kein <label> drumherum: sonst würde die Vorschlagsliste Teil des Feldnamens */}
               <div className="col-span-3 sm:col-span-1">
@@ -107,17 +107,24 @@ export function LineItemsEditor({
                   onPick={(p) => applyProduct(row, p)}
                 />
               </div>
-              <label>
-                <span className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">Menge<span className="sr-only"> (Position {idx + 1})</span></span>
-                <input
-                  className={inputClass(err?.quantity)}
-                  inputMode="decimal"
+              {/* kein <label> drumherum: sonst würden die Pfeil-Knöpfe Teil des Feldnamens */}
+              <div>
+                <span id={`${row.key}-qty-label`} className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">
+                  Menge<span className="sr-only"> (Position {idx + 1})</span>
+                </span>
+                <QuantityInput
+                  id={`${row.key}-qty`}
                   value={row.quantity}
-                  aria-invalid={!!err?.quantity || undefined}
-                  onChange={(e) => update(row.key, { quantity: e.target.value })}
+                  error={err?.quantity}
+                  position={idx + 1}
+                  onChange={(quantity) => update(row.key, { quantity })}
                 />
-                {err?.quantity && <span className="mt-0.5 block text-xs text-red-600">{err.quantity}</span>}
-              </label>
+                {err?.quantity && (
+                  <span id={`${row.key}-qty-error`} className="mt-0.5 block text-xs text-red-600">
+                    {err.quantity}
+                  </span>
+                )}
+              </div>
               <label>
                 <span className="mb-1 block text-xs font-medium text-slate-500 sm:sr-only">Einheit<span className="sr-only"> (Position {idx + 1})</span></span>
                 <input
@@ -302,6 +309,72 @@ function DescriptionInput({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Mengenfeld mit Pfeilen ▲▼ (±1) – Textfeld statt type="number", damit das deutsche Komma (1,5) überall geht. */
+function QuantityInput({
+  id,
+  value,
+  error,
+  position,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  error?: string;
+  position: number;
+  onChange: (value: string) => void;
+}) {
+  const q = parseDecimal(value);
+  const canDecrease = !Number.isNaN(q) && q - 1 >= 1;
+  const step = (delta: 1 | -1) => onChange(stepQuantity(value, delta));
+  const arrowClass =
+    'flex flex-1 items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent';
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        className={`${inputClass(error)} pr-11 sm:pr-8`}
+        inputMode="decimal"
+        value={value}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={error ? `${id}-error` : undefined}
+        aria-invalid={!!error || undefined}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
+          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+          e.preventDefault();
+          step(e.key === 'ArrowUp' ? 1 : -1);
+        }}
+      />
+      {/* Nicht per Tab erreichbar – Tastatur nutzt die Pfeiltasten im Feld. preventDefault beim Drücken: Fokus (und
+          Handy-Tastatur) bleibt im Feld */}
+      <div className="absolute inset-y-px right-px flex w-10 flex-col overflow-hidden rounded-r-lg border-l border-slate-200 bg-white sm:w-7">
+        <button
+          type="button"
+          tabIndex={-1}
+          className={arrowClass}
+          aria-label={`Plus 1 (Position ${position})`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => step(1)}
+        >
+          <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          className={`${arrowClass} border-t border-slate-200`}
+          aria-label={`Minus 1 (Position ${position})`}
+          disabled={!canDecrease}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => step(-1)}
+        >
+          <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }

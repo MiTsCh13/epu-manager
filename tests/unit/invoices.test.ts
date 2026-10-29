@@ -6,6 +6,7 @@ import {
   hasFormErrors,
   parseLineItems,
   validateInvoiceForm,
+  stepQuantity,
   getDisplayStatus,
   invoiceYear,
   matchesFilter,
@@ -122,5 +123,26 @@ describe('validateInvoiceForm', () => {
       1: { unit_price: 'Ungültiger Preis' },
       2: { quantity: 'Ungültige Menge' },
     });
+  });
+});
+
+describe('stepQuantity', () => {
+  it.each([
+    ['1', 1, '2'],
+    ['2', -1, '1'],
+    ['1', -1, '1'],
+    ['1,5', 1, '2,5'],
+    ['2,5', -1, '1,5'],
+    ['1,5', -1, '1,5'],
+    ['0,5', 1, '1,5'],
+    ['', 1, '1'],
+    ['abc', 1, '1'],
+    ['0,1', 1, '1,1'],
+    ['', -1, ''],
+    ['abc', -1, 'abc'],
+    ['0,5', -1, '0,5'],
+    ['1,2345', 1, '2,2345'],
+  ] as const)('%s %i → %s', (value, delta, expected) => {
+    expect(stepQuantity(value, delta)).toBe(expected);
   });
 });

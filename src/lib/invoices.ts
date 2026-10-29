@@ -1,6 +1,6 @@
 // Rechnungs-Hilfsfunktionen: Anzeige-Status, Filter, Datumslogik
 import type { InvoiceStatus, LineItem } from '@/types';
-import { parseDecimal, round2 } from './money';
+import { formatDecimalInput, parseDecimal, round2 } from './money';
 
 export type DisplayStatus = InvoiceStatus; // 'draft' | 'sent' | 'paid' | 'overdue'
 export type InvoiceFilter = 'all' | 'open' | 'paid' | 'overdue';
@@ -104,6 +104,18 @@ export interface InvoiceFormErrors {
 
 // Leer = weder Bezeichnung noch Preis (die Menge ist bei neuen Zeilen mit „1“ vorbelegt)
 const isBlankRow = (i: LineItemInput) => !i.description.trim() && !i.unit_price.trim();
+
+/**
+ * Menge per Pfeil um ±1 ändern. Nach unten nicht unter 1 – sonst bleibt der Text unverändert (kleinere Mengen
+ * wie 0,5 nur per Eingabe). Kommazahlen bleiben erhalten (1,5 → 2,5); ungültiger Text zählt nach oben als 0.
+ */
+export function stepQuantity(value: string, delta: 1 | -1): string {
+  const parsed = parseDecimal(value);
+  const q = Number.isNaN(parsed) ? 0 : parsed;
+  if (delta < 0 && q - 1 < 1) return value;
+  // Gleitkomma glätten (0,1 + 1), ohne Nachkommastellen der Eingabe abzuschneiden
+  return formatDecimalInput(Math.round((q + delta) * 1e6) / 1e6);
+}
 
 /** Eingabezeilen → Positionen (leere Zeilen werden ignoriert, ungültige Zahlen als 0). */
 export function parseLineItems(items: LineItemInput[]): LineItem[] {

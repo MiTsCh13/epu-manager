@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Copy, Mail, Share2 } from 'lucide-react';
 import { buildInvoiceEmail, composeUrl, isPlausibleEmail, type InvoiceEmail, type MailProvider } from '@/lib/invoiceEmail';
@@ -49,9 +49,16 @@ export function SendInvoiceModal({
   const [busy, setBusy] = useState(false);
   const [share] = useState(canShareFiles);
 
-  // Beim Öffnen: Vorschlag aufbauen und PDF schon erzeugen – Teilen und Pop-ups brauchen einen direkten Klick
+  // Aktuelle Rechnung für den Effekt, ohne ihn bei jedem neuen Objekt (Nachladen der Seite) neu zu starten
+  const invoiceRef = useRef(invoice);
+  invoiceRef.current = invoice;
+  const invoiceId = invoice?.id ?? null;
+
+  // Beim Öffnen: Vorschlag aufbauen und PDF schon erzeugen – Teilen und Pop-ups brauchen einen direkten Klick.
+  // Nur bei anderer Rechnung neu (ausgestellte Rechnungen ändern sich nicht) – sonst wären Eingaben weg.
   useEffect(() => {
-    if (!invoice) return;
+    const invoice = invoiceRef.current;
+    if (!invoiceId || !invoice) return;
     const suggestion = buildInvoiceEmail(invoice);
     setMail(suggestion);
     setPdf(null);
@@ -77,7 +84,7 @@ export function SendInvoiceModal({
     return () => {
       cancelled = true;
     };
-  }, [invoice]);
+  }, [invoiceId]);
 
   const toInvalid = mail.to.trim() !== '' && !isPlausibleEmail(mail.to);
   // Stabil halten: Modal setzt bei neuem onClose den Fokus zurück aufs erste Feld (Tippen im Text springt sonst)
