@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
 import { Assistant } from '@/components/assistant/Assistant';
+import { FeedbackDialog } from '@/components/feedback/FeedbackDialog';
 import { Sidebar } from './Sidebar';
 import { BottomNav, MobileDrawer, TopBar } from './MobileNav';
 
@@ -10,6 +11,13 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const openMenu = useCallback(() => setMenuOpen(true), []);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Im Handy-Menü: erst das Menü schließen, dann das Fenster öffnen
+  const openFeedback = useCallback(() => {
+    setMenuOpen(false);
+    setFeedbackOpen(true);
+  }, []);
+  const closeFeedback = useCallback(() => setFeedbackOpen(false), []);
   const { pathname } = useLocation();
 
   // Bei Seitenwechsel nach oben scrollen und Menü schließen
@@ -20,9 +28,9 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Sidebar />
+      <Sidebar onFeedback={openFeedback} />
       <TopBar onOpenMenu={openMenu} />
-      <MobileDrawer open={menuOpen} onClose={closeMenu} />
+      <MobileDrawer open={menuOpen} onClose={closeMenu} onFeedback={openFeedback} />
       <div className="lg:pl-64">
         {/* pb: Platz für die Bottom-Navigation auf Mobile */}
         <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-10">
@@ -40,6 +48,7 @@ export function AppLayout() {
       </div>
       <BottomNav onOpenMenu={openMenu} />
       <Assistant />
+      {feedbackOpen && <FeedbackDialog onClose={closeFeedback} />}
     </div>
   );
 }

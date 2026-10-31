@@ -11,8 +11,8 @@ export default function Datenschutz() {
     <LegalPage title="Datenschutzerklärung">
       <p>
         Hier steht, welche Daten Klaro verarbeitet, wozu, wo sie gespeichert werden und welche Rechte du hast. Kurz gesagt:
-        Klaro speichert nur, was du selbst eingibst oder hochlädst, und verwendet es nur, damit die App funktioniert. Kein
-        Tracking, keine Werbung, kein Verkauf von Daten.
+        Klaro speichert nur, was du selbst eingibst oder hochlädst, und verwendet es nur, damit die App funktioniert – und
+        dein Feedback, um Klaro zu verbessern. Kein Tracking, keine Werbung, kein Verkauf von Daten.
       </p>
 
       <LegalSection title="1. Verantwortlich">
@@ -40,6 +40,12 @@ export default function Datenschutz() {
             <strong>Dateien:</strong> Belege (Fotos, PDFs), Logos und Kopfbilder für Rechnungs-Vorlagen.
           </li>
           <li>
+            <strong>Feedback &amp; Wünsche:</strong> was du über „Feedback &amp; Wünsche“ schickst – Art (Wunsch, Fehler,
+            Lob, Sonstiges), deine Nachricht und auf welcher Seite der App du warst. Das Feedback wird mit deinem Konto
+            verknüpft gespeichert; deine E-Mail-Adresse wird nur dazugeschrieben, wenn du einer Antwort zustimmst. Es liest
+            nur der Betreiber von Klaro (siehe Punkt 1).
+          </li>
+          <li>
             <strong>Technische Daten:</strong> Beim Aufruf der App fallen IP-Adresse, Zeitpunkt, Browser und aufgerufene
             Adresse in den Server-Protokollen der Anbieter unten an. Bei „Beleg importieren“ und „Aus meiner Rechnung
             übernehmen“ speichert Klaro zusätzlich, wann und mit welchem Ergebnis du die Funktion genutzt hast (für das
@@ -53,6 +59,11 @@ export default function Datenschutz() {
           <li>
             Damit du Klaro nutzen kannst – Konto, Rechnungen, Ausgaben, Berechnungen, E-Mails zur Bestätigung und zum
             Zurücksetzen des Passworts: Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO).
+          </li>
+          <li>
+            Feedback auswerten, um Klaro zu verbessern und Fehler zu beheben: berechtigtes Interesse (Art. 6 Abs. 1 lit. f
+            DSGVO). Dir auf dein Feedback per E-Mail antworten: deine Einwilligung über das Häkchen „Du darfst mir
+            antworten“ (Art. 6 Abs. 1 lit. a DSGVO) – du kannst sie jederzeit per E-Mail an <OperatorMail /> widerrufen.
           </li>
           <li>
             Sicherheit, Schutz vor Missbrauch und Kostenkontrolle (Server-Protokolle, Tageslimits): berechtigtes Interesse
@@ -127,7 +138,7 @@ export default function Datenschutz() {
       <LegalSection title="8. Wie lange Daten gespeichert werden">
         <p>
           Deine Daten bleiben gespeichert, solange du dein Konto hast. Unter Einstellungen → Konto löschen kannst du dein
-          Konto jederzeit selbst löschen. Dann werden alle Daten und Dateien in Klaro sofort gelöscht. Server- und
+          Konto jederzeit selbst löschen. Dann werden alle Daten und Dateien in Klaro sofort gelöscht – auch dein Feedback. Server- und
           Anmelde-Protokolle sowie Sicherungskopien der Anbieter werden nach deren Fristen automatisch gelöscht.
         </p>
         <p>

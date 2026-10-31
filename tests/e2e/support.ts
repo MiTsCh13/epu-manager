@@ -17,7 +17,7 @@ function newClient(): Client {
   return createClient<Database>(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function adminClient(): Client {
+export function adminClient(): Client {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY fehlt in .env.local');
   return createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 }

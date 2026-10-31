@@ -36,7 +36,8 @@ export function ChoiceCards<T extends string | boolean>({
           return (
             <label
               key={String(opt.value)}
-              className={`relative flex min-h-[44px] cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+              // Radio ist unsichtbar (sr-only) – Tastaturfokus an der Karte zeigen
+              className={`relative flex min-h-[44px] cursor-pointer gap-3 rounded-lg border p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary has-[:focus-visible]:ring-offset-1 ${
                 opt.disabled
                   ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-60'
                   : selected

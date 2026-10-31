@@ -4,6 +4,7 @@ import { NAV_ITEMS } from './navigation';
 import { TrialBadge } from './TrialBadge';
 import { UserMenu } from './UserMenu';
 import { LegalLinks } from '@/components/legal/LegalLinks';
+import { FeedbackNavButton } from '@/components/feedback/FeedbackDialog';
 
 export function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -30,7 +31,7 @@ export function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /** Feste Sidebar ab Desktop-Breite (lg). */
-export function Sidebar() {
+export function Sidebar({ onFeedback }: { onFeedback: () => void }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
       <div className="flex h-16 items-center px-5">
@@ -39,6 +40,9 @@ export function Sidebar() {
       <nav aria-label="Hauptnavigation" className="flex-1 overflow-y-auto px-3 py-2">
         <NavList />
       </nav>
+      <div className="px-3 pb-2">
+        <FeedbackNavButton onClick={onFeedback} />
+      </div>
       <div className="space-y-3 border-t border-slate-200 p-4">
         <TrialBadge />
         <UserMenu />

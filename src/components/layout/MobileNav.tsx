@@ -7,6 +7,7 @@ import { NavList } from './Sidebar';
 import { TrialBadge } from './TrialBadge';
 import { UserMenu } from './UserMenu';
 import { LegalLinks } from '@/components/legal/LegalLinks';
+import { FeedbackNavButton } from '@/components/feedback/FeedbackDialog';
 
 /** Mobile TopBar: Logo + Menü-Button. */
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
@@ -70,7 +71,7 @@ export function BottomNav({ onOpenMenu }: { onOpenMenu: () => void }) {
 }
 
 /** Ausklappbares Menü (Mobile) mit vollständiger Navigation, Testphase und Abmelden. */
-export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function MobileDrawer({ open, onClose, onFeedback }: { open: boolean; onClose: () => void; onFeedback: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -110,6 +111,9 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
         <nav aria-label="Menü-Navigation" className="flex-1 overflow-y-auto px-3 py-2">
           <NavList onNavigate={onClose} />
         </nav>
+        <div className="px-3 pb-2">
+          <FeedbackNavButton onClick={onFeedback} />
+        </div>
         <div className="space-y-3 border-t border-slate-200 p-4">
           <TrialBadge onNavigate={onClose} />
           <UserMenu />

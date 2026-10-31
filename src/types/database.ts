@@ -204,6 +204,42 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          contact_ok: boolean
+          created_at: string
+          email: string | null
+          id: string
+          kind: string
+          message: string
+          page: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          contact_ok?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          kind: string
+          message: string
+          page?: string | null
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          contact_ok?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          page?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       imports: {
         Row: {
           created_at: string
