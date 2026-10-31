@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { normalizeClient, type ClientFormData } from '@/lib/validation';
 import type { Client } from '@/types';
@@ -14,11 +14,20 @@ export function useClients() {
   const [clients, setClients] = useState<ClientWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Zählt Änderungen: Wurde während des Ladens ein Kunde angelegt/geändert/gelöscht, ist die Antwort veraltet und
+  // würde z. B. den gerade angelegten Kunden wieder aus der Liste werfen – dann neu laden
+  const changes = useRef(0);
+  // Laufen zwei Ladevorgänge gleichzeitig (z. B. reload), zählt nur der neueste
+  const latest = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
+    const id = ++latest.current;
     setLoading(true);
     setError(null);
+    const before = changes.current;
     const { data, error: err } = await supabase.from('clients').select('*, invoices(count)').order('name');
+    if (id !== latest.current) return;
+    if (changes.current !== before) return load();
     if (err) {
       setError('Deine Kunden konnten nicht geladen werden.');
     } else {
@@ -36,13 +45,16 @@ export function useClients() {
   const create = useCallback(async (form: ClientFormData): Promise<Result<Client>> => {
     const { data, error: err } = await supabase.from('clients').insert(normalizeClient(form)).select().single();
     if (err) return { data: null, error: 'Der Kunde konnte nicht gespeichert werden.' };
-    setClients((list) => [...list, { ...data, invoiceCount: 0 }].sort(byName));
+    changes.current++;
+    // Hat ein gleichzeitiges Laden den Kunden schon gebracht, nicht doppelt einfügen
+    setClients((list) => [...list.filter((c) => c.id !== data.id), { ...data, invoiceCount: 0 }].sort(byName));
     return { data, error: null };
   }, []);
 
   const update = useCallback(async (id: string, form: ClientFormData): Promise<Result<Client>> => {
     const { data, error: err } = await supabase.from('clients').update(normalizeClient(form)).eq('id', id).select().single();
     if (err) return { data: null, error: 'Die Änderungen konnten nicht gespeichert werden.' };
+    changes.current++;
     setClients((list) => list.map((c) => (c.id === id ? { ...data, invoiceCount: c.invoiceCount } : c)).sort(byName));
     return { data, error: null };
   }, []);
@@ -58,6 +70,7 @@ export function useClients() {
           : 'Der Kunde konnte nicht gelöscht werden.',
       };
     }
+    changes.current++;
     setClients((list) => list.filter((c) => c.id !== id));
     return { data: true, error: null };
   }, []);
