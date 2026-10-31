@@ -5,6 +5,7 @@ import { fetchAll } from '@/lib/fetchAll';
 import { deleteReceipt } from '@/lib/receipts';
 import { bookDueRecurring } from '@/lib/recurringSync';
 import { supabase } from '@/lib/supabase';
+import { useLoadGuard } from '@/hooks/useLoadGuard';
 import type { Asset, AssetInsert, Expense, ExpenseInsert, SvsPayment, SvsPaymentInsert } from '@/types';
 
 type Result = { error: string | null };
@@ -20,8 +21,11 @@ export function useExpensesData(year: number) {
   // Jahre mit Ausgaben oder Anlagen (für die Jahresauswahl, z. B. nach einem Import älterer Jahre)
   const [years, setYears] = useState<number[]>([]);
   const loadedYear = useRef<number | null>(null);
+  // Verspätete Antworten (auch die eines vorher gewählten Jahres) dürfen nichts überschreiben
+  const guard = useLoadGuard();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
+    const ticket = guard.start();
     // Ladeanzeige nur beim ersten Laden eines Jahres – beim Neuladen nach dem Speichern bleiben Suche und Filter erhalten
     if (loadedYear.current !== year) setLoading(true);
     setError(null);
@@ -41,6 +45,9 @@ export function useExpensesData(year: number) {
       fetchAll((a, b) => supabase.from('assets').select('*').lte('purchase_date', to)
         .order('purchase_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
     ]);
+    const fresh = guard.check(ticket);
+    if (fresh === 'stale') return;
+    if (fresh === 'changed') return load();
     if (exp.error || svs.error || inv.error || inc.error || ast.error) {
       setError('Deine Ausgaben konnten nicht geladen werden.');
     } else {
@@ -53,7 +60,7 @@ export function useExpensesData(year: number) {
       );
     }
     setLoading(false);
-  }, [year]);
+  }, [year, guard]);
 
   useEffect(() => {
     void load();
@@ -88,9 +95,10 @@ export function useExpensesData(year: number) {
   const deleteExpense = useCallback(async (id: string): Promise<Result> => {
     const { error: err } = await supabase.from('expenses').delete().eq('id', id);
     if (err) return { error: 'Die Ausgabe konnte nicht gelöscht werden.' };
+    guard.changed();
     setExpenses((list) => list.filter((e) => e.id !== id));
     return { error: null };
-  }, []);
+  }, [guard]);
 
   /** Mehrere Ausgaben in eine Kategorie verschieben. Was nur einzeln geht, wird übersprungen und zurückgemeldet. */
   const recategorizeExpenses = useCallback(
@@ -134,10 +142,11 @@ export function useExpensesData(year: number) {
         await Promise.all(chunk.flatMap((id) => (receiptOf.has(id) ? [deleteReceipt(receiptOf.get(id)!)] : [])));
       }
       const gone = new Set(ids);
+      guard.changed();
       setExpenses((list) => list.filter((e) => !gone.has(e.id)));
       return { error: null };
     },
-    [expenses, load],
+    [expenses, load, guard],
   );
 
   const saveAsset = useCallback(
@@ -156,9 +165,10 @@ export function useExpensesData(year: number) {
   const deleteAsset = useCallback(async (id: string): Promise<Result> => {
     const { error: err } = await supabase.from('assets').delete().eq('id', id);
     if (err) return { error: 'Die Anlage konnte nicht gelöscht werden.' };
+    guard.changed();
     setAssets((list) => list.filter((a) => a.id !== id));
     return { error: null };
-  }, []);
+  }, [guard]);
 
   const addSvsPayment = useCallback(
     async (values: SvsPaymentInsert): Promise<Result> => {
@@ -183,9 +193,10 @@ export function useExpensesData(year: number) {
   const deleteSvsPayment = useCallback(async (id: string): Promise<Result> => {
     const { error: err } = await supabase.from('svs_payments').delete().eq('id', id);
     if (err) return { error: 'Der SVS-Beitrag konnte nicht gelöscht werden.' };
+    guard.changed();
     setSvsPayments((list) => list.filter((p) => p.id !== id));
     return { error: null };
-  }, []);
+  }, [guard]);
 
   return {
     expenses,

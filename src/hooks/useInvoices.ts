@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useLoadGuard } from '@/hooks/useLoadGuard';
 import type { Invoice } from '@/types';
 
 export type InvoiceListItem = Pick<
@@ -23,8 +24,11 @@ export function useInvoices() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Verspätete Antworten dürfen „bezahlt“ bzw. gelöschte Entwürfe nicht wieder zurückdrehen
+  const guard = useLoadGuard();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
+    const ticket = guard.start();
     setLoading(true);
     setError(null);
     const { data, error: err } = await supabase
@@ -32,6 +36,9 @@ export function useInvoices() {
       .select('id, invoice_number, invoice_date, due_date, status, total, subtotal, is_honorarnote, paid_at, cancelled_at, cancels_invoice_id, cancels_invoice_number, client_snapshot, clients(name)')
       .order('invoice_date', { ascending: false })
       .order('invoice_number', { ascending: false });
+    const fresh = guard.check(ticket);
+    if (fresh === 'stale') return;
+    if (fresh === 'changed') return load();
     if (err) {
       setError('Deine Rechnungen konnten nicht geladen werden.');
     } else {
@@ -44,7 +51,7 @@ export function useInvoices() {
       );
     }
     setLoading(false);
-  }, []);
+  }, [guard]);
 
   useEffect(() => {
     void load();
@@ -53,16 +60,18 @@ export function useInvoices() {
   const markPaid = useCallback(async (id: string, paidAt: string): Promise<ActionResult> => {
     const { error: err } = await supabase.from('invoices').update({ status: 'paid', paid_at: paidAt }).eq('id', id);
     if (err) return { error: invoiceErrorMessage(err, 'Status konnte nicht geändert werden.') };
+    guard.changed();
     setInvoices((list) => list.map((i) => (i.id === id ? { ...i, status: 'paid', paid_at: paidAt } : i)));
     return { error: null };
-  }, []);
+  }, [guard]);
 
   const deleteDraft = useCallback(async (id: string): Promise<ActionResult> => {
     const { data, error: err } = await supabase.from('invoices').delete().eq('id', id).eq('status', 'draft').select('id');
     if (err || data.length === 0) return { error: 'Nur Entwürfe können gelöscht werden.' };
+    guard.changed();
     setInvoices((list) => list.filter((i) => i.id !== id));
     return { error: null };
-  }, []);
+  }, [guard]);
 
   return { invoices, loading, error, reload: load, markPaid, deleteDraft };
 }
