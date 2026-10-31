@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, Laptop, Plus, ReceiptEuro, Repeat, ScanText } from 'lucide-react';
 import { useAuth, useProfileFor } from '@/contexts/AuthContext';
@@ -20,6 +20,7 @@ import { ExpenseFormModal, type ExpenseEntry, type ReceiptScan } from '@/compone
 import { useReceiptScanner } from '@/components/expenses/ReceiptScanner';
 import { WindowReceiptDrop } from '@/components/expenses/ReceiptDrop';
 import { takePendingReceipt } from '@/lib/pendingReceipt';
+import type { ReceiptPrefill } from '@/lib/receiptPrefill';
 import { ExpenseBrowser } from '@/components/expenses/ExpenseBrowser';
 import { SvsPaymentsSection } from '@/components/expenses/SvsPaymentsSection';
 import { RecurringDueList, RecurringSection } from '@/components/expenses/Recurring';
@@ -76,7 +77,9 @@ export default function Expenses() {
   }, [searchParams, setSearchParams]);
 
   // Sprungmarke #wiederkehrend aus der Übersicht erst nach dem Laden anspringen
-  const { hash } = useLocation();
+  const location = useLocation();
+  const { hash } = location;
+  const navigate = useNavigate();
   // Bei Einnahmen-Ausgaben-Rechnung liegen die Serien im Reiter „Wiederkehrend“ → den zuerst öffnen
   useEffect(() => {
     if (hash === '#wiederkehrend' && settings?.profit_method !== 'pauschal') setTab('wiederkehrend');
@@ -152,6 +155,15 @@ export default function Expenses() {
     const file = takePendingReceipt();
     if (file) scanner.start(file);
   }, []); // nur beim Öffnen der Seite
+
+  // Vom Assistenten: Fahrt als vorausgefülltes Formular öffnen (auch wenn die Seite schon offen ist)
+  useEffect(() => {
+    const prefill = (location.state as { assistantExpense?: ReceiptPrefill } | null)?.assistantExpense;
+    if (!prefill) return;
+    openScan({ file: null, prefill, source: 'assistant', id: crypto.randomUUID() });
+    // Zustand verbrauchen – sonst öffnet „Zurück“ bzw. Neuladen das Formular noch einmal
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.key]);
 
   const deletingRecord = deleting?.kind === 'asset' ? deleting.asset : (deleting?.expense ?? null);
 
@@ -417,7 +429,7 @@ export default function Expenses() {
       )}
 
       <ExpenseFormModal
-        key={editing ? `${editing.kind}-${editing.kind === 'asset' ? editing.asset.id : editing.expense.id}` : scan ? `scan-${scan.file.name}-${scan.file.lastModified}` : 'new'}
+        key={editing ? `${editing.kind}-${editing.kind === 'asset' ? editing.asset.id : editing.expense.id}` : scan ? (scan.file ? `scan-${scan.file.name}-${scan.file.lastModified}` : `scan-${scan.id}`) : 'new'}
         open={formOpen}
         entry={editing}
         scan={scan}

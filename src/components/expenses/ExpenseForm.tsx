@@ -1,3 +1,4 @@
+import { VEHICLE_LABELS } from '@/constants/vehicles';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Paperclip, X } from 'lucide-react';
@@ -40,10 +41,13 @@ export type ExpenseEntry = { kind: 'expense'; expense: Expense } | { kind: 'asse
 
 type Result = Promise<{ error: string | null }>;
 
-/** Ausgelesener Beleg: Datei + Vorschlag fürs Formular (nur bei neuen Ausgaben). */
+/** Vorschlag fürs Formular: aus einem Beleg (mit Datei) oder vom Assistenten (ohne Datei) */
 export interface ReceiptScan {
-  file: File;
+  file: File | null;
   prefill: ReceiptPrefill;
+  source?: 'receipt' | 'assistant';
+  /** Eindeutig je Vorschlag ohne Datei (Formular wird damit neu aufgebaut) */
+  id?: string;
 }
 
 function vatRateOf(amount: number, net: number | null): VatRate {
@@ -104,7 +108,7 @@ function toForm(entry: ExpenseEntry, isKU: boolean): ExpenseFormInput {
 
 const CUSTOM_LIFE = 'andere';
 
-export const VEHICLE_LABELS: Record<Vehicle, string> = { car: 'Auto', motorbike: 'Motorrad, Moped', bike: 'Fahrrad' };
+export { VEHICLE_LABELS };
 
 /**
  * Ausgabe erfassen bzw. bearbeiten (inkl. Beleg-Upload). Über 1.000 € wird daraus eine Anlage, die Klaro über die
@@ -297,7 +301,7 @@ export function ExpenseFormModal({
     <Modal
       open={open}
       onClose={saving ? () => undefined : onClose}
-      title={entry?.kind === 'asset' ? 'Anlage bearbeiten' : entry ? 'Ausgabe bearbeiten' : scan ? 'Beleg prüfen' : 'Ausgabe erfassen'}
+      title={entry?.kind === 'asset' ? 'Anlage bearbeiten' : entry ? 'Ausgabe bearbeiten' : scan ? (scan.source === 'assistant' ? 'Ausgabe prüfen' : 'Beleg prüfen') : 'Ausgabe erfassen'}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
@@ -310,7 +314,7 @@ export function ExpenseFormModal({
       }
     >
       <form id={formId} onSubmit={handleSubmit} noValidate className="space-y-5">
-        {scan && !entry && <ScanSummary prefill={scan.prefill} />}
+        {scan && !entry && <ScanSummary prefill={scan.prefill} source={scan.source ?? 'receipt'} />}
         {!scan && !entry && onImportReceipt && <ReceiptDropArea onFile={onImportReceipt} />}
         <CategoryGrid
           value={form.categoryId}
@@ -605,7 +609,7 @@ export function ExpenseFormModal({
 }
 
 /** Hinweis oben im Formular, wenn Klaro den Beleg ausgelesen hat. */
-function ScanSummary({ prefill }: { prefill: ReceiptPrefill }) {
+function ScanSummary({ prefill, source }: { prefill: ReceiptPrefill; source: 'receipt' | 'assistant' }) {
   const notes = prefill.notes.length > 0 && (
     <ul className="mt-1 list-disc space-y-1 pl-4">
       {prefill.notes.map((n, i) => (
@@ -613,6 +617,14 @@ function ScanSummary({ prefill }: { prefill: ReceiptPrefill }) {
       ))}
     </ul>
   );
+  if (source === 'assistant') {
+    return (
+      <Alert type="info" title="Vom Assistenten vorausgefüllt">
+        Bitte prüf die Angaben, bevor du speicherst.
+        {notes}
+      </Alert>
+    );
+  }
   return prefill.likelyPrivate ? (
     <Alert type="warning" title="Klaro hat deinen Beleg gelesen – das ist vermutlich privat">
       Private Ausgaben sind nicht absetzbar. Speichere den Beleg nur, wenn du ihn wirklich beruflich nutzt.

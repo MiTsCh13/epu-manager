@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
+import { Assistant } from '@/components/assistant/Assistant';
 import { Sidebar } from './Sidebar';
 import { BottomNav, MobileDrawer, TopBar } from './MobileNav';
 
@@ -38,6 +39,7 @@ export function AppLayout() {
         </main>
       </div>
       <BottomNav onOpenMenu={openMenu} />
+      <Assistant />
     </div>
   );
 }

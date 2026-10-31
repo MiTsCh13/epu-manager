@@ -82,11 +82,18 @@ export default function Datenschutz() {
             verarbeitet Vercel die technischen Daten aus Punkt 2, deine Geschäftsdaten laufen nicht über Vercel.
           </li>
           <li>
-            <strong>Anthropic</strong> (USA) – nur wenn du „Beleg importieren“ oder „Aus meiner Rechnung übernehmen“
-            verwendest. Dann geht der Inhalt der Datei (z. B. Text und Bild des Belegs oder deiner Rechnung, eventuell mit
-            Namen und Anschriften) an die KI Claude von Anthropic, die die Felder ausliest. Anthropic verwendet diese Daten
-            nicht zum Training und löscht sie laut eigenen Angaben nach kurzer Zeit automatisch (spätestens nach 30 Tagen). Ohne diese Funktionen
-            bekommt Anthropic keine Daten.
+            <strong>Anthropic</strong> (USA) – nur wenn du „Beleg importieren“, „Aus meiner Rechnung übernehmen“ oder den
+            Assistenten verwendest. Dann geht der Inhalt der Datei (z. B. Text und Bild des Belegs oder deiner Rechnung,
+            eventuell mit Namen und Anschriften) bzw. dein Befehl an den Assistenten samt den Namen deiner Kunden und deiner
+            Leistungen & Produkte (mit Einheit und Preis) an die KI Claude von Anthropic, die daraus einen Vorschlag macht.
+            Anthropic verwendet diese Daten nicht zum Training und löscht sie laut eigenen Angaben nach kurzer Zeit
+            automatisch (spätestens nach 30 Tagen). Ohne diese Funktionen bekommt Anthropic keine Daten.
+          </li>
+          <li>
+            <strong>HeiGIT gGmbH</strong> (Heidelberg, Deutschland, EU) – betreibt den Routenplaner OpenRouteService. Nur wenn
+            du mit dem Assistenten eine Fahrt einträgst: Start und Ziel der Fahrt (z. B. Ort, deine Firmenadresse oder die
+            Adresse des Kunden) gehen an OpenRouteService, das die Kilometer berechnet. Dein Name und andere Daten werden
+            nicht übermittelt.
           </li>
           <li>
             <strong>Hostinger International Ltd.</strong> (Zypern, EU) – Versand der E-Mails von Klaro (z. B. Bestätigung
@@ -100,7 +107,16 @@ export default function Datenschutz() {
         </p>
       </LegalSection>
 
-      <LegalSection title="6. Speicher im Browser">
+      <LegalSection title="6. Spracheingabe">
+        <p>
+          Sprichst du dem Assistenten einen Befehl, wandelt dein Browser die Sprache in Text um – Klaro bekommt nur den
+          Text. Das macht der Browser selbst mit dem Dienst seines Herstellers: Google Chrome schickt die Aufnahme dafür an
+          Google, Safari an Apple. Willst du das nicht, tipp den Befehl einfach oder nutz das Diktier-Mikrofon deiner
+          Handy-Tastatur.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="7. Speicher im Browser">
         <p>
           Klaro verwendet keine Cookies für Tracking oder Werbung und keine Analyse-Tools. Im Speicher deines Browsers
           liegen nur technisch nötige Einträge: deine Anmeldung (damit du angemeldet bleibst) und ein kurzer Merker beim
@@ -108,7 +124,7 @@ export default function Datenschutz() {
         </p>
       </LegalSection>
 
-      <LegalSection title="7. Wie lange Daten gespeichert werden">
+      <LegalSection title="8. Wie lange Daten gespeichert werden">
         <p>
           Deine Daten bleiben gespeichert, solange du dein Konto hast. Unter Einstellungen → Konto löschen kannst du dein
           Konto jederzeit selbst löschen. Dann werden alle Daten und Dateien in Klaro sofort gelöscht. Server- und
@@ -120,7 +136,7 @@ export default function Datenschutz() {
         </p>
       </LegalSection>
 
-      <LegalSection title="8. Deine Rechte">
+      <LegalSection title="9. Deine Rechte">
         <p>
           Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und
           Widerspruch (Art. 15–21 DSGVO). Schreib dafür einfach an <OperatorMail />.

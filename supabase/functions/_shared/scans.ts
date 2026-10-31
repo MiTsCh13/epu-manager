@@ -1,4 +1,4 @@
-// Gemeinsame Helfer für die Lese-Functions mit Claude (read-receipt, read-invoice-design):
+// Gemeinsame Helfer für die Functions mit Claude (read-receipt, read-invoice-design, assistant):
 // Anmeldung, Antworten, Tageslimit und Protokoll in receipt_scans (je Art getrennt gezählt).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { parseAllowedOrigins } from './cors.ts';
@@ -22,7 +22,7 @@ export async function getUserId(req: Request): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
-export type ScanKind = 'receipt' | 'invoice_design';
+export type ScanKind = 'receipt' | 'invoice_design' | 'assistant';
 
 /**
  * Anthropic-Guthaben aufgebraucht: Anthropic antwortet mit 400 „credit balance is too low“. Das ist kein Fehler der
@@ -37,7 +37,7 @@ export function isBillingError(e: unknown): boolean {
 export const UNAVAILABLE = 'Das automatische Auslesen ist gerade vorübergehend nicht verfügbar. Bitte versuche es später erneut.';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Über alle Konten und beide Arten – Notbremse für die Kosten (≈ 20–40 $ pro Tag)
+// Über alle Konten und Arten – Notbremse für die Kosten (≈ 20–40 $ pro Tag)
 export const GLOBAL_DAILY_LIMIT = 1000;
 
 /**

@@ -1,9 +1,16 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 /** Leiste für ausgewählte Einträge: Anzahl, Summe, Aktionen, Auswahl aufheben. Klebt beim Scrollen unten. */
 export function BulkBar({ count, summary, onClear, children }: { count: number; summary?: ReactNode; onClear: () => void; children: ReactNode }) {
-  if (count === 0) return null;
+  const visible = count > 0;
+  // Assistent-Knopf ausblenden (index.css), solange die Leiste da ist
+  useEffect(() => {
+    if (!visible) return;
+    document.body.setAttribute('data-bulk-bar', '');
+    return () => document.body.removeAttribute('data-bulk-bar');
+  }, [visible]);
+  if (!visible) return null;
   return (
     <div
       role="region"

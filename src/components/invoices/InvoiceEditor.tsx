@@ -1,3 +1,4 @@
+import type { InvoicePrefill } from '@/lib/assistant';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -63,22 +64,23 @@ interface FormState {
   touched: { intro: boolean; notes: boolean; footer: boolean };
 }
 
-function initialState(invoice: Invoice | null, isKU: boolean): FormState {
+function initialState(invoice: Invoice | null, isKU: boolean, prefill?: InvoicePrefill | null): FormState {
   const today = toISODate(new Date());
   if (!invoice) {
     return {
-      clientId: '',
+      clientId: prefill?.clientId ?? '',
       invoiceNumber: '',
       numberTouched: false,
       invoiceDate: today,
       dueDate: addDays(today, 14),
       dueTouched: false,
       payment: 'transfer',
-      serviceFrom: today,
-      serviceTouched: false,
+      serviceFrom: prefill?.serviceDate ?? today,
+      serviceTouched: !!prefill?.serviceDate,
       serviceTo: '',
       isPeriod: false,
-      rows: [newRow()],
+      // Vom Assistenten: Positionen übernehmen
+      rows: prefill?.rows.length ? prefill.rows.map((r) => ({ ...newRow(), ...r })) : [newRow()],
       vatRate: isKU ? 0 : 20,
       templateId: '',
       templateTouched: false,
@@ -121,14 +123,14 @@ function initialState(invoice: Invoice | null, isKU: boolean): FormState {
 }
 
 /** Neue Rechnung bzw. Entwurf bearbeiten. Ausgestellte Rechnungen zeigt InvoiceDetail. */
-export function InvoiceEditor({ invoice }: { invoice: Invoice | null }) {
+export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; prefill?: InvoicePrefill | null }) {
   const navigate = useNavigate();
   const { profile, profileFor } = useAuth();
   // Kleinunternehmer-Status im Jahr der Leistung (UStR Rz 995: im Kalenderjahr ausgeführte Umsätze) – wie in der DB:
   // Ende des Leistungszeitraums, sonst Leistungsdatum, sonst Rechnungsdatum
   const kuIn = (date: string | null | undefined) => profileFor(yearOfDate(date))?.is_kleinunternehmer ?? true;
   const [form, setForm] = useState<FormState>(() =>
-    initialState(invoice, kuIn(invoice?.service_date_to ?? invoice?.service_date_from ?? invoice?.invoice_date)),
+    initialState(invoice, kuIn(invoice?.service_date_to ?? invoice?.service_date_from ?? invoice?.invoice_date ?? prefill?.serviceDate), prefill),
   );
   const isKU = kuIn((form.isPeriod && form.serviceTo) || form.serviceFrom || form.invoiceDate);
   // Neue Selbständige stellen Honorarnoten aus, Gewerbetreibende Rechnungen. Entwürfe folgen dem aktuellen Profil.

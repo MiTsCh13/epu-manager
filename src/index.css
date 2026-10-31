@@ -22,3 +22,8 @@
   src: url('/fonts/lora-400-normal.ttf') format('truetype');
   font-display: swap;
 }
+
+/* Assistent-Knopf ausblenden, solange eine Auswahl-Leiste unten klebt (BulkBar) – er würde ihre Knöpfe verdecken */
+body[data-bulk-bar] .assistant-fab {
+  display: none;
+}
