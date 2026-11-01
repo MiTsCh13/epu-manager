@@ -4,12 +4,13 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
-import { correctionDraftFrom, formatDate, stornoDate, toISODate } from '@/lib/invoices';
+import { correctionDraftFrom, formatDate, stornoClosingText, stornoDate, toISODate } from '@/lib/invoices';
 import { DEFAULT_NUMBER_FORMAT, nextInvoiceNumber } from '@/lib/invoiceNumbers';
 import { formatEuro } from '@/lib/money';
 import { supabase } from '@/lib/supabase';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
+import { TextArea } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import type { Invoice } from '@/types';
 
@@ -24,12 +25,27 @@ export function CancelInvoiceModal({ invoice, onClose }: { invoice: Invoice | nu
   const used = useUsedInvoiceNumbers(!!invoice);
   const [withCorrection, setWithCorrection] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Text unten: Vorschlag passt sich an (bezahlt/offen, mit/ohne Korrektur), bis man ihn selbst ändert
+  const [notes, setNotes] = useState<string | null>(null);
 
   useEffect(() => {
-    if (invoice) setWithCorrection(true);
+    if (invoice) {
+      setWithCorrection(true);
+      setNotes(null);
+    }
   }, [invoice]);
 
   const docLabel = invoice?.is_honorarnote ? 'Honorarnote' : 'Rechnung';
+  const suggestion = invoice
+    ? stornoClosingText({
+        paid: invoice.status === 'paid',
+        withCorrection,
+        docLabel,
+        number: invoice.invoice_number,
+        amount: formatEuro(Number(invoice.total)),
+      })
+    : '';
+  const closingText = notes ?? suggestion;
   const date = invoice ? stornoDate(invoice.invoice_date) : toISODate(new Date());
   const format = profile?.invoice_number_format ?? DEFAULT_NUMBER_FORMAT;
   const stornoNumber = used ? nextInvoiceNumber(format, date, used.numbers, used.formats) : null;
@@ -41,6 +57,7 @@ export function CancelInvoiceModal({ invoice, onClose }: { invoice: Invoice | nu
       p_invoice: invoice.id,
       p_number: stornoNumber,
       p_date: date,
+      p_notes: closingText.trim() || undefined,
     });
     if (error || !stornoId) {
       setBusy(false);
@@ -64,7 +81,7 @@ export function CancelInvoiceModal({ invoice, onClose }: { invoice: Invoice | nu
       setBusy(false);
       if (draftError || !draft) {
         toast.error(
-          `Storniert – die korrigierte Rechnung konnte aber nicht angelegt werden. ${invoiceErrorMessage(draftError ?? { message: '' }, 'Leg sie bitte neu an.')}`,
+          `Storniert – die korrigierte ${docLabel} konnte aber nicht angelegt werden. ${invoiceErrorMessage(draftError ?? { message: '' }, `Leg sie bitte neu an – die Stornorechnung kündigt sie deinem Kunden an.`)}`,
         );
         navigate(`/rechnungen/${stornoId}`);
         return;
@@ -139,6 +156,15 @@ export function CancelInvoiceModal({ invoice, onClose }: { invoice: Invoice | nu
             <span className="block text-slate-600">Als Entwurf mit denselben Positionen – du änderst nur, was falsch war.</span>
           </span>
         </label>
+        <TextArea
+          label="Text unten auf der Stornorechnung"
+          optional
+          rows={3}
+          maxLength={2000}
+          value={closingText}
+          hint="Klaro schlägt einen Text vor – du kannst ihn ändern oder leeren."
+          onChange={(e) => setNotes(e.target.value)}
+        />
         {!used && <Alert type="info">Die nächste Nummer wird ermittelt …</Alert>}
       </div>
     </Modal>

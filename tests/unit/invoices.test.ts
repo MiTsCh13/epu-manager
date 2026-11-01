@@ -7,6 +7,7 @@ import {
   parseLineItems,
   validateInvoiceForm,
   stepQuantity,
+  stornoClosingText,
   stornoDate,
   correctionDraftFrom,
   getDisplayStatus,
@@ -51,12 +52,13 @@ describe('getDisplayStatus', () => {
 
 describe('matchesFilter', () => {
   it.each([
-    ['all', ['draft', 'sent', 'paid', 'overdue']],
+    ['all', ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'storno']],
     ['open', ['sent', 'overdue']],
     ['paid', ['paid']],
     ['overdue', ['overdue']],
+    ['cancelled', ['cancelled', 'storno']],
   ] as const)('%s', (filter, expected) => {
-    const all = ['draft', 'sent', 'paid', 'overdue'] as const;
+    const all = ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'storno'] as const;
     expect(all.filter((s) => matchesFilter(s, filter))).toEqual(expected);
   });
 });
@@ -157,6 +159,18 @@ describe('Stornieren', () => {
     expect(getDisplayStatus({ status: 'cancelled', due_date: '2000-01-01', cancelled_at: '2026-10-29T10:00:00Z' })).toBe('cancelled');
     expect(matchesFilter('cancelled', 'open')).toBe(false);
     expect(matchesFilter('storno', 'paid')).toBe(false);
+  });
+
+  it('stornoClosingText: Vorschlag je nach bezahlt/offen und korrigierter Rechnung', () => {
+    const base = { docLabel: 'Rechnung', number: '2026-002', amount: '€ 480,00' };
+    expect(stornoClosingText({ ...base, paid: true, withCorrection: false })).toBe(
+      'Den bereits bezahlten Betrag von € 480,00 zahle ich Ihnen in den nächsten Tagen zurück.',
+    );
+    expect(stornoClosingText({ ...base, paid: true, withCorrection: true })).toContain('verrechne ich mit der korrigierten Rechnung');
+    expect(stornoClosingText({ ...base, paid: false, withCorrection: false })).toBe('Bitte bezahlen Sie die Rechnung 2026-002 nicht mehr.');
+    expect(stornoClosingText({ ...base, docLabel: 'Honorarnote', paid: false, withCorrection: true })).toBe(
+      'Bitte bezahlen Sie die Honorarnote 2026-002 nicht. Sie erhalten in Kürze eine korrigierte Honorarnote.',
+    );
   });
 
   it('stornoDate: heute, aber nie vor dem Rechnungsdatum', () => {

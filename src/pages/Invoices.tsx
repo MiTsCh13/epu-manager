@@ -21,7 +21,7 @@ import { ListControls } from '@/components/ui/ListControls';
 import { YearSelect } from '@/components/ui/YearSelect';
 import { ImportLink } from '@/components/import/ImportLink';
 
-const FILTERS: InvoiceFilter[] = ['all', 'open', 'paid', 'overdue'];
+const FILTERS: InvoiceFilter[] = ['all', 'open', 'paid', 'overdue', 'cancelled'];
 
 const newInvoiceLink = (
   <Link

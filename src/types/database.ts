@@ -797,7 +797,12 @@ export type Database = {
         Returns: string
       }
       cancel_invoice: {
-        Args: { p_date: string; p_invoice: string; p_number: string }
+        Args: {
+          p_date: string
+          p_invoice: string
+          p_notes?: string
+          p_number: string
+        }
         Returns: string
       }
       delete_recurring: {

@@ -4,7 +4,7 @@ import { formatDecimalInput, parseDecimal, round2 } from './money';
 
 // 'cancelled' = stornierte Rechnung (auch wenn sie vorher bezahlt war), 'storno' = die Stornorechnung selbst
 export type DisplayStatus = InvoiceStatus | 'storno';
-export type InvoiceFilter = 'all' | 'open' | 'paid' | 'overdue';
+export type InvoiceFilter = 'all' | 'open' | 'paid' | 'overdue' | 'cancelled';
 
 export const STATUS_LABELS: Record<DisplayStatus, string> = {
   draft: 'Entwurf',
@@ -20,6 +20,7 @@ export const FILTER_LABELS: Record<InvoiceFilter, string> = {
   open: 'Offen',
   paid: 'Bezahlt',
   overdue: 'Überfällig',
+  cancelled: 'Storniert',
 };
 
 export const DEFAULT_PAYMENT_DAYS = 14;
@@ -72,6 +73,9 @@ export function matchesFilter(status: DisplayStatus, filter: InvoiceFilter): boo
       return status === 'paid';
     case 'overdue':
       return status === 'overdue';
+    // stornierte Rechnungen und ihre Stornorechnungen gemeinsam
+    case 'cancelled':
+      return status === 'cancelled' || status === 'storno';
   }
 }
 
@@ -178,6 +182,21 @@ export function hasFormErrors(e: InvoiceFormErrors): boolean {
 /** Datum der Stornorechnung: heute – aber nie vor dem Datum der Originalrechnung. */
 export function stornoDate(invoiceDate: string, today: string = toISODate(new Date())): string {
   return invoiceDate > today ? invoiceDate : today;
+}
+
+/**
+ * Vorschlag für den „Text unten“ der Stornorechnung (an den Kunden, Sie-Form wie die E-Mail): Bezahltes Geld wird
+ * zurückgezahlt bzw. mit der korrigierten Rechnung verrechnet, eine offene Rechnung soll nicht mehr bezahlt werden.
+ */
+export function stornoClosingText(o: { paid: boolean; withCorrection: boolean; docLabel: string; number: string; amount: string }): string {
+  if (o.paid) {
+    return o.withCorrection
+      ? `Den bereits bezahlten Betrag von ${o.amount} verrechne ich mit der korrigierten ${o.docLabel}, die Sie in Kürze erhalten.`
+      : `Den bereits bezahlten Betrag von ${o.amount} zahle ich Ihnen in den nächsten Tagen zurück.`;
+  }
+  return o.withCorrection
+    ? `Bitte bezahlen Sie die ${o.docLabel} ${o.number} nicht. Sie erhalten in Kürze eine korrigierte ${o.docLabel}.`
+    : `Bitte bezahlen Sie die ${o.docLabel} ${o.number} nicht mehr.`;
 }
 
 /**

@@ -41,16 +41,25 @@ test('Offene und bezahlte Rechnung stornieren, Schutz in der Datenbank', async (
   await page.getByRole('button', { name: 'Stornieren' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(`mit der Nummer ${year}-004`)).toBeVisible();
+  // Text unten: Vorschlag passt sich an die Auswahl an, eigene Änderung bleibt
+  const closing = dialog.getByLabel(/Text unten auf der Stornorechnung/);
+  await expect(closing).toHaveValue(`Bitte bezahlen Sie die Rechnung ${year}-002 nicht. Sie erhalten in Kürze eine korrigierte Rechnung.`);
   await dialog.getByLabel(/korrigierte Rechnung anlegen/).uncheck();
+  await expect(closing).toHaveValue(`Bitte bezahlen Sie die Rechnung ${year}-002 nicht mehr.`);
+  await closing.fill('Bitte nicht mehr bezahlen – danke!');
+  await dialog.getByLabel(/korrigierte Rechnung anlegen/).check();
+  await dialog.getByLabel(/korrigierte Rechnung anlegen/).uncheck();
+  await expect(closing).toHaveValue('Bitte nicht mehr bezahlen – danke!');
   await dialog.getByRole('button', { name: 'Stornieren' }).click();
   await expect(page.getByRole('heading', { name: `Stornorechnung ${year}-004` })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(`Rechnung ${year}-002`)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Stornieren' })).toHaveCount(0);
 
-  const { data: afterOpen } = await client.from('invoices').select('invoice_number, status, total, cancelled_at, cancels_invoice_number, client_snapshot').in('invoice_number', [`${year}-002`, `${year}-004`]).order('invoice_number');
+  await expect(page.getByText('Bitte nicht mehr bezahlen – danke!')).toBeVisible();
+  const { data: afterOpen } = await client.from('invoices').select('invoice_number, status, total, cancelled_at, cancels_invoice_number, client_snapshot, notes').in('invoice_number', [`${year}-002`, `${year}-004`]).order('invoice_number');
   expect(afterOpen![0]).toMatchObject({ status: 'cancelled' });
   expect(afterOpen![0]!.cancelled_at).not.toBeNull();
-  expect(afterOpen![1]).toMatchObject({ status: 'cancelled', total: -480, cancels_invoice_number: `${year}-002` });
+  expect(afterOpen![1]).toMatchObject({ status: 'cancelled', total: -480, cancels_invoice_number: `${year}-002`, notes: 'Bitte nicht mehr bezahlen – danke!' });
   expect((afterOpen![1]!.client_snapshot as { name: string }).name).toBe('Tischlerei Holz');
 
   // Zur stornierten Rechnung: Status + Link zur Stornorechnung, nicht mehr „als bezahlt markieren“
@@ -63,20 +72,35 @@ test('Offene und bezahlte Rechnung stornieren, Schutz in der Datenbank', async (
   await page.goto(`/rechnungen/${paid!.id}`);
   await page.getByRole('button', { name: 'Stornieren' }).click();
   await expect(dialog.getByText('als Minus-Einnahme')).toBeVisible();
+  await expect(dialog.getByLabel(/Text unten auf der Stornorechnung/)).toHaveValue(/verrechne ich mit der korrigierten Rechnung/);
   await dialog.getByRole('button', { name: 'Stornieren' }).click();
   await expect(page.getByPlaceholder('z. B. Website-Gestaltung')).toHaveValue('Beratung', { timeout: 20_000 });
   await expect(page.getByLabel(/Nummer$/)).toHaveValue(`${year}-006`);
 
-  const { data: afterPaid } = await client.from('invoices').select('invoice_number, status, total, paid_at, cancelled_at').in('invoice_number', [`${year}-001`, `${year}-005`, `${year}-006`]).order('invoice_number');
+  const { data: afterPaid } = await client.from('invoices').select('invoice_number, status, total, paid_at, cancelled_at, notes').in('invoice_number', [`${year}-001`, `${year}-005`, `${year}-006`]).order('invoice_number');
   expect(afterPaid![0]).toMatchObject({ status: 'paid' });
   expect(afterPaid![0]!.cancelled_at).not.toBeNull();
   expect(afterPaid![1]).toMatchObject({ status: 'paid', total: -480 });
+  expect(afterPaid![1]!.notes).toContain('verrechne ich');
   expect(afterPaid![1]!.paid_at).not.toBeNull();
   expect(afterPaid![2]).toMatchObject({ status: 'draft' });
 
   // Zweites Mal stornieren geht nicht
   const again = await client.rpc('cancel_invoice', { p_invoice: paid!.id, p_number: 'X-3', p_date: iso });
   expect(again.error?.message).toContain('kann nicht storniert werden');
+
+  // Reiter „Storniert“: beide Originale und beide Stornorechnungen, nicht unter „Bezahlt“
+  await page.goto('/rechnungen?filter=cancelled');
+  for (const n of ['001', '002', '004', '005']) await expect(page.getByText(`${year}-${n}`, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`${year}-006`, { exact: true })).toHaveCount(0);
+  await page.goto('/rechnungen?filter=paid');
+  await expect(page.getByRole('tab', { name: /Bezahlt/ })).toHaveAttribute('aria-selected', 'true');
+  for (const n of ['001', '002', '004', '005']) await expect(page.getByText(`${year}-${n}`, { exact: true })).toHaveCount(0);
+
+  // Text unten auf der Stornorechnung lässt sich danach nicht mehr ändern
+  const { data: stornoRow } = await client.from('invoices').select('id').eq('invoice_number', `${year}-004`).single();
+  const edited = await client.from('invoices').update({ notes: 'geändert' }).eq('id', stornoRow!.id).select('id');
+  expect(edited.error !== null || edited.data?.length === 0).toBe(true);
 
   // Einnahmen: bezahlt + Storno = 0
   await page.goto('/rechnungen');

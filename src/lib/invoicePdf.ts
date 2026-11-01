@@ -146,7 +146,8 @@ export function buildInvoicePdfData(invoice: Invoice): InvoicePdfData {
   if (!isKU) totals.push([`USt ${vatRate} %`, formatEuro(Number(invoice.vat_amount))]);
 
   const closingBlocks = parseRichText(fill(invoice.notes));
-  const closingTitle = fill(template.closing.title) || null;
+  // Überschrift der Vorlage (z. B. „Vielen Dank für Ihr Vertrauen!“) passt nicht über eine Stornierung
+  const closingTitle = storno ? null : fill(template.closing.title) || null;
   // Höchstens 5 Kontaktzeilen – die Fußzeile soll nicht die halbe Seite füllen
   const contact = template.footer.contact.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 5);
   const bankExtra = template.footer.bankExtra.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 4);
