@@ -179,6 +179,15 @@ export function hasFormErrors(e: InvoiceFormErrors): boolean {
 
 // ─── Stornieren ─────────────────────────────────────────────
 
+/**
+ * Zurück zum Entwurf: nur offene Rechnungen, die Klaro nicht als verschickt kennt (bezahlt, storniert, Stornorechnung
+ * und verschickt bleiben gesperrt – die Datenbank prüft dasselbe in reopen_invoice).
+ */
+export function canReopenInvoice(invoice: Parameters<typeof getDisplayStatus>[0] & { emailed_at?: string | null }): boolean {
+  const status = getDisplayStatus(invoice);
+  return (status === 'sent' || status === 'overdue') && !invoice.emailed_at;
+}
+
 /** Datum der Stornorechnung: heute – aber nie vor dem Datum der Originalrechnung. */
 export function stornoDate(invoiceDate: string, today: string = toISODate(new Date())): string {
   return invoiceDate > today ? invoiceDate : today;

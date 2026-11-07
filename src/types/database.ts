@@ -360,6 +360,7 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           payment_method: string
+          reopened_at: string | null
           service_date_from: string | null
           service_date_to: string | null
           status: string
@@ -392,6 +393,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payment_method?: string
+          reopened_at?: string | null
           service_date_from?: string | null
           service_date_to?: string | null
           status?: string
@@ -424,6 +426,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payment_method?: string
+          reopened_at?: string | null
           service_date_from?: string | null
           service_date_to?: string | null
           status?: string
@@ -817,6 +820,7 @@ export type Database = {
         Args: { p_date: string; p_user: string }
         Returns: boolean
       }
+      reopen_invoice: { Args: { p_invoice: string }; Returns: undefined }
       set_default_template: { Args: { p_id: string }; Returns: undefined }
     }
     Enums: {

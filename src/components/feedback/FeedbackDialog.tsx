@@ -36,7 +36,6 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const busyRef = useRef(false);
-  // Stabil halten: Modal setzt bei neuem onClose den Fokus zurück ins erste Feld
   const handleClose = useCallback(() => !busyRef.current && onClose(), [onClose]);
 
   async function submit() {

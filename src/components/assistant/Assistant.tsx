@@ -60,7 +60,6 @@ function AssistantDialog({ onClose }: { onClose: () => void }) {
   // Sperre gegen doppeltes Senden (Enter, Mikro) – jeder Befehl kostet und zählt gegen das Tageslimit
   const busyRef = useRef(false);
   busyRef.current = busy;
-  // Stabil halten: Modal setzt bei neuem onClose den Fokus zurück ins erste Feld
   const handleClose = useCallback(() => !busyRef.current && onClose(), [onClose]);
 
   const send = useCallback(async (command: string) => {

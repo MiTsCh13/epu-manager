@@ -87,7 +87,6 @@ export function SendInvoiceModal({
   }, [invoiceId]);
 
   const toInvalid = mail.to.trim() !== '' && !isPlausibleEmail(mail.to);
-  // Stabil halten: Modal setzt bei neuem onClose den Fokus zurück aufs erste Feld (Tippen im Text springt sonst)
   const handleClose = useCallback(() => !busy && onClose(), [busy, onClose]);
 
   async function markSent() {

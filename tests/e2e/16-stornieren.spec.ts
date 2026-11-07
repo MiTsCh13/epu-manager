@@ -46,7 +46,10 @@ test('Offene und bezahlte Rechnung stornieren, Schutz in der Datenbank', async (
   await expect(closing).toHaveValue(`Bitte bezahlen Sie die Rechnung ${year}-002 nicht. Sie erhalten in Kürze eine korrigierte Rechnung.`);
   await dialog.getByLabel(/korrigierte Rechnung anlegen/).uncheck();
   await expect(closing).toHaveValue(`Bitte bezahlen Sie die Rechnung ${year}-002 nicht mehr.`);
-  await closing.fill('Bitte nicht mehr bezahlen – danke!');
+  // Echt tippen: der Fokus muss im Feld bleiben (das Fenster darf ihn nicht bei jedem Zeichen neu setzen)
+  await closing.fill('');
+  await closing.pressSequentially('Bitte nicht mehr bezahlen – danke!');
+  await expect(closing).toBeFocused();
   await dialog.getByLabel(/korrigierte Rechnung anlegen/).check();
   await dialog.getByLabel(/korrigierte Rechnung anlegen/).uncheck();
   await expect(closing).toHaveValue('Bitte nicht mehr bezahlen – danke!');

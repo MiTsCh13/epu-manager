@@ -58,12 +58,17 @@ export function useInvoices() {
   }, [load]);
 
   const markPaid = useCallback(async (id: string, paidAt: string): Promise<ActionResult> => {
-    const { error: err } = await supabase.from('invoices').update({ status: 'paid', paid_at: paidAt }).eq('id', id);
+    // Nur wenn noch offen: Eine veraltete Liste darf einen zurückgeholten Entwurf nicht ungeprüft als bezahlt ausstellen
+    const { data, error: err } = await supabase.from('invoices').update({ status: 'paid', paid_at: paidAt }).eq('id', id).in('status', ['sent', 'overdue']).select('id');
     if (err) return { error: invoiceErrorMessage(err, 'Status konnte nicht geändert werden.') };
+    if (data.length === 0) {
+      void load();
+      return { error: 'Diese Rechnung ist nicht mehr offen. Die Liste wurde aktualisiert.' };
+    }
     guard.changed();
     setInvoices((list) => list.map((i) => (i.id === id ? { ...i, status: 'paid', paid_at: paidAt } : i)));
     return { error: null };
-  }, [guard]);
+  }, [guard, load]);
 
   const deleteDraft = useCallback(async (id: string): Promise<ActionResult> => {
     const { data, error: err } = await supabase.from('invoices').delete().eq('id', id).eq('status', 'draft').select('id');

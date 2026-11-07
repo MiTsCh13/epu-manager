@@ -43,3 +43,4 @@
 - [ ] Have Impressum + privacy policy checked (e.g. WKO template / lawyer) before a wider launch
 - [ ] Before enabling billing: add Stripe to the privacy policy, update Impressum ("kostenlos, nicht gewerblich"), Gewerbe/GISA
 - [ ] Before a wider launch: terms of use incl. processing agreement (Art. 28 DSGVO) for users' customer data
+- [ ] Before a wider launch: have a tax adviser confirm "Zurück zum Entwurf" (does a never-sent invoice count as issued? old version not kept, date unchanged, reopened draft can be deleted)

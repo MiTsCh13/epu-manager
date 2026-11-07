@@ -24,15 +24,19 @@ export function Modal({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  // Immer das aktuelle onClose – der Fokus-Effekt darf nicht neu laufen, wenn der Aufrufer es bei jedem Render neu erzeugt
+  // (sonst springt der Fokus bei jedem getippten Zeichen ins erste Feld)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     // Erstes Eingabefeld fokussieren (sonst den Dialog selbst) – ohne zu scrollen, damit Hinweise oben sichtbar bleiben
-    const first = panelRef.current?.querySelector<HTMLElement>('input:not([type=file]):not([type=hidden]), textarea, select');
+    const first = panelRef.current?.querySelector<HTMLElement>('input:not([type=file]):not([type=hidden]):not([hidden]), textarea, select');
     (first ?? panelRef.current)?.focus({ preventScroll: true });
 
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -41,7 +45,7 @@ export function Modal({
       document.body.style.overflow = prevOverflow;
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

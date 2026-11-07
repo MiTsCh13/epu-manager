@@ -7,6 +7,7 @@ import {
   parseLineItems,
   validateInvoiceForm,
   stepQuantity,
+  canReopenInvoice,
   stornoClosingText,
   stornoDate,
   correctionDraftFrom,
@@ -159,6 +160,17 @@ describe('Stornieren', () => {
     expect(getDisplayStatus({ status: 'cancelled', due_date: '2000-01-01', cancelled_at: '2026-10-29T10:00:00Z' })).toBe('cancelled');
     expect(matchesFilter('cancelled', 'open')).toBe(false);
     expect(matchesFilter('storno', 'paid')).toBe(false);
+  });
+
+  it('canReopenInvoice: nur offen und nicht als verschickt bekannt', () => {
+    const open = { status: 'sent', due_date: '2999-01-01' };
+    expect(canReopenInvoice(open)).toBe(true);
+    expect(canReopenInvoice({ status: 'sent', due_date: '2000-01-01' })).toBe(true); // überfällig
+    expect(canReopenInvoice({ ...open, emailed_at: '2026-11-07T10:00:00Z' })).toBe(false);
+    expect(canReopenInvoice({ status: 'paid', due_date: null })).toBe(false);
+    expect(canReopenInvoice({ status: 'draft', due_date: null })).toBe(false);
+    expect(canReopenInvoice({ ...open, cancelled_at: '2026-11-07T10:00:00Z' })).toBe(false);
+    expect(canReopenInvoice({ ...open, cancels_invoice_id: 'o' })).toBe(false);
   });
 
   it('stornoClosingText: Vorschlag je nach bezahlt/offen und korrigierter Rechnung', () => {

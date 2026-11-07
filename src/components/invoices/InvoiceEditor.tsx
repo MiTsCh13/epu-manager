@@ -21,6 +21,7 @@ import {
   toISODate,
   validateInvoiceForm,
   type InvoiceFormErrors,
+  formatDate,
 } from '@/lib/invoices';
 import { formatDecimalInput, formatEuro } from '@/lib/money';
 import { calculateInvoiceTotals, validateInvoiceUStG11 } from '@/lib/tax';
@@ -455,13 +456,21 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
           )}
         </section>
 
+        {invoice?.reopened_at && (
+          <Alert type="info" title={`Diese ${docLabel} war schon ausgestellt`}>
+            Bessere aus, was nicht passt. Prüf auch Rechnungsdatum und „Zahlbar bis“: Sie ändern sich nicht von selbst.
+          </Alert>
+        )}
+
         {/* Nummer + Daten */}
         <section className="grid gap-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
           <Field
             label={isHonorarnote ? 'Honorarnoten-Nummer' : 'Rechnungsnummer'}
             value={form.invoiceNumber}
             error={errors.invoiceNumber}
-            hint="Fortlaufend vergeben – du kannst sie anpassen."
+            // Zurückgeholt: Die Nummer war schon vergeben und bleibt – sonst entstünde eine Lücke
+            readOnly={!!invoice?.reopened_at}
+            hint={invoice?.reopened_at ? 'Bleibt gleich, weil diese Nummer schon vergeben war.' : 'Fortlaufend vergeben – du kannst sie anpassen.'}
             onChange={(e) => set({ invoiceNumber: e.target.value, numberTouched: true })}
           />
           <Field
@@ -720,12 +729,17 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
         <div className="space-y-3 text-sm text-slate-700">
           <p>
             <strong>{form.invoiceNumber}</strong> an <strong>{client?.name ?? 'ohne Kunde'}</strong> über{' '}
-            <strong>{formatEuro(totals.total)}</strong>
+            <strong>{formatEuro(totals.total)}</strong>, Rechnungsdatum <strong>{formatDate(form.invoiceDate)}</strong>
+            {form.dueDate && form.payment !== 'cash' && (
+              <>
+                , zahlbar bis <strong>{formatDate(form.dueDate)}</strong>
+              </>
+            )}
             {form.payment === 'cash' ? ', bar bezahlt – wird gleich als bezahlt verbucht.' : '.'}
           </p>
           <p>
-            Nach dem Ausstellen ist die {docLabel} unveränderbar – so verlangt es das Gesetz. Fehler korrigierst du später
-            mit einer Stornorechnung.
+            Solange du die {docLabel} niemandem gegeben hast, kannst du sie noch zurück zum Entwurf holen. Danach korrigierst du
+            Fehler mit einer Stornorechnung: einer Gegenrechnung, die sie aufhebt.
           </p>
           {ustWarnings.map((w) => (
             <Alert key={w} type="warning">
@@ -773,6 +787,12 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
         }
       >
         <p className="text-sm text-slate-700">Der Entwurf {invoice?.invoice_number} wird endgültig gelöscht.</p>
+        {invoice?.reopened_at && (
+          <p className="mt-2 text-sm text-slate-700">
+            Diese Nummer war schon ausgestellt. Gibt es bereits spätere Rechnungen, entsteht beim Löschen eine Lücke in deinen
+            Nummern. Besser: ausbessern und wieder ausstellen.
+          </p>
+        )}
       </Modal>
     </PageWrapper>
   );

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Ban, CheckCircle2, Eye, FileDown, Lock, Mail, MailCheck } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Eye, FileDown, Lock, Mail, MailCheck, PencilLine } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadBlob, renderInvoicePdf } from '@/lib/renderInvoicePdf';
-import { formatDate, getDisplayStatus } from '@/lib/invoices';
+import { canReopenInvoice, formatDate, getDisplayStatus } from '@/lib/invoices';
 import { formatEuro } from '@/lib/money';
 import { KLEINUNTERNEHMER_NOTE } from '@/constants/tax2026';
 import { countryName } from '@/constants/countries';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { MarkPaidModal } from './MarkPaidModal';
 import { PdfPreviewModal } from './PdfPreviewModal';
 import { CancelInvoiceModal } from './CancelInvoiceModal';
+import { ReopenInvoiceModal } from './ReopenInvoiceModal';
 import { SendInvoiceModal } from './SendInvoiceModal';
 import type { Invoice, LineItem } from '@/types';
 
@@ -60,6 +61,8 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
   const closeEmail = useCallback(() => setEmailing(false), []);
   const [cancelling, setCancelling] = useState(false);
   const closeCancel = useCallback(() => setCancelling(false), []);
+  const [reopening, setReopening] = useState(false);
+  const closeReopen = useCallback(() => setReopening(false), []);
   // Stornierte Rechnung → zugehörige Stornorechnung verlinken
   const [storno, setStorno] = useState<{ id: string; invoice_number: string } | null>(null);
   useEffect(() => {
@@ -161,6 +164,11 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
               Als bezahlt markieren
             </Button>
           )}
+          {canReopenInvoice(invoice) && (
+            <Button variant="ghost" icon={<PencilLine className="h-4 w-4" />} onClick={() => setReopening(true)}>
+              Zurück zum Entwurf
+            </Button>
+          )}
           {canCancel && (
             <Button variant="ghost" icon={<Ban className="h-4 w-4" />} onClick={() => setCancelling(true)}>
               Stornieren
@@ -244,12 +252,16 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
 
       <p className="mt-4 flex items-start gap-2 text-xs text-slate-500">
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        Ausgestellte Rechnungen sind unveränderbar. Kunden- und Absenderdaten sind auf dem Stand vom Ausstellungstag.
+        {canReopenInvoice(invoice)
+          ? 'Solange du sie niemandem gegeben hast, kannst du sie zurück zum Entwurf holen. Kunden- und Absenderdaten sind auf dem Stand vom Ausstellungstag.'
+          : 'Diese Rechnung ist unveränderbar. Kunden- und Absenderdaten sind auf dem Stand vom Ausstellungstag.'}
       </p>
 
       <PdfPreviewModal invoice={previewing ? invoice : null} onClose={() => setPreviewing(false)} />
 
       <CancelInvoiceModal invoice={cancelling ? invoice : null} onClose={closeCancel} />
+
+      <ReopenInvoiceModal invoice={reopening ? invoice : null} onClose={closeReopen} onReopened={onChanged} />
 
       <SendInvoiceModal
         invoice={emailing ? invoice : null}
@@ -278,9 +290,12 @@ export function InvoiceDetail({ invoice, onChanged }: { invoice: Invoice; onChan
             .from('invoices')
             .update({ status: 'paid', paid_at: paidAt })
             .eq('id', invoice.id)
+            // Nur wenn noch offen: Eine veraltete Ansicht darf einen zurückgeholten Entwurf nicht ungeprüft ausstellen
+            .in('status', ['sent', 'overdue'])
             .select()
-            .single();
+            .maybeSingle();
           if (error) toast.error('Status konnte nicht geändert werden.');
+          else if (!data) toast.error('Diese Rechnung ist nicht mehr offen. Bitte lade die Seite neu.');
           else {
             toast.success(`${invoice.invoice_number} als bezahlt markiert`);
             onChanged(data);
