@@ -21,6 +21,9 @@ const removeNewApis = () => {
   drop(Uint8Array, 'fromHex');
   drop(Uint8Array.prototype, 'toBase64');
   drop(Uint8Array.prototype, 'toHex');
+  // Schleife „for await … of“ über Datenströme (pdf.js liest damit die Texte eines PDFs)
+  drop(ReadableStream.prototype, Symbol.asyncIterator as unknown as string);
+  drop(ReadableStream.prototype, 'values');
 };
 
 test('Rechnungs-Vorschau und Vorlage aus Rechnung ohne neue Browser-Funktionen', async ({ page, cleanup }) => {
@@ -44,6 +47,7 @@ test('Rechnungs-Vorschau und Vorlage aus Rechnung ohne neue Browser-Funktionen',
   // PDF-Vorschau einer Rechnung
   await page.goto(`/rechnungen/${inv!.id}`);
   expect(await page.evaluate(() => typeof (Map.prototype as unknown as Record<string, unknown>).getOrInsertComputed)).toBe('undefined');
+  expect(await page.evaluate(() => Symbol.asyncIterator in ReadableStream.prototype)).toBe(false);
   await page.getByRole('button', { name: 'Vorschau' }).click();
   await expect(page.getByLabel('Seite 1 von 1')).toBeVisible({ timeout: 30_000 });
   await page.keyboard.press('Escape');
