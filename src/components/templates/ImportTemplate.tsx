@@ -3,7 +3,7 @@ import { useMemo, useRef, useState, type DragEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Check, FileUp, Info, Loader2 } from 'lucide-react';
 import { useAuth, useProfileFor } from '@/contexts/AuthContext';
-import { analyzeInvoicePdf, finalizeImport, readInvoiceDesign, type ImportedDesign } from '@/lib/invoiceImport';
+import { analyzeInvoicePdf, finalizeImport, readInvoiceDesign, type ImportedDesign, errorDetail } from '@/lib/invoiceImport';
 import type { TemplateSettings } from '@/lib/invoiceTemplates';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -57,8 +57,8 @@ export function ImportTemplate({
       setImported(result);
       setName(result.result.name || file.name.replace(/\.pdf$/i, '').slice(0, 60));
       setStep('compare');
-    } catch {
-      fail('Klaro konnte deine Rechnung nicht lesen. Bitte versuche es erneut.');
+    } catch (e) {
+      fail('Klaro konnte deine Rechnung nicht lesen. Bitte versuche es erneut.' + errorDetail('Vorlage aus Rechnung', e));
     } finally {
       onBusyChange?.(false);
     }

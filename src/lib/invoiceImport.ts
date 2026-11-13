@@ -14,6 +14,13 @@ const MAX_IMAGE_SIDE = 2400; // herausgelöste Bilder höchstens so groß
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const NOT_READABLE = 'Dieses PDF kann Klaro nicht öffnen – ist es vielleicht passwortgeschützt?';
 
+/** Technischer Grund für die Fehlersuche: in die Konsole und kurz an die Meldung (z. B. bei Problemen in einzelnen Browsern). */
+export function errorDetail(where: string, e: unknown): string {
+  console.error(`[Klaro] ${where}`, e);
+  const text = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  return ` (Technischer Hinweis: ${text.slice(0, 160)})`;
+}
+
 export interface FoundImage extends DesignImage {
   blob: Blob;
 }
@@ -95,8 +102,8 @@ export async function analyzeInvoicePdf(file: File): Promise<InvoiceAnalysis | {
     let doc;
     try {
       doc = await loading.promise;
-    } catch {
-      return { error: NOT_READABLE };
+    } catch (e) {
+      return { error: NOT_READABLE + errorDetail('PDF öffnen', e) };
     }
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
@@ -214,8 +221,8 @@ export async function analyzeInvoicePdf(file: File): Promise<InvoiceAnalysis | {
       colors,
     };
     return { request, pageUrl: jpeg, images, canvas };
-  } catch {
-    return { error: 'Klaro konnte diese Rechnung nicht vorbereiten. Bitte versuche es erneut oder starte mit einem Design.' };
+  } catch (e) {
+    return { error: 'Klaro konnte diese Rechnung nicht vorbereiten. Bitte versuche es erneut oder starte mit einem Design.' + errorDetail('PDF vorbereiten', e) };
   } finally {
     void task?.destroy();
   }

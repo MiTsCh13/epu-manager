@@ -9,6 +9,8 @@ export async function invokeFunction<T>(
 ): Promise<{ data: T; error: null } | { data: null; error: string }> {
   const { data, error } = await supabase.functions.invoke<T & { error?: string }>(name, { method: 'POST', body });
   if (error || !data || data.error) {
+    // Für die Fehlersuche (z. B. Netzwerk- oder Browserprobleme) – die Meldung an die Person bleibt verständlich
+    console.error(`[Klaro] Function ${name}`, error ?? data?.error);
     const ctx = (error as { context?: Response } | null)?.context;
     const errorBody = ctx ? await ctx.json().catch(() => null) : null;
     return { data: null, error: (errorBody as { error?: string } | null)?.error ?? data?.error ?? fallbackError };
