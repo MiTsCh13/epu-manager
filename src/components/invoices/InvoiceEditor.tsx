@@ -10,6 +10,7 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { closingTextFor, normalizeTemplate } from '@/lib/invoiceTemplates';
 import { DEFAULT_NUMBER_FORMAT, nextInvoiceNumber } from '@/lib/invoiceNumbers';
 import { useUsedInvoiceNumbers } from '@/hooks/useUsedInvoiceNumbers';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { invoiceErrorMessage } from '@/hooks/useInvoices';
 import { supabase } from '@/lib/supabase';
 import { yearOfDate } from '@/lib/taxYears';
@@ -37,6 +38,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Select } from '@/components/ui/Field';
 import { PlaceholderText } from '@/components/templates/TemplateFields';
 import { Modal } from '@/components/ui/Modal';
+import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import { Term } from '@/components/ui/Tooltip';
 import { LineItemsEditor, newRow, type LineItemRow } from './LineItemsEditor';
 import { PdfPreviewModal } from './PdfPreviewModal';
@@ -146,7 +148,33 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
   const [errors, setErrors] = useState<InvoiceFormErrors>({});
   const [ustErrors, setUstErrors] = useState<string[]>([]);
   const [ustWarnings, setUstWarnings] = useState<string[]>([]);
-  const [saving, setSaving] = useState<'draft' | 'sent' | 'delete' | 'pdf' | null>(null);
+  const [saving, setSaving] = useState<'draft' | 'sent' | 'delete' | 'pdf' | 'leave' | null>(null);
+
+  // Ungespeicherte Änderungen: Klaro füllt beim Öffnen einiges selbst aus (Nummer, Vorlage, Texte) – das zählt nicht.
+  // Maßgeblich ist der Stand bei der ersten eigenen Eingabe; danach gilt jede Abweichung davon als ungespeichert.
+  const snapshot = JSON.stringify(form);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const baseline = useRef(snapshot);
+  // Vom Assistenten vorausgefüllt: Das ist schon Inhalt, der verloren ginge
+  const interacted = useRef(!!prefill);
+  const leaving = useRef(false); // nach Ausstellen/Löschen: ohne Rückfrage weiter
+  useEffect(() => {
+    if (!interacted.current) baseline.current = snapshot;
+  }, [snapshot]);
+  const markInteracted = () => {
+    interacted.current = true;
+  };
+  // Klicks zählen nur auf Bedienelementen (Position hinzufügen, Pfeile, Bar/Überweisung …) – nicht Antippen zum Scrollen
+  const markClick = (e: { target: EventTarget }) => {
+    if ((e.target as Element).closest('button, [role=radio], a')) markInteracted();
+  };
+  // Gespeichert wird der Stand beim Klick – was währenddessen noch getippt wird, bleibt ungespeichert
+  const markSaved = (snap: string) => {
+    baseline.current = snap;
+  };
+  const isDirty = () => !leaving.current && interacted.current && snapshotRef.current !== baseline.current;
+  const blocker = useUnsavedChangesGuard(isDirty, isDirty());
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [clientModal, setClientModal] = useState(false);
@@ -291,9 +319,12 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
 
   async function save(status: 'draft' | 'sent') {
     setSaving(status);
+    const snap = snapshotRef.current;
     const saved = await persist(status);
     setSaving(null);
     if (!saved) return;
+    markSaved(snap);
+    if (status === 'sent') leaving.current = true;
     if (status === 'draft') {
       toast.success('Entwurf gespeichert');
       if (!invoice) navigate(`/rechnungen/${saved.id}`, { replace: true });
@@ -308,9 +339,13 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
     setUstErrors([]);
     if (!validateForm()) return;
     setSaving('pdf');
+    const snap = snapshotRef.current;
     const saved = await persist('draft');
     setSaving(null);
-    if (saved) setPreview(saved);
+    if (saved) {
+      markSaved(snap);
+      setPreview(saved);
+    }
   }
 
   function handleSaveDraft() {
@@ -356,6 +391,7 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
       return;
     }
     toast.success('Entwurf gelöscht');
+    leaving.current = true;
     navigate('/rechnungen', { replace: true });
   }
 
@@ -379,7 +415,27 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
     .filter(Boolean)
     .join(', ');
 
+  /** Aus dem Fenster „Änderungen nicht gespeichert“: als Entwurf speichern, dann die Seite verlassen. */
+  async function saveBeforeLeaving(): Promise<boolean> {
+    setUstErrors([]);
+    if (!validateForm()) {
+      toast.error('Bitte ergänze zuerst die rot markierten Angaben.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    setSaving('leave');
+    const snap = snapshotRef.current;
+    const saved = await persist('draft');
+    setSaving(null);
+    if (!saved) return false;
+    markSaved(snap);
+    toast.success('Entwurf gespeichert');
+    return true;
+  }
+
   return (
+    // Erste eigene Eingabe merken (Tippen, auch Einfügen oder Autofill, Bedienelemente) – siehe „Ungespeicherte Änderungen“ oben
+    <div className="contents" onClickCapture={markClick} onInputCapture={markInteracted} onChangeCapture={markInteracted}>
     <PageWrapper
       title={invoice ? `Entwurf ${invoice.invoice_number}` : `Neue ${docLabel}`}
       description="Klaro prüft alle Pflichtangaben nach § 11 UStG, bevor du die Rechnung ausstellst."
@@ -794,6 +850,15 @@ export function InvoiceEditor({ invoice, prefill }: { invoice: Invoice | null; p
           </p>
         )}
       </Modal>
+
+      <UnsavedChangesModal
+        blocker={blocker}
+        text={`Du hast an dieser ${docLabel} etwas geändert, das noch nicht gespeichert ist.`}
+        saveLabel="Als Entwurf speichern"
+        saving={saving === 'leave'}
+        onSave={saveBeforeLeaving}
+      />
     </PageWrapper>
+    </div>
   );
 }

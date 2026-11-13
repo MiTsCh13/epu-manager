@@ -1,11 +1,12 @@
 // Vorlage bearbeiten: links die Bereiche der Rechnung (immer nur einer offen), rechts die Live-Vorschau.
 // Ein Klick auf einen Bereich der Vorschau öffnet die passenden Einstellungen.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ChevronDown, Lock } from 'lucide-react';
 import { useProfileFor } from '@/contexts/AuthContext';
 import { saveTemplate } from '@/hooks/useTemplates';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { FONTS, normalizeTemplate, type HeaderStyle, type LogoPosition, type LogoSize, type TemplateSettings } from '@/lib/invoiceTemplates';
 import { supabase } from '@/lib/supabase';
 import { KLEINUNTERNEHMER_NOTE } from '@/constants/tax2026';
@@ -16,6 +17,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Spinner } from '@/components/ui/Spinner';
+import { UnsavedChangesModal } from '@/components/ui/UnsavedChangesModal';
 import type { InvoiceTemplate } from '@/types';
 
 type Section = 'allgemein' | Exclude<TemplatePart, 'pflicht'>;
@@ -94,12 +96,15 @@ export default function TemplateEditor() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    // Veraltete Antwort (z. B. doppeltes Laden) darf schon Eingetipptes nicht überschreiben
+    let cancelled = false;
     void supabase
       .from('invoice_templates')
       .select('*')
       .eq('id', id ?? '')
       .single()
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error || !data) return setLoadError(true);
         const s = normalizeTemplate(data.settings);
         setRow(data);
@@ -107,15 +112,15 @@ export default function TemplateEditor() {
         setSettings(s);
         setSaved(JSON.stringify({ name: data.name, s }));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const dirty = !!settings && JSON.stringify({ name, s: settings }) !== saved;
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const blocker = useUnsavedChangesGuard(() => dirtyRef.current, dirty);
 
   if (loadError) {
     return (
@@ -146,14 +151,24 @@ export default function TemplateEditor() {
     }
   };
 
-  async function save() {
-    if (!name.trim()) return void toast.error('Bitte gib der Vorlage einen Namen.');
+  /** true, wenn gespeichert. */
+  async function save(): Promise<boolean> {
+    if (!name.trim()) {
+      toast.error('Bitte gib der Vorlage einen Namen.');
+      return false;
+    }
     setSaving(true);
     const r = await saveTemplate(row!.id, name, settings!);
     setSaving(false);
-    if (r.error) return void toast.error(r.error);
-    setSaved(JSON.stringify({ name, s: settings }));
+    if (r.error) {
+      toast.error(r.error);
+      return false;
+    }
+    const now = JSON.stringify({ name, s: settings });
+    setSaved(now);
+    dirtyRef.current = false;
     toast.success('Vorlage gespeichert – das Aussehen gilt auch für offene Entwürfe');
+    return true;
   }
 
   const headerLabel = HEADER_STYLES.find((h) => h.id === s.header.style)?.label ?? '';
@@ -171,9 +186,6 @@ export default function TemplateEditor() {
         <>
           <Link
             to="/einstellungen#vorlagen"
-            onClick={(e) => {
-              if (dirty && !window.confirm('Deine Änderungen an der Vorlage sind noch nicht gespeichert. Trotzdem verlassen?')) e.preventDefault();
-            }}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -392,6 +404,13 @@ export default function TemplateEditor() {
           <TemplatePreview profile={profile} settings={s} active={pflichtInfo ? 'pflicht' : section === 'allgemein' ? null : section} onSelect={selectPart} />
         </div>
       </div>
+      <UnsavedChangesModal
+        blocker={blocker}
+        text="Du hast an dieser Vorlage etwas geändert, das noch nicht gespeichert ist."
+        saveLabel="Speichern"
+        saving={saving}
+        onSave={save}
+      />
     </PageWrapper>
   );
 }

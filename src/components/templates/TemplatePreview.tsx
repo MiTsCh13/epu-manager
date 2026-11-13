@@ -10,6 +10,7 @@ import { DEFAULT_NUMBER_FORMAT, formatInvoiceNumber } from '@/lib/invoiceNumbers
 import type { TemplateSettings } from '@/lib/invoiceTemplates';
 import { Spinner } from '@/components/ui/Spinner';
 import type { Invoice, Profile } from '@/types';
+import { loadPdfjs } from '@/lib/pdfjs';
 
 export type TemplatePart = 'kopf' | 'pflicht' | 'oben' | 'positionen' | 'unten' | 'zahlung' | 'fuss';
 
@@ -139,8 +140,7 @@ export function TemplatePreview({
         const invoice = sampleInvoice(profile, settings);
         const images = givenImages ?? (await loadTemplateImages(settings));
         const { blob } = await renderInvoicePdf(invoice, { images });
-        const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+        const pdfjs = await loadPdfjs();
         const bytes = new Uint8Array(await blob.arrayBuffer());
         if (cancelled) return;
         const loading = pdfjs.getDocument({ data: bytes });

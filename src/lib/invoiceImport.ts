@@ -6,6 +6,7 @@ import { uploadBrandingImage } from './branding';
 import { invokeFunction } from './functions';
 import { adoptedSummary, designToTemplate, dominantColors, type DesignResult } from './invoiceDesign';
 import type { TemplateSettings } from './invoiceTemplates';
+import { loadPdfjs } from '@/lib/pdfjs';
 
 const MAX_RENDER_SCALE = 2; // A4 → ca. 1190 × 1684 Pixel – gut lesbar für Claude, scharf genug zum Ausschneiden
 const MAX_RENDER_SIDE = 1700; // auch bei übergroßen Seiten (Scanner-Apps) unter den Canvas-Grenzen der Handys
@@ -88,8 +89,7 @@ export async function analyzeInvoicePdf(file: File): Promise<InvoiceAnalysis | {
   if (file.size > MAX_PDF_BYTES) return { error: 'Das PDF ist größer als 15 MB.' };
   let task: { destroy: () => Promise<void> } | null = null;
   try {
-    const pdfjs = await import('pdfjs-dist');
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+    const pdfjs = await loadPdfjs();
     const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
     task = loading;
     let doc;

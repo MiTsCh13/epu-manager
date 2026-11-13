@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { loadPdfjs } from '@/lib/pdfjs';
 
 /**
  * Zeichnet alle Seiten eines PDFs als Canvas (pdf.js) – funktioniert in jedem Browser,
@@ -13,8 +14,7 @@ export function PdfPages({ blob, onError }: { blob: Blob; onError: () => void })
     let destroy: (() => void) | undefined;
 
     (async () => {
-      const pdfjs = await import('pdfjs-dist');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+      const pdfjs = await loadPdfjs();
       const task = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
       destroy = () => void task.destroy();
       const doc = await task.promise;
